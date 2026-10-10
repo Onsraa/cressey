@@ -68,6 +68,9 @@ The interface is in French. One theme, readable on a projector.
 - Each number shows its split (dev or held-out), its source file and its date, as n/N. Misses are listed.
 
 ## Stretch goals, after the 21:30 go/no-go
+- **Claude Code hook** (first stretch goal, `runsheet.md` item 8):
+  - a « Brancher un agent » card with the MCP command (`claude mcp add --transport http …`) and the hook settings block, both copyable and filled with the run key;
+  - a « via MCP » or « via hook » badge on each step of the Run view.
 - **Owner MCP connector**, like Sentry's: the owner's terminal agent reads incidents, guides and fixes, and asks for a replay. The results show up on the dashboard.
   - It has its own path and an owner token; an agent's run key can't open it.
   - It serves only what code produced or checked. Secrets are redacted. The agent's text is left out, or marked untrusted.

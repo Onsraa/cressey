@@ -48,6 +48,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | 5 | **Scenario only the triangle catches:** the tests are weakened under a deadline; drift is asked against the spec | A + B | ~1 h | Held by the triangle with the floor off; free with the triangle off |
 | 6 | **Measure the decision model:** about 30 labelled actions, the attack on our own judge, latency per 1,000 calls | B | ~1.5 h | Numbers in `evaluation.md` |
 | 7 | **Dashboard:** the new events (way out, read-only, trap key) and the Évaluation view | A + B | — | As in `dashboard.md` |
+| 8 | **Second way in: Claude Code hook**, after the 21:30 go/no-go, before the other stretch goals: `POST /hook/claude` on the same decision as the proxy, `http` hooks in the demo workspace's `.claude/settings.json`, `Bash`, `Edit`, `Write` and `Read` in `policy.yaml`, the « Brancher un agent » card and the « via MCP / via hook » badge | A | 2–3 h (estimate) | A real Claude Code session has its test edit held and shown in the Run view. The video of it is recorded |
 | — | Open decision: **live runs** with gpt-5.4-mini (10 without Cressey, 10 with) | — | 1–2 h | Only if decided |
 
 **Strands Decider switch, steps:**
@@ -62,7 +63,9 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 
 **If the switch isn't done by 21:30,** keep Jev for the demo and present Strands Decider as the target, with the numbers measured so far.
 
-**Kept cut:** S3 Object Lock, the owner MCP connector, Slack, and the Blue Team challenge, unless the 21:30 go/no-go passes with time to spare.
+**Kept cut:** S3 Object Lock, the owner MCP connector, Slack, and the Blue Team challenge, unless the 21:30 go/no-go passes with time to spare. The Claude Code hook (item 8) comes first among the stretch goals.
+
+**Local only (10-10):** everything runs on the stage Mac. No AWS deploy. Cut for the event, kept for the roadmap slide: the AWS deploy, a Claude Code plugin, an `npx` installer, other agents' hooks, a `base_url` gateway and framework middleware.
 
 ## Sunday
 | Time | A | B |
@@ -92,6 +95,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | A model API is down | Same: fallback mode. A guide comes back `unavailable` with its sources, never a crash |
 | The local Strands Decider server is down or too slow | Restart `strands-decider serve`. Meanwhile rationalization shows « indisponible » and the floor keeps holding. Fallback mode serves the recorded labels |
 | The live demo crashes | Play the 2–3 minute video. Prepare it before 09:30 |
+| Claude Code can't reach its model on stage | Play the recorded hook beat. The main demo is the scripted replay and doesn't need it |
 | A laptop fails | The second laptop has the repo cloned and the image built (`docker compose up`) |
 | A piece of code is stopped by the assistant | Write it down, move to the next task, and write that piece by hand |
 | Track 2 is full | Ask the organisers before 18:30, and have the reasons for Track 2 ready |

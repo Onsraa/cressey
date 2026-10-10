@@ -16,6 +16,7 @@
 | Demo tools (synthetic): a workspace holding a fake production key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
 | Demo agent: a scripted replay of synthetic sessions, played through Cressey | `backend/src/cressey/demo/agent.py`, `backend/data/sessions/` (format in `sessions.md`) | built |
 | Dashboard | `web/src/` | skeleton only |
+| Second way in: Claude Code hook. `POST /hook/claude` runs the same decision as `on_call_tool`; `http` hooks in the demo workspace's `.claude/settings.json` | `core/api.py`, `core/proxy.py` | decided 10-10, to build after the 21:30 go/no-go |
 
 ## Request flow (target)
 ```
@@ -131,7 +132,8 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 - **secrets:** ggshield. It needs the `GITGUARDIAN_API_KEY` repo secret, and warns when the key is missing.
 
 ## Deployment
-- **Target: AWS** (the Bedrock partnership covers hosting and models).
+- **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The API has no authentication.
+- **After the event: AWS** (the Bedrock partnership covers hosting and models).
 - **Not built yet:** the container deploy and the Bedrock adapters.
 - **Where Bedrock plugs in:** the adapters in `clients.py`.
   - Bedrock exposes an OpenAI-compatible endpoint at `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
