@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 
 import pytest
 
@@ -39,7 +40,7 @@ class FakeJudge:
         self.judgment, self.flags = judgment, flags or {}
         self.asked: list[tuple[str, dict]] = []
 
-    async def answers(self, state: dict, questions: dict) -> dict | None:
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
         if "weakens" in questions:
             self.asked.append(("judgment", state))
             return None if self.judgment is None else {"weakens": self.judgment}
