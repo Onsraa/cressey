@@ -67,14 +67,13 @@ function secretName(run: Run, fp: string) {
 	return o ? nameOf(o.secret) : "secret";
 }
 
-// « DB_PROD_KEY (lue dans .env.prod, étape 3) »
+// “DB_PROD_KEY (read in .env.prod, step 3)”
 export function originText(run: Run, fp: string): string {
 	const o = origin(run, fp);
-	if (!o) return "secret (origine inconnue)";
+	if (!o) return "secret (unknown origin)";
 	const path = parsed(o.step.args)?.path;
-	const where =
-		typeof path === "string" ? `dans ${path}` : `par ${o.step.tool}`;
-	return `${nameOf(o.secret)} (lue ${where}, étape ${o.step.n})`;
+	const where = typeof path === "string" ? `in ${path}` : `by ${o.step.tool}`;
+	return `${nameOf(o.secret)} (read ${where}, step ${o.step.n})`;
 }
 
 // The secrets a call carries: read in its result, or used in its arguments.
@@ -102,4 +101,4 @@ export const RAMP = ["#f3f3f1", "#d6d6d3", "#a3a3a0", "#5c5c5a", "#1e1e1e"];
 export const band = (v: number) => STOPS.filter((t) => v >= t).length;
 
 // The floor's reason for a call carrying a trap key (core/floor.py).
-export const TRAP = "clé piège utilisée";
+export const TRAP = "trap key used";

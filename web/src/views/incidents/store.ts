@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 
 // Values by key that outlive the view, which unmounts on every switch: a replay takes up
-// to a minute and a « Pourquoi ? » answer several seconds, so neither may be lost or rerun.
+// to a minute and a “Why?” answer several seconds, so neither may be lost or rerun.
 export class Keyed<T> {
 	private values = new Map<string, T>();
 	private listeners = new Set<() => void>();

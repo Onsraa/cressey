@@ -86,7 +86,7 @@ export function Field({ run, focus }: { run: Run; focus?: number }) {
 					width={w}
 					height={h}
 					role="img"
-					aria-label={`Triangle de la fraude : ${calls.length} appels placés selon leurs trois scores`}
+					aria-label={`Fraud triangle: ${calls.length} calls placed by their three scores`}
 					className="absolute inset-0"
 				>
 					<g shapeRendering="crispEdges">
@@ -214,7 +214,7 @@ export function Field({ run, focus }: { run: Run; focus?: number }) {
 					return (
 						<div
 							key={g.k}
-							data-tip={`${g.name} · ${on ? "confirmée par les faits" : "non confirmée"}`}
+							data-tip={`${g.name} · ${on ? "confirmed by the facts" : "not confirmed"}`}
 							className="absolute flex items-center gap-[7px] whitespace-nowrap border-[1.2px] border-ink bg-surface py-0.5 pr-2 pl-0.5"
 							style={{ left: t[g.k].x, top: t[g.k].y, transform: LABEL[g.L] }}
 						>

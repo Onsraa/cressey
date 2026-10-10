@@ -20,22 +20,22 @@ const LOOK: Record<Status, { Icon: LucideIcon; tone: Tone; tip: string }> = {
 	pending: {
 		Icon: Hourglass,
 		tone: "info",
-		tip: "Le guide démarre à l'ouverture de l'incident, avant la décision.",
+		tip: "The guide starts when the incident opens, before the decision.",
 	},
 	ok: {
 		Icon: Check,
 		tone: "ok",
-		tip: "Chaque étape cite une source vérifiée.",
+		tip: "Each step quotes a verified source.",
 	},
 	unsure: {
 		Icon: CircleQuestionMark,
 		tone: "warn",
-		tip: "Aucune source vérifiée ne couvre ce cas.",
+		tip: "No verified source covers this case.",
 	},
 	unavailable: {
 		Icon: X,
 		tone: "grey",
-		tip: "Guide indisponible ; les sources restent affichées.",
+		tip: "Guide unavailable; the sources are still shown.",
 	},
 };
 
@@ -64,7 +64,7 @@ function Inbox({ owner }: { owner: OwnerGuide }) {
 					</span>
 					<span className="truncate text-mute-2 text-xs">
 						{owner.owner_role === "soc"
-							? "boîte de repli"
+							? "fallback inbox"
 							: LEG[owner.leg].name}
 					</span>
 				</div>
@@ -77,7 +77,7 @@ function Inbox({ owner }: { owner: OwnerGuide }) {
 				</Tip>
 			</div>
 			<div className="flex flex-1 flex-col gap-4 p-4">
-				{owner.status === "pending" && <Pending>Rédaction du guide…</Pending>}
+				{owner.status === "pending" && <Pending>Writing the guide…</Pending>}
 				{owner.guide_id ? (
 					<>
 						<GuideBody id={owner.guide_id} status={owner.status} />
@@ -86,7 +86,7 @@ function Inbox({ owner }: { owner: OwnerGuide }) {
 				) : (
 					owner.status === "unavailable" && (
 						<p className="text-sm leading-[1.45]">
-							Guide indisponible. Les sources restent listées.
+							Guide unavailable. The sources are still listed.
 						</p>
 					)
 				)}
@@ -111,12 +111,10 @@ function useGuide(id: string, status: Status) {
 
 function GuideBody({ id, status }: { id: string; status: Status }) {
 	const guide = useGuide(id, status);
-	if (guide === undefined) return <Pending>Chargement du guide…</Pending>;
+	if (guide === undefined) return <Pending>Loading the guide…</Pending>;
 	if (guide === "failed")
 		return (
-			<p className="text-[13px] text-held-fg">
-				Le guide n'a pas pu être chargé.
-			</p>
+			<p className="text-[13px] text-held-fg">The guide couldn't be loaded.</p>
 		);
 	const dropped = guide.dropped_steps;
 	const s = dropped > 1 ? "s" : "";
@@ -137,7 +135,7 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 									{x.action}
 								</span>
 								<span className="text-pretty bg-paper px-[9px] py-1.5 text-[12.5px] leading-[1.45]">
-									« {x.quote} »
+									“{x.quote}”
 								</span>
 								<span className="font-mono text-[11px] text-mute">
 									{x.source_title} · {x.source_id}
@@ -150,7 +148,7 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 			{guide.status === "unsure" && (
 				<>
 					<p className="text-sm leading-[1.45]">
-						Aucune source vérifiée ne couvre ce cas. Voir l'équipe sécurité.
+						No verified source covers this case. Ask the security team.
 					</p>
 					{guide.message && (
 						<p className="font-mono text-[11px] text-mute">{guide.message}</p>
@@ -159,13 +157,13 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 			)}
 			{guide.status === "unavailable" && (
 				<p className="text-sm leading-[1.45]">
-					Guide indisponible. Les sources restent listées.
+					Guide unavailable. The sources are still listed.
 				</p>
 			)}
 			{dropped > 0 && (
 				<span className="inline-flex items-center gap-[5px] self-start font-mono text-[11px] text-mute">
 					<X size={11} />
-					{dropped} étape{s} écartée{s} : citation introuvable
+					{dropped} step{s} dropped: quote not found
 				</span>
 			)}
 			{guide.status !== "ok" && guide.passages.length > 0 && (
@@ -207,8 +205,8 @@ function Why({ id }: { id: string }) {
 			>
 				<input
 					type="text"
-					aria-label="Question sur ce guide"
-					placeholder="Pourquoi cette étape ?"
+					aria-label="Question about this guide"
+					placeholder="Why this step?"
 					maxLength={500}
 					value={q}
 					onChange={(e) => setQ(e.target.value)}
@@ -220,13 +218,13 @@ function Why({ id }: { id: string }) {
 					disabled={why?.busy || q.trim().length < 3}
 					className="btn btn-dark px-[11px] text-[13px]"
 				>
-					Pourquoi ?
+					Why?
 				</button>
 			</form>
-			{why?.busy && <Pending>Recherche dans les sources vérifiées…</Pending>}
+			{why?.busy && <Pending>Searching the verified sources…</Pending>}
 			{why?.failed && (
 				<p className="font-mono text-[11px] text-held-fg">
-					La question n'a pas pu être posée.
+					The question couldn't be asked.
 				</p>
 			)}
 			{why?.answer && (
@@ -240,7 +238,7 @@ function Why({ id }: { id: string }) {
 							{why.answer.citations.map((c, n) => (
 								<Tip
 									key={`${c.source_id}-${c.quote}`}
-									tip={`« ${c.quote} »`}
+									tip={`“${c.quote}”`}
 									className="inline-flex min-h-5 cursor-help items-center bg-ink px-1.5 py-0.5 font-mono text-[11px] text-surface"
 								>
 									[{n + 1}] {c.source_title} · {c.source_id}

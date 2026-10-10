@@ -1,11 +1,11 @@
 import type { Incident } from "@/api/types";
 
-// An incident's lifecycle (dashboard.md): retenu → décidé → correctif approuvé → rejeu validé.
+// An incident's lifecycle (dashboard.md): held → decided → fix approved → replay passed.
 export const LIFE = [
-	"retenu",
-	"décidé",
-	"correctif approuvé",
-	"rejeu validé",
+	"held",
+	"decided",
+	"fix approved",
+	"replay passed",
 ] as const;
 
 // How far along the lifecycle an incident is, 0 to 3. The decision is the held call's

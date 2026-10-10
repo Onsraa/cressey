@@ -8,35 +8,35 @@ import { Aside, Head, Split, type Tile, Tiles } from "./ui";
 // Why a session missed: an incident let through, or a normal task held.
 const why = (s: Session) =>
 	s.expect === "held"
-		? "Devait être retenue : elle ne l'a pas été."
-		: `Retenue par erreur à l'étape ${s.held_at}${s.reason ? ` : ${s.reason}` : ""}`;
+		? "Should have been held: it wasn't."
+		: `Held by mistake at step ${s.held_at}${s.reason ? `: ${s.reason}` : ""}`;
 
 export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {
 	const tiles: Tile[] = [
 		{
-			label: "Sessions d'incident retenues",
+			label: "Incident sessions held",
 			value: `${d.incident_held} / ${d.incident_sessions}`,
 			sub: `${sample(d.incident_sessions)} sessions`,
-			reading: "bon, plus haut est mieux",
+			reading: "good, higher is better",
 		},
 		{
-			label: "Sessions normales retenues par erreur",
+			label: "Normal sessions held by mistake",
 			value: `${d.normal_held} / ${d.normal_sessions}`,
 			sub: `${sample(d.normal_sessions)} sessions`,
-			reading: "à surveiller, plus bas est mieux",
+			reading: "to watch, lower is better",
 			watch: true,
 		},
 		{
-			label: "Temps d'arrêt · p50 / p95",
+			label: "Time to stop · p50 / p95",
 			value: `${ms(d.stop_ms_p50)} / ${ms(d.stop_ms_p95)} ms`,
-			sub: `${sample(d.incident_held)} sessions retenues`,
-			reading: "bon, plus bas est mieux",
+			sub: `${sample(d.incident_held)} sessions held`,
+			reading: "good, lower is better",
 		},
 		{
-			label: "Décision de Cressey par appel · p50 / p95",
+			label: "Cressey's decision per call · p50 / p95",
 			value: `${ms(d.check_ms_p50)} / ${ms(d.check_ms_p95)} ms`,
-			sub: `tous les appels de ${d.incident_sessions + d.normal_sessions} sessions`,
-			reading: "bon, plus bas est mieux",
+			sub: `every call in ${d.incident_sessions + d.normal_sessions} sessions`,
+			reading: "good, lower is better",
 		},
 	];
 	const held = (k: number, n: number) => `${k}/${n}`;
@@ -48,14 +48,14 @@ export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {
 					key: "incident",
 					value: share(d.incident_held, d.incident_sessions),
 					text: held(d.incident_held, d.incident_sessions),
-					tip: `Sessions d'incident retenues : ${d.incident_held} / ${d.incident_sessions}`,
+					tip: `Incident sessions held: ${d.incident_held} / ${d.incident_sessions}`,
 					fill: "var(--color-ink)",
 				},
 				{
 					key: "normal",
 					value: share(d.normal_held, d.normal_sessions),
 					text: held(d.normal_held, d.normal_sessions),
-					tip: `Sessions normales retenues par erreur : ${d.normal_held} / ${d.normal_sessions}`,
+					tip: `Normal sessions held by mistake: ${d.normal_held} / ${d.normal_sessions}`,
 					hatch: true,
 				},
 			],
@@ -69,7 +69,7 @@ export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {
 			<div className="rise grid min-h-[300px] flex-1 grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-4">
 				<section className="panel min-h-[300px]">
 					<Head>
-						<span>SESSIONS RETENUES</span>
+						<span>SESSIONS HELD</span>
 						<div className="flex-1" />
 						<Aside>
 							<span className="size-3 bg-ink" />
@@ -83,17 +83,17 @@ export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {
 					<Bars
 						groups={groups}
 						percent
-						label="Sessions retenues par split, incident contre normal"
+						label="Sessions held by split, incident against normal"
 					/>
 				</section>
 				<section className="panel">
 					<Head>
 						<X size={14} className="text-held-strong" />
-						<span>RATÉS</span>
+						<span>MISSES</span>
 						<Aside>{d.misses.length}</Aside>
 					</Head>
 					{d.misses.length === 0 && (
-						<p className="px-[18px] py-3.5 text-[13px] text-mute">Aucun raté</p>
+						<p className="px-[18px] py-3.5 text-[13px] text-mute">No misses</p>
 					)}
 					{d.misses.map((id) => {
 						const s = d.sessions.find((x) => x.session === id);

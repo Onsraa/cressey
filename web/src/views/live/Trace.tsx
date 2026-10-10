@@ -58,14 +58,14 @@ export function Trace({
 				<span className="opacity-70">{count || ""}</span>
 				<div className="flex-1" />
 				<span
-					data-tip="Scores par étape : Pression · Opportunité · Rationalisation"
+					data-tip="Scores per step: Pressure · Opportunity · Rationalization"
 					className="font-mono text-[11px] tracking-normal opacity-80"
 				>
 					P O R
 				</span>
 			</div>
 			<div ref={box} className="min-h-0 flex-1 overflow-auto">
-				{count === 0 && <Waiting title="Aucune étape pour l'instant" />}
+				{count === 0 && <Waiting title="No steps yet" />}
 				{rows.map((row) => (
 					<button
 						key={row.id}
@@ -132,7 +132,7 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 				{step.is_error && (
 					<span className="inline-flex items-center gap-1 font-mono text-[11px] text-held-fg">
 						<CircleX size={11} />
-						échec
+						failed
 					</span>
 				)}
 			</span>
@@ -159,7 +159,7 @@ function TextRow({
 			<span className="flex min-w-0 flex-col gap-[3px]">
 				<span className="flex min-w-0 flex-wrap items-center gap-1.5">
 					<span className="font-medium font-mono text-[12.5px]">
-						{report ? "rapport final" : "message"}
+						{report ? "final report" : "message"}
 					</span>
 					<AgentText />
 					{check?.confirmed && (
@@ -170,7 +170,7 @@ function TextRow({
 							className="inline-flex h-5 items-center gap-1 border border-held-bd bg-held px-1.5 font-mono text-[11px] text-held-fg"
 						>
 							<TriangleAlert size={11} />
-							rapport contredit par le journal
+							report contradicted by the log
 						</span>
 					)}
 				</span>
@@ -200,7 +200,7 @@ function Mini({ legs }: { legs: Legs }) {
 				return (
 					<span
 						key={g.k}
-						data-tip={`${g.name} ${fmt(leg.score)}${leg.confirmed ? "\nconfirmée par les faits à cette étape" : ""}`}
+						data-tip={`${g.name} ${fmt(leg.score)}${leg.confirmed ? "\nconfirmed by the facts at this step" : ""}`}
 						className="inline-flex size-5 items-center justify-center font-pixel text-base leading-none"
 						style={{
 							background: RAMP[b],

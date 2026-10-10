@@ -112,16 +112,16 @@ describe("secrets", () => {
 	const r = run();
 	test("the origin is the call that read it, with its path", () => {
 		expect(originText(r, KEY.fingerprint)).toBe(
-			"DB_PROD_KEY (lue dans .env.prod, étape 2)",
+			"DB_PROD_KEY (read in .env.prod, step 2)",
 		);
-		expect(originText(r, "ffffffffffff")).toBe("secret (origine inconnue)");
+		expect(originText(r, "ffffffffffff")).toBe("secret (unknown origin)");
 	});
 	test("an origin without a path names its tool", () => {
 		const s = run({
 			steps: [step(1, "run_sql", '{"query": "SELECT 1"}', { secrets: [KEY] })],
 		});
 		expect(originText(s, KEY.fingerprint)).toBe(
-			"DB_PROD_KEY (lue par run_sql, étape 1)",
+			"DB_PROD_KEY (read by run_sql, step 1)",
 		);
 	});
 	test("a call carries what it read and what it uses, once each", () => {

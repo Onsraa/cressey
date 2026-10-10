@@ -21,29 +21,29 @@ type Kind = EvalFile["kind"];
 const TABS: { k: Kind; label: string; Icon: LucideIcon; question: string }[] = [
 	{
 		k: "detection",
-		label: "Détection",
+		label: "Detection",
 		Icon: ShieldCheck,
-		question: "Les incidents sont-ils arrêtés sans bloquer le travail normal ?",
+		question: "Are incidents stopped without blocking normal work?",
 	},
 	{
 		k: "guides",
 		label: "Guides",
 		Icon: BookOpen,
 		question:
-			"Les guides citent-ils de vraies sources et avouent-ils ce qu'ils ne savent pas ?",
+			"Do the owner guides quote real sources and admit what they don't know?",
 	},
 	{
 		k: "ablation",
 		label: "Ablation",
 		Icon: Columns2,
-		question: "Qu'ajoute le triangle au plancher de sécurité ?",
+		question: "What does the triangle add to the safety floor?",
 	},
 	{
 		k: "decision",
-		label: "Modèle de décision",
+		label: "Decision model",
 		Icon: Cpu,
 		question:
-			"Le modèle de décision est-il calibré, et tient-il sous attaque ?",
+			"Is the decision model calibrated, and does it hold under attack?",
 	},
 ];
 
@@ -92,19 +92,18 @@ export function EvalView() {
 		: { body: null, detail: undefined };
 
 	let content = body;
-	if (error)
-		content = <Notice>Les rapports n'ont pas pu être chargés : {error}</Notice>;
-	else if (!files) content = <Notice>Chargement des rapports…</Notice>;
+	if (error) content = <Notice>The reports couldn't be loaded: {error}</Notice>;
+	else if (!files) content = <Notice>Loading the reports…</Notice>;
 	else if (!file)
-		content = <Notice>/api/eval ne sert pas de rapport « {t.label} ».</Notice>;
-	else if (!body) content = <Notice>Rapport illisible : {file.file}</Notice>;
+		content = <Notice>/api/eval serves no “{t.label}” report.</Notice>;
+	else if (!body) content = <Notice>Unreadable report: {file.file}</Notice>;
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-7">
 			<header className="rise flex flex-none flex-wrap items-end gap-4">
 				<div className="flex min-w-0 flex-[1_1_360px] flex-col gap-[7px]">
 					<div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
-						<span className="text-mute">Évaluation</span>
+						<span className="text-mute">Evaluation</span>
 						<span className="text-mute-3">/</span>
 						<span className="font-medium">{t.label}</span>
 						{detail && <span className="text-mute">· {detail}</span>}
@@ -115,7 +114,7 @@ export function EvalView() {
 				</div>
 				{file && (
 					<span
-						data-tip="Le fichier source et la date de chaque nombre de cette page"
+						data-tip="The source file and the date of every number on this page"
 						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 						tabIndex={0}
 						className="inline-flex h-6 items-center gap-[5px] border border-ink bg-surface px-2 font-mono text-xs"
@@ -127,7 +126,7 @@ export function EvalView() {
 			</header>
 			<div
 				role="tablist"
-				aria-label="Sections de l'évaluation"
+				aria-label="Evaluation sections"
 				className="flex flex-none overflow-x-auto border-ink border-b-[1.2px] [scrollbar-width:none]"
 			>
 				{TABS.map((x) => {

@@ -86,7 +86,7 @@ export function Bars({
 								fontSize={11}
 								fill="var(--color-mute)"
 							>
-								{percent ? `${num(t * 100)} %` : t.toLocaleString("fr-FR")}
+								{percent ? `${num(t * 100)}%` : t.toLocaleString("en-US")}
 							</text>
 						</g>
 					))}
@@ -132,7 +132,7 @@ export function Bars({
 										fontSize={12}
 										fill="var(--color-mute-2)"
 									>
-										pas encore mesuré
+										not measured yet
 									</text>
 								)}
 								<text
@@ -227,13 +227,13 @@ export function Strip({
 							fontSize={11}
 							fill="var(--color-mute)"
 						>
-							{l === "yes" ? "oui" : "non"}
+							{l}
 						</text>
 					))}
 					{lanes.map((dots, i) =>
 						dots.map((d) => {
 							const cy = base[i] - 5 - d.level * (DOT + 2) - DOT / 2;
-							const tip = `${d.id} · ${d.label === "yes" ? "oui" : "non"} · ${num(d.score, 2)}`;
+							const tip = `${d.id} · ${d.label} · ${num(d.score, 2)}`;
 							return d.label === "yes" ? (
 								<rect
 									key={d.id}
@@ -273,7 +273,7 @@ export function Strip({
 						fill="var(--color-ink)"
 						dominantBaseline="middle"
 					>
-						seuil {threshold.toLocaleString("fr-FR")}
+						threshold {threshold.toLocaleString("en-US")}
 					</text>
 					<line
 						x1={L}
@@ -292,7 +292,7 @@ export function Strip({
 							fontSize={11}
 							fill="var(--color-mute)"
 						>
-							{t.toLocaleString("fr-FR")}
+							{t.toLocaleString("en-US")}
 						</text>
 					))}
 				</svg>

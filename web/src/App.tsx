@@ -27,14 +27,14 @@ import { LiveView } from "@/views/live/LiveView";
 import { SettingsView } from "@/views/settings/SettingsView";
 
 const NAV: { k: View; label: string; Icon: LucideIcon }[] = [
-	{ k: "live", label: "Run en direct", Icon: Activity },
+	{ k: "live", label: "Live run", Icon: Activity },
 	{ k: "inc", label: "Incidents", Icon: Inbox },
-	{ k: "eval", label: "Évaluation", Icon: ChartColumn },
-	{ k: "connect", label: "Réglages", Icon: SlidersHorizontal },
+	{ k: "eval", label: "Evaluation", Icon: ChartColumn },
+	{ k: "connect", label: "Settings", Icon: SlidersHorizontal },
 ];
 
 const SHORTCUTS =
-	"Raccourcis\n1–4 : changer de vue\nR : rejeter l'appel retenu\nA : approuver (deux fois)\nT : triangle ou courbes";
+	"Shortcuts\n1–4: switch view\nR: reject the held call\nA: approve (twice)\nT: triangle or chart";
 
 export default function App() {
 	return (
@@ -66,7 +66,7 @@ function Shell() {
 	}, [go]);
 
 	useEffect(() => {
-		document.title = hold ? `Retenu · ${hold.step.tool} · Cressey` : "Cressey";
+		document.title = hold ? `Held · ${hold.step.tool} · Cressey` : "Cressey";
 	}, [hold]);
 
 	return (
@@ -102,37 +102,37 @@ function Sidebar({
 	const items = [
 		{
 			Icon: ShieldCheck,
-			label: "Garde",
-			value: alerting.length ? "alerte" : "active",
+			label: "Guard",
+			value: alerting.length ? "alert" : "active",
 			dot: alerting.length ? "var(--color-warn-bd)" : "var(--color-ok-strong)",
 			tip: alerting.length
-				? `Mode de protection : Garde\nEn alerte : ${alerting.map((k) => CHECK[k]).join(", ")}`
-				: "Mode de protection : Garde\nLes appels à risque attendent une décision humaine.",
+				? `Protection mode: Guard\nOn alert: ${alerting.map((k) => CHECK[k]).join(", ")}`
+				: "Protection mode: Guard\nRisky calls wait for a human decision.",
 		},
 		{
 			Icon: Cpu,
-			label: "Modèle",
-			// replay and fallback answer from the recording: « réponses enregistrées ».
-			value: mode === "live" || mode === "record" ? mode : "enregistré",
+			label: "Model",
+			// replay and fallback answer from the recording: “recorded answers”.
+			value: mode === "live" || mode === "record" ? mode : "recorded",
 			dot: mode === "live" ? "var(--color-ok-strong)" : "var(--color-warn-bd)",
 			tip:
 				mode === "live" || mode === "record"
-					? `Mode des modèles : ${mode}`
-					: `Mode des modèles : réponses enregistrées (${mode ?? "?"})`,
+					? `Model mode: ${mode}`
+					: `Model mode: recorded answers (${mode ?? "?"})`,
 		},
 		{
 			Icon: Hash,
-			label: "Journal",
+			label: "Log",
 			value: !status
 				? "…"
 				: status.log.count
 					? `${status.log.hash.slice(0, 12)} · ${status.log.count}`
-					: "vide",
+					: "empty",
 			dot: status?.log.intact
 				? "var(--color-ok-strong)"
 				: "var(--color-held-strong)",
 			tip: status
-				? `Journal des événements\ndernier hash ${status.log.hash.slice(0, 12)}\n${status.log.count} enregistrements · chaîne ${status.log.intact ? "intacte" : "rompue"}`
+				? `Event log\nlast hash ${status.log.hash.slice(0, 12)}\n${status.log.count} records · chain ${status.log.intact ? "intact" : "broken"}`
 				: "",
 		},
 	];
@@ -157,7 +157,7 @@ function Sidebar({
 						k === "inc" && pending
 							? String(pending)
 							: k === "live" && holds.length
-								? "retenu"
+								? "held"
 								: "";
 					const red = k === "live" || (k === "inc" && holds.length > 0);
 					return (
@@ -186,11 +186,11 @@ function Sidebar({
 			<div className="flex flex-none flex-col gap-1 border-line border-t px-2.5 pt-3 pb-3.5">
 				{offline && (
 					<div
-						data-tip="Le backend ne répond pas : l'écran montre la dernière réponse."
+						data-tip="The backend isn't answering: the screen shows its last answer."
 						className="flex h-8 items-center gap-2.5 overflow-hidden whitespace-nowrap px-3 font-medium text-held-fg text-xs"
 					>
 						<Unplug size={15} />
-						{open && "API injoignable"}
+						{open && "API unreachable"}
 					</div>
 				)}
 				{items.map(({ Icon, label, value, dot, tip }) => (
@@ -216,17 +216,17 @@ function Sidebar({
 				<div className={`flex gap-1 pt-1.5 ${open ? "flex-row" : "flex-col"}`}>
 					<button
 						type="button"
-						aria-label="Raccourcis clavier"
+						aria-label="Keyboard shortcuts"
 						data-tip={SHORTCUTS}
 						className="btn h-8 min-w-8 flex-auto cursor-help px-1.5 text-[12.5px]"
 					>
 						<Keyboard size={15} />
-						{open && "Raccourcis"}
+						{open && "Shortcuts"}
 					</button>
 					<button
 						type="button"
-						aria-label={open ? "Replier le menu" : "Déplier le menu"}
-						data-tip={open ? "Replier le menu" : "Déplier le menu"}
+						aria-label={open ? "Collapse the menu" : "Expand the menu"}
+						data-tip={open ? "Collapse the menu" : "Expand the menu"}
 						onClick={toggle}
 						className="btn h-8 w-8 flex-none p-0"
 					>
@@ -258,16 +258,16 @@ function HoldBanner() {
 			<span className="inline-flex size-7 items-center justify-center bg-held-strong text-surface">
 				<Pause size={16} strokeWidth={2.5} />
 			</span>
-			<strong className="font-semibold text-[15px]">Appel retenu</strong>
+			<strong className="font-semibold text-[15px]">Call held</strong>
 			<span className="font-mono text-[13px]">
 				{hold.run_id} · #{hold.step.n} {hold.step.tool}
-				{holds.length > 1 && ` · et ${holds.length - 1} autre(s)`}
+				{holds.length > 1 && ` · and ${holds.length - 1} more`}
 			</span>
 			<span
-				data-tip="Sans décision, l'appel est annulé sans risque à la fin du compte à rebours."
+				data-tip="Without a decision, the call is safely cancelled when the countdown ends."
 				className="inline-flex items-baseline gap-2"
 			>
-				<span className="font-mono text-xs">annulation sûre dans</span>
+				<span className="font-mono text-xs">safe cancel in</span>
 				<span className="font-pixel text-[30px] leading-none">
 					{clock(hold.step.held_until, now)}
 				</span>
@@ -278,7 +278,7 @@ function HoldBanner() {
 				onClick={() => go("live", { run: hold.run_id, step: hold.step.n })}
 				className="btn btn-dark"
 			>
-				Voir la retenue
+				Go to hold
 			</button>
 		</div>
 	);
@@ -295,14 +295,14 @@ function AlertBanner() {
 		>
 			<BellRing size={17} />
 			<strong className="font-semibold">
-				Mode alerte : Cressey ne bloque pas
+				Alert mode: Cressey isn't blocking
 			</strong>
 			<span className="font-mono text-[13px]">
 				{alerting.map((k) => CHECK[k]).join(" · ")}
 			</span>
 			<div className="flex-1" />
 			<button type="button" onClick={() => go("connect")} className="btn">
-				Que fait Cressey quand… ?
+				What does Cressey do when…?
 			</button>
 		</div>
 	);
@@ -319,15 +319,13 @@ function FleetBanner() {
 			{fleet.map((f) => (
 				<div key={f.target} className="flex flex-wrap items-center gap-3">
 					<Radar size={17} />
-					<strong className="font-semibold">Signal entre runs</strong>
+					<strong className="font-semibold">Signal across runs</strong>
 					<span className="font-mono text-[13px]">
-						{f.runs.length} runs visent {f.target} hors mandat, de{" "}
-						{time(f.first_at)} à {time(f.last_at)}
+						{f.runs.length} runs target {f.target} outside their mandate, from{" "}
+						{time(f.first_at)} to {time(f.last_at)}
 					</span>
 					{responses?.fleet === "stop" && (
-						<span className="chip border-info-bd">
-							leurs appels sont refusés
-						</span>
+						<span className="chip border-info-bd">their calls are refused</span>
 					)}
 				</div>
 			))}

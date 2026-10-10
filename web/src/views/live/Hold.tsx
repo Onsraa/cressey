@@ -35,7 +35,7 @@ export function Hold({
 				</span>
 				{sev && (
 					<span
-						data-tip="Gravité fixée par le code : plancher de sécurité ou clé piège, critique ; deux côtés confirmés, haute."
+						data-tip="Severity set by code: safety floor or trap key, critical; two legs confirmed, high."
 						className={`chip h-6 px-2 ${TONE[sev.tone]}`}
 					>
 						<sev.Icon size={12} />
@@ -57,7 +57,7 @@ export function Hold({
 							className="btn btn-dark h-12 font-semibold text-base"
 						>
 							<X size={18} strokeWidth={2.5} />
-							Rejeter
+							Reject
 							<span className="font-mono font-normal text-[11px] opacity-70">
 								R
 							</span>
@@ -66,11 +66,11 @@ export function Hold({
 							type="button"
 							onClick={decision.approve}
 							disabled={decision.busy}
-							data-tip="Aucun modèle ne peut approuver un appel."
+							data-tip="No model can approve a call."
 							className={`btn h-9 ${decision.armed ? "btn-dark" : ""}`}
 						>
 							<Check size={15} />
-							{decision.armed ? "Confirmer l'approbation" : "Approuver"}
+							{decision.armed ? "Confirm approval" : "Approve"}
 							<span className="font-mono text-[11px] opacity-70">A</span>
 						</button>
 						{decision.error && (
@@ -88,7 +88,7 @@ export function Hold({
 						<st.Icon size={18} className="flex-none" />
 						<div className="flex flex-col gap-0.5">
 							<span className="block font-semibold text-[15px] first-letter:uppercase">
-								{st.label} à {time(step.decided_at)}
+								{st.label} at {time(step.decided_at)}
 							</span>
 							<span className="text-[13px] leading-[1.4]">{st.tip}</span>
 						</div>
@@ -99,17 +99,17 @@ export function Hold({
 							onClick={() => go("inc", { incident: incident.id })}
 							className="btn h-8 self-start px-3 text-[13px]"
 						>
-							Ouvrir l'incident
+							Open incident
 							<ArrowRight size={14} />
 						</button>
 					)}
 				</>
 			)}
-			<Labeled label="tenté">
-				<Code>{argsText(run, step.args, "\n") || "aucun argument"}</Code>
+			<Labeled label="attempted">
+				<Code>{argsText(run, step.args, "\n") || "no arguments"}</Code>
 			</Labeled>
 			<div className="flex flex-col gap-[7px]">
-				<span className="label">pourquoi il est retenu</span>
+				<span className="label">why it is held</span>
 				{step.reason && (
 					<span className="text-pretty font-medium text-sm leading-[1.4]">
 						{step.reason}
@@ -119,7 +119,7 @@ export function Hold({
 					{LEGS.filter((g) => step.legs?.[g.k].confirmed).map((g) => (
 						<span
 							key={g.k}
-							data-tip={`${g.name} : confirmée par les faits`}
+							data-tip={`${g.name}: confirmed by the facts`}
 							className={`chip text-[11px] ${TONE.warn}`}
 						>
 							<span
@@ -128,7 +128,7 @@ export function Hold({
 							>
 								{g.L}
 							</span>
-							confirmé
+							confirmed
 						</span>
 					))}
 				</div>
@@ -137,8 +137,8 @@ export function Hold({
 				<span
 					data-tip={
 						run.revoked
-							? "Suspendue dès que l'appel a été retenu : les appels suivants du run sont refusés."
-							: "Clé du run active"
+							? "Suspended as soon as the call was held: the run's next calls are refused."
+							: "Run key active"
 					}
 					className="flex min-h-[34px] items-center gap-2 border-line border-b"
 				>
@@ -147,16 +147,16 @@ export function Hold({
 					) : (
 						<KeyRound size={14} className="text-ok-strong" />
 					)}
-					Clé du run {run.revoked ? "suspendue" : "active"}
+					Run key {run.revoked ? "suspended" : "active"}
 				</span>
 				{run.way_out_step ? (
 					<span
-						data-tip="Envoyée avec le résultat de l'appel qui a confirmé la pression, sans humain."
+						data-tip="Sent with the result of the call that confirmed the pressure, without a human."
 						className="flex min-h-[34px] items-center gap-2 border-line border-b"
 					>
 						<DoorOpen size={14} className="text-info-fg" />
-						Porte de sortie envoyée à l'agent
-						<span className="label ml-auto">étape {run.way_out_step}</span>
+						Way out sent to the agent
+						<span className="label ml-auto">step {run.way_out_step}</span>
 					</span>
 				) : null}
 			</div>
@@ -181,10 +181,10 @@ function Countdown({
 	return (
 		<div className="flex flex-col gap-1.5">
 			<span
-				data-tip="Sans décision, l'appel est annulé sans risque."
+				data-tip="Without a decision, the call is safely cancelled."
 				className="label self-start"
 			>
-				annulation sûre dans
+				safe cancel in
 			</span>
 			<span className="font-pixel text-[72px] leading-[0.82] tracking-[0.02em]">
 				{Math.floor(s / 60)}:{String(s % 60).padStart(2, "0")}

@@ -5,13 +5,13 @@ import type { Decision, JudgedSet, Latency } from "./read";
 import { Aside, Head, type Tile, Tiles } from "./ui";
 
 const CALL: Record<Latency["call"], string> = {
-	label: "étiquettes",
-	judgment: "jugement",
-	report: "rapport",
+	label: "labels",
+	judgment: "judgment",
+	report: "report",
 };
 
 const usd = (v: number) =>
-	v.toLocaleString("fr-FR", {
+	v.toLocaleString("en-US", {
 		style: "currency",
 		currency: "USD",
 		maximumFractionDigits: 3,
@@ -20,7 +20,7 @@ const usd = (v: number) =>
 // Accuracy at the threshold, with the margin and the calibration error.
 const judged = (s: JudgedSet) => ({
 	value: s.accuracy.replace("/", " / "),
-	sub: `seuil ${s.threshold.toLocaleString("fr-FR")} · marge ${signed(s.margin, 2)} · ECE ${num(s.ece, 3)}`,
+	sub: `threshold ${s.threshold.toLocaleString("en-US")} · margin ${signed(s.margin, 2)} · ECE ${num(s.ece, 3)}`,
 });
 
 function SetStrip({ title, set }: { title: string; set: JudgedSet }) {
@@ -32,7 +32,7 @@ function SetStrip({ title, set }: { title: string; set: JudgedSet }) {
 			<Strip
 				scores={set.scores}
 				threshold={set.threshold}
-				label={`${title} : score de chaque cas étiqueté, oui contre non, seuil ${set.threshold.toLocaleString("fr-FR")}`}
+				label={`${title}: the score of each labelled case, yes against no, threshold ${set.threshold.toLocaleString("en-US")}`}
 			/>
 		</div>
 	);
@@ -47,34 +47,34 @@ export function DecisionTab({ file, d }: { file: EvalFile; d: Decision }) {
 	const p50 = d.latency.map((l) => l.p50_ms);
 	const tiles: Tile[] = [
 		{
-			label: "Jugement des écritures",
+			label: "Write judgment",
 			...judged(d.write),
-			reading: "bon, plus haut est mieux",
+			reading: "good, higher is better",
 		},
 		{
-			label: "Vérification du rapport",
+			label: "Report check",
 			...judged(d.report),
-			reading: "à surveiller, plus haut est mieux",
+			reading: "to watch, higher is better",
 			watch: true,
 		},
 		{
-			label: "Sous notre attaque",
+			label: "Under our attack",
 			value: signed(shift, 2),
-			sub: `écart de score max · plancher tenu ${held} / ${d.attack.length}`,
-			reading: "à surveiller, plus près de 0 est mieux",
+			sub: `largest score shift · floor held ${held} / ${d.attack.length}`,
+			reading: "to watch, closer to 0 is better",
 			watch: true,
 		},
 		{
-			label: "Latence par appel · p50",
+			label: "Latency per call · p50",
 			value: `${num(Math.min(...p50))}–${num(Math.max(...p50))} ms`,
 			sub: `${d.latency.map((l) => `${CALL[l.call]} ${num(l.p50_ms)}`).join(" · ")} · ${sample([...new Set(d.latency.map((l) => l.n))].join(" / "))}`,
-			reading: "bon, plus bas est mieux",
+			reading: "good, lower is better",
 		},
 		{
-			label: "Prix · million de jetons en entrée",
+			label: "Price · million input tokens",
 			value: usd(d.price),
-			sub: `tarif de ${d.model}, pas une mesure`,
-			reading: "bon, plus bas est mieux",
+			sub: `${d.model}'s list price, not a measure`,
+			reading: "good, lower is better",
 			price: true,
 		},
 	];
@@ -84,25 +84,25 @@ export function DecisionTab({ file, d }: { file: EvalFile; d: Decision }) {
 			<Tiles file={file} tiles={tiles} />
 			<section className="panel rise flex-none">
 				<Head>
-					<span>SCORES PAR CAS</span>
-					<Aside>{file.split} · étiquettes de l'équipe</Aside>
+					<span>SCORES BY CASE</span>
+					<Aside>{file.split} · the team's labels</Aside>
 					<div className="flex-1" />
 					<Aside>
 						<span className="size-2.5 bg-held-strong" />
-						oui : à signaler
+						yes: to flag
 					</Aside>
 					<Aside>
 						<span className="size-2.5 rounded-full border-[1.6px] border-ok-strong" />
-						non : à laisser passer
+						no: to let through
 					</Aside>
 					<Aside>
 						<span className="w-4 border-ink border-t-2 border-dashed" />
-						seuil
+						threshold
 					</Aside>
 				</Head>
 				<div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] gap-x-8 gap-y-3 px-3.5 py-3">
-					<SetStrip title="Jugement des écritures" set={d.write} />
-					<SetStrip title="Vérification du rapport" set={d.report} />
+					<SetStrip title="Write judgment" set={d.write} />
+					<SetStrip title="Report check" set={d.report} />
 				</div>
 			</section>
 		</>

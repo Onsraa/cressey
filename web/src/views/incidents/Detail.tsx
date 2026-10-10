@@ -24,10 +24,10 @@ import { acted, OBSERVER_TIP } from "./util";
 type Tab = "overview" | "guides" | "fixes" | "observer";
 
 const TABS: { k: Tab; label: string; Icon: LucideIcon }[] = [
-	{ k: "overview", label: "Vue d'ensemble", Icon: LayoutDashboard },
+	{ k: "overview", label: "Overview", Icon: LayoutDashboard },
 	{ k: "guides", label: "Guides", Icon: BookOpen },
-	{ k: "fixes", label: "Correctifs & rejeu", Icon: Wrench },
-	{ k: "observer", label: "Observateur", Icon: Eye },
+	{ k: "fixes", label: "Fixes & replay", Icon: Wrench },
+	{ k: "observer", label: "Observer", Icon: Eye },
 ];
 
 const isStatus = (s: string): s is StepStatus => Object.hasOwn(STATUS, s);
@@ -38,7 +38,7 @@ export function Detail({ incident: i }: { incident: Incident }) {
 	const { runs } = useLive();
 	const [tab, setTab] = useState<Tab>("overview");
 	const run = runs.find((r) => r.id === i.run_id);
-	// The same task in « Observateur » mode: logged, never held.
+	// The same task in “Observer” mode: logged, never held.
 	const control = runs
 		.filter((r) => r.kind === "control" && r.task === run?.task)
 		.toSorted((a, b) => a.started_at.localeCompare(b.started_at))
@@ -60,30 +60,30 @@ export function Detail({ incident: i }: { incident: Incident }) {
 					<span className="text-mute">{i.run_id}</span>
 					<span className="text-mute-3">·</span>
 					<span className="mr-1.5 text-mute">
-						ouvert à {time(i.created_at)}
+						opened at {time(i.created_at)}
 					</span>
 					<span className={`chip ${TONE[sev.tone]}`}>
 						<sev.Icon size={11} />
 						{sev.label}
 					</span>
-					<Tip tip="Décision sur l'appel retenu" className="chip">
+					<Tip tip="Decision on the held call" className="chip">
 						<Gavel size={11} />
 						{i.decision === "held"
-							? "en attente de décision"
+							? "awaiting a decision"
 							: decision(i.decision)}
 					</Tip>
 					{run?.kind === "control" && (
 						<Tip tip={OBSERVER_TIP} className={`chip ${TONE.info}`}>
 							<Eye size={11} />
-							Observateur
+							Observer
 						</Tip>
 					)}
 					{acted(i) && (
 						<Tip
-							tip="L'action a eu lieu : ce qu'elle a révélé reste réel"
+							tip="The action took place: what it revealed is still real"
 							className={`chip ${TONE.warn}`}
 						>
-							action approuvée
+							action approved
 						</Tip>
 					)}
 				</div>
@@ -93,7 +93,7 @@ export function Detail({ incident: i }: { incident: Incident }) {
 				<Lifecycle incident={i} />
 				<div
 					role="tablist"
-					aria-label="Sections de l'incident"
+					aria-label="Incident sections"
 					className="-mx-6 flex flex-wrap border-ink border-b-[1.2px] px-6"
 				>
 					{tabs.map(({ k, label, Icon }) => {
@@ -135,21 +135,21 @@ function Lifecycle({ incident: i }: { incident: Incident }) {
 	const st = stage(i);
 	const approved = i.fixes.filter((f) => f.approved).length;
 	const sub = [
-		`Ouvert à ${time(i.created_at)}`,
+		`Opened at ${time(i.created_at)}`,
 		i.decision === "held"
-			? "En attente d'une décision"
-			: `Décision : ${decision(i.decision)}`,
+			? "Awaiting a decision"
+			: `Decision: ${decision(i.decision)}`,
 		i.fixes.length
-			? `${approved} sur ${i.fixes.length} correctifs approuvés`
-			: "aucun correctif proposé",
+			? `${approved} of ${i.fixes.length} fixes approved`
+			: "no fixes proposed",
 		i.replay
 			? i.replay.passed
-				? "rejeu validé"
-				: "rejeu échoué"
-			: "pas encore rejoué",
+				? "replay passed"
+				: "replay failed"
+			: "not replayed yet",
 	];
 	return (
-		<ol aria-label="Cycle de vie" className="grid grid-cols-4">
+		<ol aria-label="Lifecycle" className="grid grid-cols-4">
 			{LIFE.map((label, k) => {
 				const done = k <= st;
 				const Icon = done ? Check : k === st + 1 ? ChevronRight : Minus;

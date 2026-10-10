@@ -24,7 +24,7 @@ import type {
 	StepStatus,
 } from "@/api/types";
 
-// The interface is in French (dashboard.md); every label the views show lives here.
+// The interface is in English; every label the views show lives here.
 
 export type Tone = "ok" | "held" | "warn" | "info" | "grey";
 
@@ -43,12 +43,12 @@ export const LEGS: {
 	name: string;
 	color: string;
 }[] = [
-	{ k: "pressure", L: "P", name: "Pression", color: "var(--color-p)" },
-	{ k: "opportunity", L: "O", name: "Opportunité", color: "var(--color-o)" },
+	{ k: "pressure", L: "P", name: "Pressure", color: "var(--color-p)" },
+	{ k: "opportunity", L: "O", name: "Opportunity", color: "var(--color-o)" },
 	{
 		k: "rationalization",
 		L: "R",
-		name: "Rationalisation",
+		name: "Rationalization",
 		color: "var(--color-r)",
 	},
 ];
@@ -58,109 +58,109 @@ type Look = { label: string; Icon: LucideIcon; tone: Tone; tip: string };
 // A step's status. Rejected and refused are safe outcomes, hence green, as in the design.
 export const STATUS: Record<StepStatus, Look> = {
 	allowed: {
-		label: "autorisé",
+		label: "allowed",
 		Icon: Check,
 		tone: "ok",
-		tip: "Autorisé : passé tel quel",
+		tip: "Allowed: passed through as is",
 	},
 	alerted: {
-		label: "alerté",
+		label: "alerted",
 		Icon: BellRing,
 		tone: "warn",
-		tip: "Alerté : la réponse est « alerte », l'appel est passé et un incident est ouvert",
+		tip: "Alerted: the response is “Alert”, the call went through and an incident is open",
 	},
 	held: {
-		label: "retenu",
+		label: "held",
 		Icon: Pause,
 		tone: "held",
-		tip: "Retenu : en attente d'une décision humaine",
+		tip: "Held: waiting for a human decision",
 	},
 	approved: {
-		label: "approuvé",
+		label: "approved",
 		Icon: SquareCheck,
 		tone: "warn",
-		tip: "Approuvé par un humain, puis exécuté",
+		tip: "Approved by a human, then run",
 	},
 	rejected: {
-		label: "rejeté",
+		label: "rejected",
 		Icon: X,
 		tone: "ok",
-		tip: "Rejeté par un humain : non exécuté",
+		tip: "Rejected by a human: not run",
 	},
 	expired: {
-		label: "expiré",
+		label: "expired",
 		Icon: Hourglass,
 		tone: "warn",
-		tip: "Pas de décision à temps : annulé sans risque",
+		tip: "No decision in time: safely cancelled",
 	},
 	denied: {
-		label: "refusé",
+		label: "refused",
 		Icon: Ban,
 		tone: "ok",
-		tip: "Refusé par Cressey, sans attendre",
+		tip: "Refused by Cressey, without waiting",
 	},
 	would_hold: {
-		label: "aurait été retenu",
+		label: "would have been held",
 		Icon: CirclePause,
 		tone: "held",
-		tip: "Rejeu : cet appel aurait été retenu, et le rejeu échoue",
+		tip: "Replay: this call would have been held, and the replay fails",
 	},
 };
 
 export const RISK: Record<Step["risk"], Omit<Look, "tip">> = {
-	read: { label: "lecture", Icon: Eye, tone: "grey" },
-	write: { label: "écriture", Icon: Pencil, tone: "warn" },
+	read: { label: "read", Icon: Eye, tone: "grey" },
+	write: { label: "write", Icon: Pencil, tone: "warn" },
 	destructive: { label: "destructive", Icon: Trash, tone: "held" },
 };
 
 export const SEVERITY: Record<Incident["severity"], Omit<Look, "tip">> = {
-	critique: { label: "critique", Icon: TriangleAlert, tone: "held" },
-	haute: { label: "haute", Icon: ChevronsUp, tone: "warn" },
+	critique: { label: "critical", Icon: TriangleAlert, tone: "held" },
+	haute: { label: "high", Icon: ChevronsUp, tone: "warn" },
 };
 
 export const ROLE: Record<OwnerGuide["owner_role"], string> = {
-	key_owner: "Propriétaire de la clé",
-	task_author: "Auteur de la tâche",
-	platform_owner: "Responsable de la plateforme",
+	key_owner: "Key owner",
+	task_author: "Task author",
+	platform_owner: "Platform owner",
 	soc: "SOC",
 };
 
 export const GUIDE_STATUS: Record<OwnerGuide["status"], string> = {
-	pending: "guide en cours…",
+	pending: "writing the guide…",
 	ok: "ok",
-	unsure: "je ne sais pas, voir l'équipe sécurité",
-	unavailable: "indisponible",
+	unsure: "I don't know — ask the security team",
+	unavailable: "unavailable",
 };
 
 export const KIND: Record<Run["kind"], string> = {
 	live: "live",
-	replay: "rejeu",
-	control: "Observateur",
+	replay: "replay",
+	control: "Observer",
 };
 
 export const VISIBILITY: Record<Run["visibility"], string> = {
-	tools: "Appels d'outils",
+	tools: "Tool calls",
 	messages: "+ Messages",
-	reasoning: "+ Raisonnement",
+	reasoning: "+ Reasoning",
 };
 
 export const RESPONSE: Record<Responses["floor"], string> = {
-	alert: "Alerte",
-	review: "Revue humaine",
-	stop: "Arrêt",
+	alert: "Alert",
+	review: "Human review",
+	stop: "Stop",
 };
 
 export const CHECK: Record<keyof Responses, string> = {
-	floor: "Plancher de sécurité",
-	trap_key: "Clé piège",
+	floor: "Safety floor",
+	trap_key: "Trap key",
 	triangle: "Triangle",
-	fleet: "Signal entre runs",
+	fleet: "Signal across runs",
 };
 
 export const time = (iso?: string | null) =>
-	iso ? new Date(iso).toLocaleTimeString("fr-FR") : "";
+	iso ? new Date(iso).toLocaleTimeString("en-US") : "";
 
-// The checks currently on « alerte »: Cressey lets their calls through.
+// The checks currently on “Alert”: Cressey lets their calls through.
 export const onAlert = (r?: Responses) =>
 	r
 		? (["floor", "trap_key", "triangle"] as const).filter(

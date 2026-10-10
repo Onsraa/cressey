@@ -3,7 +3,7 @@ import { LEGS } from "@/lib/labels";
 import { scored, tipOf } from "./run";
 import { useSize } from "./ui";
 
-// Room for the axis labels and the « RETENU » marks.
+// Room for the axis labels and the “HELD” marks.
 const PAD = { left: 38, right: 8, top: 22, bottom: 24 };
 const TICKS = [0, 0.25, 0.5, 0.75, 1];
 const LABEL_W = 34; // the room an x label needs, so that a long run thins them out
@@ -52,7 +52,7 @@ export function Chart({ run }: { run: Run }) {
 						width={w}
 						height={h}
 						role="img"
-						aria-label="Pression, opportunité et rationalisation à chaque appel, l'appel retenu marqué"
+						aria-label="Pressure, opportunity and rationalization at each call, with the held call marked"
 						className="absolute inset-0 font-mono text-[11px]"
 					>
 						{calls.map((c, i) =>
@@ -71,7 +71,7 @@ export function Chart({ run }: { run: Run }) {
 										textAnchor="middle"
 										className="fill-held-fg font-pixel text-[17px]"
 									>
-										RETENU
+										HELD
 									</text>
 								</g>
 							) : null,
