@@ -154,6 +154,8 @@ class Step(BaseModel):
     # and for each flagged label the exact part that carries it (redacted).
     labels: dict[str, float] | None = Field(None, exclude=True)
     quotes: dict[str, str] = Field(default_factory=dict, exclude=True)
+    # Its call may still return a result: a parallel call doesn't label it before that.
+    running: bool = Field(False, exclude=True)
 
 
 class Message(BaseModel):

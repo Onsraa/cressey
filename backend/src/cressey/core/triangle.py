@@ -395,8 +395,9 @@ def label_soon(run: Run, i: int, judge: Judge) -> asyncio.Task[None]:
 
 
 async def _read(run: Run, steps: list[Step], judge: Judge) -> None:
-    """Every one of these steps read once: the reads in flight are awaited, not repeated."""
-    positions = [s.n - 1 for s in steps if s.labels is None]
+    """Every one of these steps read once: the reads in flight are awaited, not repeated.
+    A call still running is left for when its result is in (`label_soon` then)."""
+    positions = [s.n - 1 for s in steps if s.labels is None and not s.running]
     await asyncio.gather(*(label_soon(run, i, judge) for i in positions))
 
 

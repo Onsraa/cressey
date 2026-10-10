@@ -756,6 +756,56 @@ class WritesWeakenJudge:
         }
 
 
+class DownOnWritesJudge:
+    """Answers no to every label; the judgment of a write gets no answer, as when Jev is
+    down."""
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "weakens" in questions:
+            return None
+        return {
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
+        }
+
+
+async def test_a_late_read_that_doesnt_alarm_still_shows_what_it_found(
+    tmp_path, monkeypatch
+):
+    """Read afterwards and not held: the step shows the late judgment, here that the decision
+    model didn't answer, never the « read afterwards » placeholder."""
+    from cressey.app import create_app
+    from cressey.core import triangle
+    from cressey.demo.server import serve
+    from cressey.settings import Settings
+    from tests.server import fake_guide
+
+    monkeypatch.setattr(triangle, "PARTS_BEFORE", 1)
+    monkeypatch.setattr(triangle, "CHUNK", 1_000)
+    s = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+    )
+    with serve(create_app(s, make_guide=fake_guide, judge=DownOnWritesJudge())) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            big = {"path": "big.md", "content": "b" * 3_000}
+            await a.call_tool("write_file", big, raise_on_error=False)
+        facts: list[str] = []
+        for _ in range(250):
+            [step] = await steps(base, run)
+            facts = step["legs"]["rationalization"]["facts"]
+            if not any("lu après coup" in f for f in facts):
+                break
+            await asyncio.sleep(0.02)
+        incidents = (await api(base, "GET", "/api/incidents")).json()
+    assert facts == ["modèle de décision indisponible : rationalisation non mesurée"]
+    assert step["status"] == "allowed" and incidents == []
+
+
 async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(
     tmp_path, monkeypatch
 ):

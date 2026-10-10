@@ -148,69 +148,78 @@ class Guard(Middleware):
         dumped = json.dumps(args, ensure_ascii=False)
         shown = await asyncio.to_thread(redact, dumped, dict(run.known))
         step = self.runs.add_step(run, name, args, shown, risk, floor)
-        if run.revoked:
-            self.runs.mark(run, step, "denied")
-            raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
-        triangle = await legs(run, step, self.judge, self.policy.triangle)
-        if run.revoked:  # a parallel call was held while this one was being judged
-            self.runs.mark(run, step, "denied")
-            raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
-        triangle_hold = self.triangle_holds and alarm(triangle, risk)
-        reason = floor or (alarm_reason(triangle) if triangle_hold else None)
-        self.runs.score(run, step, triangle, reason)
-        # The Observateur run and the floor-alone ablation show what happens without it.
-        if self.triangle_holds and run.kind != "control":
-            self.runs.act_on_pressure(run, step, triangle)
-        if reason and run.kind != "replay":
-            self.incidents.open(run, step, "critique" if floor else "haute")
-        step.check_ms = _ms_since(start)  # the time to stop, when the call is held
-        # A call that would be held still goes to a human: only the others are refused.
-        if not reason and run.read_only_step and risk == "destructive":
-            step.reason = READ_ONLY
-            self.runs.mark(run, step, "denied")
-            raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
-        # The agent learns it was held, never why: a reason teaches it what to route around
-        # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
-        held = ToolError(f"Cressey : action retenue. {WAY_OUT}")
-        response = self._response(name, reason, bool(trapped), bool(floor))
-        if response == "alert":
-            self.runs.mark(run, step, "alerted")  # through, with its incident open
-        elif reason and run.kind != "live":
-            self.runs.mark(run, step, "would_hold")
-            if run.kind == "replay":
+        try:
+            if run.revoked:
+                self.runs.mark(run, step, "denied")
+                raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
+            triangle = await legs(run, step, self.judge, self.policy.triangle)
+            if run.revoked:  # a parallel call was held while this one was being judged
+                self.runs.mark(run, step, "denied")
+                raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
+            triangle_hold = self.triangle_holds and alarm(triangle, risk)
+            reason = floor or (alarm_reason(triangle) if triangle_hold else None)
+            self.runs.score(run, step, triangle, reason)
+            # The Observateur run and the floor-alone ablation show what happens without it.
+            if self.triangle_holds and run.kind != "control":
+                self.runs.act_on_pressure(run, step, triangle)
+            if reason and run.kind != "replay":
+                self.incidents.open(run, step, "critique" if floor else "haute")
+            step.check_ms = _ms_since(start)  # the time to stop, when the call is held
+            # A call that would be held still goes to a human: only the others are refused.
+            if not reason and run.read_only_step and risk == "destructive":
+                step.reason = READ_ONLY
+                self.runs.mark(run, step, "denied")
+                raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
+            # The agent learns it was held, never why: a reason teaches it what to route around
+            # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
+            held = ToolError(f"Cressey : action retenue. {WAY_OUT}")
+            response = self._response(name, reason, bool(trapped), bool(floor))
+            if response == "alert":
+                self.runs.mark(run, step, "alerted")  # through, with its incident open
+            elif reason and run.kind != "live":
+                self.runs.mark(run, step, "would_hold")
+                if run.kind == "replay":
+                    raise held
+            elif response == "stop":
+                run.revoked = (
+                    True  # as after a rejection: the rest of the run is denied
+                )
+                self.runs.mark(run, step, "denied")
+                raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
+            elif reason and not await self.runs.hold(run, step, self.hold_timeout):
                 raise held
-        elif response == "stop":
-            run.revoked = True  # as after a rejection: the rest of the run is denied
-            self.runs.mark(run, step, "denied")
-            raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
-        elif reason and not await self.runs.hold(run, step, self.hold_timeout):
-            raise held
-        # The key broker: the tool gets the credential the mandate allows, never the agent's
-        # own key. The Observer measures what happens without Cressey, so it's left alone.
-        credential = self.policy.broker.get(name) if run.kind != "control" else None
-        if credential:
-            sent = scoped(args, credential, run.mandate, step.status == "approved")
-            message = context.message.model_copy(update={"arguments": dict(sent)})
-            context = context.copy(message=message)
-        result = await call_next(context)
-        text = _text(result)
-        scanned = time.perf_counter()
-        found = await asyncio.to_thread(scan, text)
-        step.scan_ms = _ms_since(scanned)
-        self.runs.record(run, step, result.is_error, text, found)
-        label_soon(
-            run, step.n - 1, self.judge
-        )  # read now: the next write won't wait for it
-        # Too long to read before it ran: read now, without holding the developer's work.
-        late = not reason and risk != "read" and not read_before(step)
-        if late and run.kind != "replay":
-            task = asyncio.get_running_loop().create_task(self._read_late(run, step))
-            self._late.add(task)
-            task.add_done_callback(self._late.discard)
-        # Added after the record: the ledger labels the tool's own text, not Cressey's.
-        if run.way_out_step == step.n:
-            result.content.append(mcp_types.TextContent(text=f"Cressey : {WAY_OUT}"))
-        return result
+            # The key broker: the tool gets the credential the mandate allows, never the agent's
+            # own key. The Observer measures what happens without Cressey, so it's left alone.
+            credential = self.policy.broker.get(name) if run.kind != "control" else None
+            if credential:
+                sent = scoped(args, credential, run.mandate, step.status == "approved")
+                message = context.message.model_copy(update={"arguments": dict(sent)})
+                context = context.copy(message=message)
+            result = await call_next(context)
+            text = _text(result)
+            scanned = time.perf_counter()
+            found = await asyncio.to_thread(scan, text)
+            step.scan_ms = _ms_since(scanned)
+            self.runs.record(run, step, result.is_error, text, found)
+            label_soon(
+                run, step.n - 1, self.judge
+            )  # read now: the next write won't wait for it
+            # Too long to read before it ran: read now, without holding the developer's work.
+            late = not reason and risk != "read" and not read_before(step)
+            if late and run.kind != "replay":
+                task = asyncio.get_running_loop().create_task(
+                    self._read_late(run, step)
+                )
+                self._late.add(task)
+                task.add_done_callback(self._late.discard)
+            # Added after the record: the ledger labels the tool's own text, not Cressey's.
+            if run.way_out_step == step.n:
+                result.content.append(
+                    mcp_types.TextContent(text=f"Cressey : {WAY_OUT}")
+                )
+            return result
+        finally:
+            step.running = False  # its result is in, or it was refused
 
     async def _read_late(self, run: Run, step: Step) -> None:
         """A call that ran before it could be read: if the triangle would have held it,
@@ -220,9 +229,12 @@ class Guard(Middleware):
         except Exception:  # a background task has no caller to raise to: report it
             log.exception("late read of step %d of run %s failed", step.n, run.id)
             return
-        if not (self.triangle_holds and alarm(late, step.risk)):
+        alarmed = self.triangle_holds and alarm(late, step.risk)
+        reason = f"{alarm_reason(late)} (lu après coup)" if alarmed else None
+        # Alarm or not, the step shows what the late read found, an unanswered model too.
+        self.runs.score(run, step, late, reason)
+        if not alarmed:
             return
-        self.runs.score(run, step, late, f"{alarm_reason(late)} (lu après coup)")
         self.runs.mark(run, step, "alerted")
         self.incidents.open(run, step, "haute")
 

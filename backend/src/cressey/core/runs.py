@@ -84,6 +84,7 @@ class Runs:
             risk=risk,
             reason=reason,
             raw_args=raw_args,
+            running=True,
         )
         run.steps.append(step)
         self._log(run, step, "call", tool=tool, args=shown, risk=risk, reason=reason)
@@ -135,7 +136,7 @@ class Runs:
         text: str,
         found: list[tuple[str, Secret]],
     ) -> None:
-        step.is_error, step.result = is_error, text
+        step.is_error, step.result, step.running = is_error, text, False
         step.secrets = [s for _, s in found]
         run.known |= {value: s.fingerprint for value, s in found}
         fingerprints: list[JsonValue] = [s.fingerprint for s in step.secrets]
