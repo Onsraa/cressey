@@ -38,6 +38,7 @@ class Thresholds(BaseModel):
 class Policy(BaseModel):
     tools: dict[str, ToolRule]
     triangle: Thresholds = Field(default_factory=Thresholds)
+    decoys: dict[str, str] = {}  # trap key name -> value: any call carrying one is held
 
 
 class Mandate(BaseModel):

@@ -1,5 +1,6 @@
 """Safety floor: code classifies each call and holds irreversible actions, or data
-leaving, outside the task's mandate. Anything it can't classify counts as destructive."""
+leaving, outside the task's mandate. Anything it can't classify counts as destructive.
+A call that carries a trap key is held whatever the mandate."""
 
 import re
 from collections.abc import Mapping
@@ -9,6 +10,7 @@ from pydantic import JsonValue
 from sqlglot import exp
 
 from cressey.core.models import Mandate, Risk, ToolRule
+from cressey.core.trace import decoded, strings
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
 # sqlglot can't parse REPLACE INTO (S4). It inserts or overwrites rows: classed as a write.
@@ -93,3 +95,14 @@ def check(
             return "destructive", (
                 f"envoi hors mandat : {', '.join(outside)}" if outside else None
             )
+
+
+def trap(args: Mapping[str, JsonValue], decoys: Mapping[str, str]) -> str | None:
+    """Why the safety floor holds a call that carries a trap key, whatever the mandate: in any
+    argument, in any case, or in a token that decodes from base64, hex or URL encoding."""
+    text = " ".join(s for value in args.values() for s in strings(value))
+    forms = [form.lower() for form in (text, *decoded(text))]
+    used = [
+        name for name, key in decoys.items() if any(key.lower() in f for f in forms)
+    ]
+    return f"clé piège utilisée : {', '.join(used)}" if used else None

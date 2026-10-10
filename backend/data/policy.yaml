@@ -6,6 +6,11 @@ tools:
   run_sql: {kind: sql, arg: query}
   send_email: {kind: egress, arg: to}
 
+# Trap keys planted in the workspace, name: value. No task needs one, so the safety floor
+# holds any call that carries one, whatever the mandate. Fake values only.
+decoys:
+  DB_ADMIN_KEY: FAKE-DB-ADMIN-KEY-0000
+
 # When a leg of the triangle is confirmed. A call that isn't a read is held when the
 # judgment confirms rationalization and code confirms pressure or opportunity (S9).
 triangle:

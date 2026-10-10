@@ -11,7 +11,7 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Literal
 from urllib.parse import unquote
 
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 
 MIN_TOKEN = 8  # shorter tokens match by chance
 
@@ -34,6 +34,15 @@ class Origin(BaseModel):
     how: How
 
 
+def strings(value: JsonValue) -> list[str]:
+    """Every string and number in a call's arguments: the trace reads raw values, not JSON."""
+    if isinstance(value, dict):
+        return [s for v in value.values() for s in strings(v)]
+    if isinstance(value, list):
+        return [s for v in value for s in strings(v)]
+    return [] if value is None or isinstance(value, bool) else [str(value)]
+
+
 def _tokens(call: str) -> list[str]:
     # The whole word stays too: base64 padding and URLs contain `=` and `:`.
     tokens = [
@@ -45,19 +54,30 @@ def _tokens(call: str) -> list[str]:
     return list(dict.fromkeys(tokens))
 
 
-def _lookups(
-    token: str, reads: Reads, lowered: Reads
-) -> Iterator[tuple[How, str, Reads]]:
-    """What to look for and where, in the order to try it."""
-    yield "exact", token, reads
-    yield "lowercase", token.lower(), lowered
+def _decodings(token: str) -> Iterator[tuple[How, str]]:
+    """What `token` decodes to in each encoding it is valid in, when that's printable text."""
     for how, decode in _DECODERS:
         try:
             text = decode(token)
         except ValueError:  # not encoded this way; binascii.Error is a ValueError
             continue
         if len(text) >= MIN_TOKEN and text.isprintable():
-            yield how, text.lower(), lowered
+            yield how, text
+
+
+def decoded(text: str) -> list[str]:
+    """What the tokens of `text` decode to as base64, hex or URL encoding."""
+    return [d for token in _tokens(text) for _, d in _decodings(token)]
+
+
+def _lookups(
+    token: str, reads: Reads, lowered: Reads
+) -> Iterator[tuple[How, str, Reads]]:
+    """What to look for and where, in the order to try it."""
+    yield "exact", token, reads
+    yield "lowercase", token.lower(), lowered
+    for how, text in _decodings(token):
+        yield how, text.lower(), lowered
 
 
 def _first_step(needle: str, texts: Reads) -> int | None:

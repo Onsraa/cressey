@@ -15,7 +15,7 @@ from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
-from cressey.core.floor import check
+from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
 from cressey.core.models import Policy
@@ -70,6 +70,7 @@ class Guard(Middleware):
             raise ToolError("Cressey : clé inconnue.")
         name, args = context.message.name, context.message.arguments or {}
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
+        floor = trap(args, self.policy.decoys) or floor
         step = self.runs.add_step(run, name, args, risk, floor)
         if run.revoked:
             self.runs.mark(run, step, "denied")

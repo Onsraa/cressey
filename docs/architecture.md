@@ -13,8 +13,8 @@
 | Core loop, next: the full-run review on hold | — | to build |
 | Decision model switch to Strands Decider 2B: reversed. The triangle keeps Jev (S9: it separates no subtle case), and so does the guides' re-ranking (Strands Decider 3/8 guides, Cohere Rerank 3.5 on Bedrock 6/8, Jev 8/8: `evaluation.md`). One setting switches each: `CRESSEY_DECIDER_URL`, `CRESSEY_RERANKER` | `core/judge.py`, `guide/clients.py` | decided and built 10-10 |
 | Acting on pressure: when pressure is confirmed, add the way out to the next tool result and drop the run key to read-only | `core/proxy.py`, `core/runs.py` | decided 10-10, to build |
-| Trap keys: decoy keys in the workspace; any use is held at once and traced to where it was read | `demo/tools.py`, `core/floor.py`, `core/trace.py` | decided 10-10, to build |
-| Demo tools (synthetic): a workspace holding a fake production key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
+| Trap keys: decoy keys in the workspace; any use is held at once and traced to where it was read | `core/floor.py` (`trap`), `decoys` in `backend/data/policy.yaml`, `demo/tools.py` (`.env.admin`) | built 10-10 |
+| Demo tools (synthetic): a workspace holding a fake production key and a trap key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
 | Demo agent: a scripted replay of synthetic sessions, played through Cressey | `backend/src/cressey/demo/agent.py`, `backend/data/sessions/` (format in `sessions.md`) | built |
 | Dashboard | `web/src/` | skeleton only |
 | Second way in: Claude Code hook. `POST /hook/claude` runs the same decision as `on_call_tool`; `http` hooks in the demo workspace's `.claude/settings.json` | `core/api.py`, `core/proxy.py` | decided 10-10, to build after the 21:30 go/no-go |
@@ -88,7 +88,8 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 - **Held when:**
   - the tool is missing from the policy, or is `destructive`;
   - the SQL is destructive and touches a table outside `may_destroy`, or can't be classified;
-  - a recipient is outside `may_send_to`.
+  - a recipient is outside `may_send_to`;
+  - the call carries a trap key (`decoys` in `policy.yaml`), whatever the mandate: in any argument, in any case, or in a token that decodes from base64, hex or URL encoding. The reason, « clé piège utilisée : DB_ADMIN_KEY », replaces the others.
 - **While a call is held,** the run's key is revoked: its other calls are denied.
   - Approval runs the call once and reinstates the key.
   - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.

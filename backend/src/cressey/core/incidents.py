@@ -8,12 +8,10 @@ from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import JsonValue
-
 from cressey.core.models import Fix, Incident, OwnerGuide, Replay, Run, Source, Step
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact
-from cressey.core.trace import trace
+from cressey.core.trace import strings, trace
 from cressey.guide.models import Guide, GuideIncident, OwnerRole
 from cressey.guide.models import Leg as LegName
 
@@ -34,20 +32,11 @@ TASK_WAY_OUT = (
 )
 
 
-def _strings(value: JsonValue) -> list[str]:
-    """Every string and number in the arguments: the trace reads raw values, not JSON."""
-    if isinstance(value, dict):
-        return [s for v in value.values() for s in _strings(v)]
-    if isinstance(value, list):
-        return [s for v in value for s in _strings(v)]
-    return [] if value is None or isinstance(value, bool) else [str(value)]
-
-
 def sources(run: Run, step: Step) -> list[Source]:
     earlier = run.steps[: step.n - 1]
     reads = [(s.n, s.result) for s in earlier if s.result]
     found = []
-    for origin in trace(" ".join(_strings(step.raw_args)), reads):
+    for origin in trace(" ".join(strings(step.raw_args)), reads):
         read = earlier[origin.step - 1]
         fingerprint = run.known.get(origin.token)
         secret = next(
