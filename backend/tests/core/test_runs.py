@@ -1,3 +1,5 @@
+from pydantic import JsonValue
+
 from cressey.core.eventlog import EventLog
 from cressey.core.models import Leg, Legs, RunIn
 from cressey.core.runs import Runs
@@ -13,7 +15,8 @@ def test_acting_on_pressure_is_logged_once_each():
     pressure = Legs(pressure=ON, opportunity=OFF, rationalization=OFF)
     with_key = Legs(pressure=ON, opportunity=ON, rationalization=OFF)
     for n, legs in enumerate([pressure, with_key, with_key], start=1):
-        step = runs.add_step(run, "read_file", {"path": f"f{n}.md"}, "read", None)
+        args: dict[str, JsonValue] = {"path": f"f{n}.md"}
+        step = runs.add_step(run, "read_file", args, str(args), "read", None)
         runs.act_on_pressure(run, step, legs)
     acted = [
         (e.kind, e.data["n"])

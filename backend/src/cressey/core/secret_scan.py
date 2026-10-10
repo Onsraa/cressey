@@ -23,7 +23,7 @@ MIN_VALUE = 8
 _NAMED = "Named secret"
 SCAN_LIMIT = 16_384
 # A value up to OVERLAP - MARGIN characters long is whole in some window.
-WINDOW = 512
+WINDOW = 256
 OVERLAP = 128
 # In a window that stops before the line does, a value ending this close to the cut may be
 # cut short: the next window, which starts OVERLAP characters earlier, sees it whole.

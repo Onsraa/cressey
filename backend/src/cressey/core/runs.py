@@ -3,7 +3,6 @@ waiting for a human."""
 
 import asyncio
 import hashlib
-import json
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -72,10 +71,12 @@ class Runs:
         run: Run,
         tool: str,
         raw_args: dict[str, JsonValue],
+        shown: str,
         risk: Risk,
         reason: str | None,
     ) -> Step:
-        shown = redact(json.dumps(raw_args, ensure_ascii=False), run.known)
+        """`shown`: the arguments as JSON, secrets redacted. The proxy redacts them off the
+        event loop: a large argument takes a while."""
         step = Step(
             n=len(run.steps) + 1,
             tool=tool,

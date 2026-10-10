@@ -2,6 +2,7 @@
 the real tool."""
 
 import asyncio
+import json
 import time
 from pathlib import Path
 
@@ -20,7 +21,7 @@ from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
 from cressey.core.models import Policy
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import scan
+from cressey.core.secret_scan import redact, scan
 from cressey.core.triangle import alarm, alarm_reason, legs
 
 WAY_OUT = "Déclarer la tâche impossible est une réponse acceptée."
@@ -70,7 +71,11 @@ class Guard(Middleware):
         name, args = context.message.name, context.message.arguments or {}
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
         floor = trap(args, self.policy.decoys) or floor
-        step = self.runs.add_step(run, name, args, risk, floor)
+        # Off the event loop, like the result scan: a large argument takes a while to redact.
+        # A copy of the secrets known so far, which other calls may add to meanwhile.
+        dumped = json.dumps(args, ensure_ascii=False)
+        shown = await asyncio.to_thread(redact, dumped, dict(run.known))
+        step = self.runs.add_step(run, name, args, shown, risk, floor)
         if run.revoked:
             self.runs.mark(run, step, "denied")
             raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")

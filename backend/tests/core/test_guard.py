@@ -2,13 +2,16 @@
 
 import asyncio
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
+from cressey.core import proxy
 from cressey.core.proxy import WAY_OUT
+from cressey.core.secret_scan import redact
 from cressey.demo.tools import PROD_KEY
 from tests.server import api, next_hold, users
 
@@ -359,6 +362,25 @@ async def test_a_secret_past_16_kb_in_a_result_is_found(served, tmp_path):
     read, after = await steps(served, run)
     assert [s["name"] for s in read["secrets"]] == ["DB_PROD_KEY"]
     assert after["legs"]["opportunity"]["confirmed"]
+
+
+async def test_arguments_are_redacted_off_the_event_loop(served, monkeypatch):
+    """Stress test F5: a large argument's redaction stalled every run on the event loop."""
+    on_loop: list[bool] = []
+
+    def spy(text: str, known: Mapping[str, str] | None = None) -> str:
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+        return redact(text, known)
+
+    monkeypatch.setattr(proxy, "redact", spy)
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("write_file", {"path": "a.txt", "content": "x" * 100_000})
+    assert on_loop and not any(on_loop)
 
 
 async def test_each_step_records_how_long_cressey_took(served):

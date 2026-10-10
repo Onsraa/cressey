@@ -154,7 +154,7 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 | Malformed arg (non-string SQL) | held, no crash (fail closed) |
 | Decision model down (fake) | floor still holds `DELETE`; `UPDATE 1=1` still passes; no crash |
 
-- **Finding F5 (medium):** argument redaction (`runs.add_step` → `redact`) has **no `SCAN_LIMIT` and runs on the event loop**, unlike the result scan (16 KB, off-thread). A single large-argument call adds its whole scan time to `check_ms` and blocks every concurrent run: 1 KB → 1.3 ms, 256 KB → 177 ms, 1 MB → **699 ms** (the result scan stays ~0.4 ms throughout). The scan is near-linear (~0.6 ms/KB), so this is latency, not an exponential DoS.
+- **Finding F5 (medium):** argument redaction (`runs.add_step` → `redact`) has **no `SCAN_LIMIT` and runs on the event loop**, unlike the result scan (16 KB, off-thread). A single large-argument call adds its whole scan time to `check_ms` and blocks every concurrent run: 1 KB → 1.3 ms, 256 KB → 177 ms, 1 MB → **699 ms** (the result scan stays ~0.4 ms throughout). The scan is near-linear (~0.6 ms/KB), so this is latency, not an exponential DoS. **Fixed 10-10:** arguments are redacted off the event loop, and detect-secrets reads 16 KB in windows (`decisions.md`); crafted input is quadratic, though, not near-linear.
 
 ### Efficiency
 
