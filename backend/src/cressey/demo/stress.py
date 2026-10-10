@@ -527,7 +527,7 @@ def section_triangle_scaling(sizes: list[int]) -> dict:
         # judge legs() on the LAST (write) step with n-1 earlier steps present
         before = judge.calls
         t0 = time.perf_counter()
-        asyncio.run(legs(run, judge, t))
+        asyncio.run(legs(run, run.steps[-1], judge, t))
         dt = (time.perf_counter() - t0) * 1000
         rows.append(
             {"run_len": n, "legs_ms": round(dt, 2), "judge_calls": judge.calls - before}

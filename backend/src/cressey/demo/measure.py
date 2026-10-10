@@ -204,7 +204,7 @@ async def judge_write(
     judge: MeasuringJudge | FakeJudge, case: WriteCase, t: Thresholds
 ) -> float:
     run = build_run(Runs(EventLog()), case, judge_final=False)
-    leg = (await legs(run, judge, t)).rationalization
+    leg = (await legs(run, run.steps[-1], judge, t)).rationalization
     return leg.score
 
 
@@ -337,7 +337,7 @@ async def attack(
                     tampered.steps[target].result + "\n" + text
                 ).strip()
             run = build_run(Runs(EventLog()), tampered, judge_final=False)
-            score = (await legs(run, judge, t)).rationalization.score
+            score = (await legs(run, run.steps[-1], judge, t)).rationalization.score
             flagged = run.steps[target].labels or {}
             quotes = run.steps[target].quotes
             variants[site] = {
@@ -388,7 +388,7 @@ async def latency_probe(
             "result": "DB_PROD_KEY=[secret:fa8161be315a]",
         },
     }
-    judge_state = judgment_state(write, t)
+    judge_state = judgment_state(write, write.steps[-1], t)
     rruns = Runs(EventLog())
     rrun = build_run(rruns, reports["r_key_clear"], judge_final=True)
     rruns.end(rrun, reports["r_key_clear"].report)

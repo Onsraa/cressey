@@ -97,7 +97,7 @@ class Guard(Middleware):
         if run.revoked:
             self.runs.mark(run, step, "denied")
             raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
-        triangle = await legs(run, self.judge, self.policy.triangle)
+        triangle = await legs(run, step, self.judge, self.policy.triangle)
         triangle_hold = self.triangle_holds and alarm(triangle, risk)
         reason = floor or (alarm_reason(triangle) if triangle_hold else None)
         self.runs.score(run, step, triangle, reason)

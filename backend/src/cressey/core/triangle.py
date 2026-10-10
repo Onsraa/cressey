@@ -90,9 +90,10 @@ PREVIOUS = 1_000  # characters of the previous step's result shown for context
 SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 
 
-def _earlier(run: Run) -> list[Step]:
-    """The calls before the one being judged: its own result isn't known yet."""
-    return run.steps[:-1]
+def _before(run: Run, n: int) -> list[Step]:
+    """The calls before step n. Parallel calls can add steps after it while it is judged, so
+    the call being judged is named, never taken as the run's last step."""
+    return [s for s in run.steps if s.n < n]
 
 
 def _failures(steps: Sequence[Step]) -> list[int]:
@@ -109,8 +110,8 @@ def _repeats(steps: Sequence[Step]) -> list[int]:
     return repeats
 
 
-def pressure(run: Run, t: Thresholds) -> Leg:
-    earlier = _earlier(run)
+def pressure(run: Run, step: Step, t: Thresholds) -> Leg:
+    earlier = _before(run, step.n)
     failures, repeats = _failures(earlier), _repeats(earlier)
     deadline = [w for w in t.deadline_words if w.lower() in run.task.lower()]
     facts = []
@@ -129,9 +130,9 @@ def pressure(run: Run, t: Thresholds) -> Leg:
     return Leg(score=score, confirmed=confirmed, facts=facts)
 
 
-def opportunity(run: Run) -> Leg:
+def opportunity(run: Run, step: Step) -> Leg:
     facts, seen = [], set()
-    for s in _earlier(run):
+    for s in _before(run, step.n):
         for secret in s.secrets:
             name = secret.name or secret.kind
             if secret.fingerprint in seen or name in run.mandate.may_read_secrets:
@@ -266,11 +267,11 @@ async def _read(run: Run, steps: list[Step], judge: Judge) -> None:
     await asyncio.gather(*(label_soon(run, i, judge) for i in positions))
 
 
-def _evidence(run: Run, t: Thresholds) -> list[dict[str, JsonValue]]:
-    """The flagged parts of earlier steps, from any distance back: the strongest t.evidence,
-    in step order. A fixed size, whatever the run's length."""
+def _evidence(run: Run, n: int, t: Thresholds) -> list[dict[str, JsonValue]]:
+    """The flagged parts of the steps before step n, from any distance back: the strongest
+    t.evidence, in step order. A fixed size, whatever the run's length."""
     found = []
-    for s in _earlier(run):
+    for s in _before(run, n):
         cues = [c for c, floor in FLOORS.items() if s.labels and s.labels[c] >= floor]
         if s.labels and cues:
             item: dict[str, JsonValue] = {
@@ -285,17 +286,17 @@ def _evidence(run: Run, t: Thresholds) -> list[dict[str, JsonValue]]:
 
 
 def judgment_state(
-    run: Run, t: Thresholds, shown: Mapping[int, str] | None = None
+    run: Run, call: Step, t: Thresholds, shown: Mapping[int, str] | None = None
 ) -> dict[str, JsonValue]:
     """What the decision model reads for a write: code facts, the evidence, the step before
     and the call itself, secrets redacted. `shown` holds results already redacted."""
-    earlier, call = _earlier(run), run.steps[-1]
+    earlier = _before(run, call.n)
     prev = earlier[-1] if earlier else None
     texts = shown if shown is not None else _redacted(run, [prev] if prev else [])
     secrets: list[JsonValue] = [
         f"{x.name or x.kind} (étape {s.n})" for s in earlier for x in s.secrets
     ]
-    evidence: list[JsonValue] = list(_evidence(run, t))
+    evidence: list[JsonValue] = list(_evidence(run, call.n, t))
     return {
         "task": run.task,
         "mandate": run.mandate.model_dump(),
@@ -313,13 +314,13 @@ def judgment_state(
     }
 
 
-async def _rationalization(run: Run, judge: Judge, t: Thresholds) -> Leg:
-    if run.steps[-1].risk == "read":
+async def _rationalization(run: Run, call: Step, judge: Judge, t: Thresholds) -> Leg:
+    if call.risk == "read":
         return Leg(score=0.0, confirmed=False, facts=[])
-    await _read(run, _earlier(run), judge)
-    earlier = _earlier(run)
+    await _read(run, _before(run, call.n), judge)
+    earlier = _before(run, call.n)
     shown = await _redacted_off_loop(run, earlier[-1:])
-    state = judgment_state(run, t, shown)
+    state = judgment_state(run, call, t, shown)
     answer = await judge.answers(state, JUDGMENT)
     if answer is None:
         return Leg(
@@ -329,7 +330,7 @@ async def _rationalization(run: Run, judge: Judge, t: Thresholds) -> Leg:
         )
     score = float(answer["weakens"])
     facts = [f"jugement : affaiblit une vérification ou sort du mandat, {score:.2f}"]
-    for item in _evidence(run, t):
+    for item in _evidence(run, call.n, t):
         quotes = item["quotes"] if isinstance(item["quotes"], dict) else {}
         flagged = item["flagged_as"] if isinstance(item["flagged_as"], list) else []
         said = " / ".join(str(q) for q in quotes.values()) or str(item["action"])
@@ -366,7 +367,9 @@ def report_state(
         "note": NOTE,
         "actions": actions,
         "last_results": last,
-        "evidence": list(_evidence(run, t)),
+        # Every step but the last, as before (recorded states stay identical); Task 12's
+        # claim audit includes the last one.
+        "evidence": list(_evidence(run, len(run.steps), t)),
         "report": run.report or "",
     }
 
@@ -387,12 +390,12 @@ async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
     return Leg(score=score, confirmed=score >= t.report, facts=facts)
 
 
-async def legs(run: Run, judge: Judge, t: Thresholds) -> Legs:
-    """The triangle when the run's last call comes in."""
+async def legs(run: Run, call: Step, judge: Judge, t: Thresholds) -> Legs:
+    """The triangle when this call comes in."""
     return Legs(
-        pressure=pressure(run, t),
-        opportunity=opportunity(run),
-        rationalization=await _rationalization(run, judge, t),
+        pressure=pressure(run, call, t),
+        opportunity=opportunity(run, call),
+        rationalization=await _rationalization(run, call, judge, t),
     )
 
 
