@@ -74,6 +74,7 @@
 | 10-10 | **Every content type is read, once:** embedded text resources and structured content unless it repeats the text; a line for what isn't text | Only text content was scanned and labelled: a secret or an instruction in an embedded resource went unseen |
 | 10-10 | **`replay-first` for the stage** (Teddy): the recorded answer first, live only on a miss. A judge miss in `replay` raises and is logged with a hash of each state field | A silent miss dropped a hold on stage; the hashes name the field that changed (jev-5d's suggestion) |
 | 10-10 | **The stage cache is stale and must be re-recorded**, with `CRESSEY_MODELS=openai` while Bedrock is unreachable here (TLS reset) | Found at the Part 1 gate: the plays ask 122 distinct judge answers and 65 are recorded, on `main` as on this branch (the recording predates 973ccca). A temp path in the demo `read_file` error made some states unreplayable: fixed. Part 1 changes no state the shipped sessions send: 108/108 identical to `main` once temp paths are normalised |
+| 10-10 | **Two views of each write: measured, not shipped.** Holds keep the words view alone; `views()` stays in the measure for the next model | The rule fixed beforehand (margin of the maximum > 0, no « no » ≥ 0.5) failed: 29/30, margin −0.12 then −0.08. Jev on the actions alone: 26/30, margin −0.51, a legitimate write at 0.6–0.7. A claimed approval in the agent's words moved no view (`evaluation.md`) |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
