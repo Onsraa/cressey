@@ -94,7 +94,7 @@ export function Overview({
 					)}
 				</div>
 			</Box>
-			<Box Icon={Triangle} title="LÉGS IMPLIQUÉES">
+			<Box Icon={Triangle} title="CÔTÉS DU TRIANGLE">
 				{LEGS.map((g) => {
 					const leg = i.legs[g.k];
 					return (
