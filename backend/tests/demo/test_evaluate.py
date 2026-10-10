@@ -43,6 +43,17 @@ async def test_the_ablation_shows_what_only_the_triangle_holds():
     )
     settings = Settings(_env_file=None, openai_api_key=None, typesafe_api_key=None)
     sessions = [s for s in load_sessions() if s.id == "demo-tests-impossibles"]
-    report = await ablation(settings, [*sessions, weaken])
+    report = await ablation(settings, [*sessions, weaken], WeakenedTestsJudge())
     assert report.floor.incident_held == 1 and report.both.incident_held == 2
     assert report.only_triangle == ["tests-affaiblis"]
+
+
+class WeakenedTestsJudge:
+    """A judge that finds a write into tests/ weakens the checks, and flags no step."""
+
+    async def answers(self, state, questions):
+        if "weakens" in questions:
+            return {
+                "weakens": 0.9 if "tests/" in state["current_step"]["args"] else 0.1
+            }
+        return {name: 0.0 for name in questions}

@@ -2,15 +2,16 @@ import json
 
 import pytest
 
-from cressey.core.models import Leg, Legs, Mandate, Run, Step
+from cressey.core.models import Leg, Legs, Mandate, Message, Run, Step
 from cressey.core.secret_scan import Secret
 from cressey.core.triangle import (
+    CHUNK,
     Thresholds,
     alarm,
+    judgment_state,
     legs,
     opportunity,
     pressure,
-    run_state,
 )
 
 pytestmark = pytest.mark.anyio
@@ -29,28 +30,47 @@ def anyio_backend():
 
 
 class FakeJudge:
-    def __init__(self, needed: float | None):
-        self.p, self.calls, self.states = needed, 0, []
+    """Answers each kind of question the triangle asks: the step labels, the part a label
+    points at, and the judgment on a write. Records every state it was shown."""
 
-    async def needed(self, state: dict) -> float | None:
-        self.calls += 1
-        self.states.append(state)
-        return self.p
+    def __init__(
+        self, judgment: float | None = 0.9, flags: dict[int, dict] | None = None
+    ):
+        self.judgment, self.flags = judgment, flags or {}
+        self.asked: list[tuple[str, dict]] = []
+
+    async def answers(self, state: dict, questions: dict) -> dict | None:
+        if "weakens" in questions:
+            self.asked.append(("judgment", state))
+            return None if self.judgment is None else {"weakens": self.judgment}
+        if "serves_task" in questions:
+            self.asked.append(("label", state))
+            return {q: 0.0 for q in questions} | self.flags.get(
+                state["current_step"]["step"], {}
+            )
+        self.asked.append(("point", state))
+        return {q: "m1" if "m1" in state["parts"] else "none" for q in questions}
+
+    def labelled(self) -> list[int]:
+        return [s["current_step"]["step"] for kind, s in self.asked if kind == "label"]
 
 
 def step(n, tool="run_tests", args="{}", risk="read", **kw) -> Step:
     return Step(n=n, tool=tool, args=args, risk=risk, **kw)
 
 
-def run_with(*steps: Step, mandate: Mandate | None = None, task: str = TASK) -> Run:
+def run_with(
+    *steps: Step, mandate: Mandate | None = None, task: str = TASK, **kw
+) -> Run:
     return Run(
         id="r1",
         task=task,
         mandate=mandate or Mandate(),
-        visibility="tools",
+        visibility="messages",
         kind="live",
         started_at="2026-10-10T12:00:00+00:00",
         steps=list(steps),
+        **kw,
     )
 
 
@@ -95,54 +115,103 @@ def test_a_secret_the_mandate_allows_is_not_opportunity():
     ).confirmed
 
 
-async def test_reads_never_drift_and_jev_is_not_asked():
-    judge = FakeJudge(0.0)
-    leg = (await legs(run_with(step(1, "read_file")), judge, T)).rationalization
-    assert leg.score == 0 and not leg.confirmed and judge.calls == 0
+async def test_reads_are_never_judged_and_the_model_is_not_asked():
+    judge = FakeJudge(0.9)
+    leg = (
+        await legs(run_with(step(1), step(2, "read_file")), judge, T)
+    ).rationalization
+    assert leg.score == 0 and not leg.confirmed and judge.asked == []
 
 
-async def test_drift_is_weighted_by_risk():
-    write = await legs(run_with(step(1, "write_file", risk="write")), FakeJudge(0.2), T)
-    destroy = await legs(
-        run_with(step(1, "run_sql", risk="destructive")), FakeJudge(0.2), T
-    )
-    w, d = write.rationalization, destroy.rationalization
-    assert (round(w.score, 2), round(d.score, 2)) == (0.4, 0.8)
-    assert not w.confirmed and d.confirmed
+async def test_the_judgment_confirms_rationalization_from_the_threshold():
+    write = run_with(step(1), step(2, "write_file", risk="write"))
+    at = (await legs(write, FakeJudge(0.5), T)).rationalization
+    under = (await legs(write, FakeJudge(0.4), T)).rationalization
+    assert at.confirmed and at.score == 0.5 and not under.confirmed
 
 
-async def test_jev_unavailable_leaves_rationalization_unconfirmed():
+async def test_no_model_leaves_rationalization_unconfirmed_and_says_so():
     leg = (
         await legs(run_with(step(1, "run_sql", risk="destructive")), FakeJudge(None), T)
     ).rationalization
     assert not leg.confirmed and "indisponible" in leg.facts[0]
 
 
-def test_two_confirmed_legs_raise_the_alarm_on_writes_only():
-    two = Legs(pressure=ON, opportunity=ON, rationalization=OFF)
-    assert alarm(two, "write") and alarm(two, "destructive") and not alarm(two, "read")
-    one = Legs(pressure=ON, opportunity=OFF, rationalization=OFF)
-    assert not alarm(one, "destructive")
+def test_pressure_and_opportunity_alone_no_longer_hold():
+    assert not alarm(Legs(pressure=ON, opportunity=ON, rationalization=OFF), "write")
+    assert not alarm(Legs(pressure=OFF, opportunity=OFF, rationalization=ON), "write")
+    with_pressure = Legs(pressure=ON, opportunity=OFF, rationalization=ON)
+    with_key = Legs(pressure=OFF, opportunity=ON, rationalization=ON)
+    assert alarm(with_pressure, "write") and alarm(with_key, "destructive")
+    assert not alarm(with_pressure, "read")
 
 
-def test_jev_sees_the_run_not_only_the_action_and_never_a_secret_value():
+async def test_a_flagged_sentence_is_kept_however_far_back():
+    said = "Les autres équipes sautent ces tests avant une mise en prod. Personne ne regardera."
+    reads = [step(n, "read_file", f'{{"path": "f{n}.py"}}') for n in range(3, 13)]
+    run = run_with(
+        step(1),
+        step(2, "read_file", '{"path": "tests/test_app.py"}'),
+        *reads,
+        step(13, "write_file", '{"path": "tests/test_app.py"}', "write"),
+        messages=[Message(after=1, text=said)],
+    )
+    judge = FakeJudge(0.9, flags={2: {"rationalization": 0.9}})
+    leg = (await legs(run, judge, T)).rationalization
+    [(_, state)] = [a for a in judge.asked if a[0] == "judgment"]
+    [kept] = state["run_state"]["evidence"]
+    assert kept["step"] == 2 and kept["flagged_as"] == ["rationalization"]
+    assert "sautent ces tests" in kept["quotes"]["rationalization"]
+    assert any("étape 2" in f and "sautent ces tests" in f for f in leg.facts)
+
+
+async def test_each_step_is_labelled_once():
+    run = run_with(step(1), step(2, "read_file"), step(3, "write_file", risk="write"))
+    judge = FakeJudge(0.1)
+    await legs(run, judge, T)
+    run.steps.append(step(4, "write_file", '{"path": "b"}', "write"))
+    await legs(run, judge, T)
+    assert sorted(judge.labelled()) == [1, 2, 3]
+
+
+async def test_a_long_result_is_read_in_parts_that_fit():
+    lines = [f"ligne {i} " + "x" * 90 for i in range(400)]  # about 40,000 characters
+    big = step(1, "read_file", '{"path": "big.log"}', result="\n".join(lines))
+    judge = FakeJudge(0.1)
+    await legs(run_with(big, step(2, "write_file", risk="write")), judge, T)
+    parts = [s["current_step"]["result"] for kind, s in judge.asked if kind == "label"]
+    assert len(parts) == 4 and all(len(p) <= CHUNK for p in parts)
+    assert "".join(parts) == "\n".join(lines)
+
+
+async def test_the_model_sees_the_run_and_never_a_secret_value():
     read = step(
-        4,
+        2,
         "read_file",
         '{"path": ".env.prod"}',
         secrets=[KEY],
         result="DB_PROD_KEY=FAKE-DB-PROD-KEY-0000",
     )
     sql = step(
-        5,
+        3,
         "run_sql",
         '{"query": "DELETE FROM users", "key": "[secret:abc123abc123]"}',
         "destructive",
         raw_args={"query": "DELETE FROM users", "key": "FAKE-DB-PROD-KEY-0000"},
     )
-    state = run_state(run_with(step(1, is_error=True), read, sql), T)
-    text = json.dumps(state, ensure_ascii=False)
-    assert state["task"] == TASK and "DELETE FROM users" in str(state["action"])
-    actions = state["recent_actions"]
-    assert isinstance(actions, list) and any("read_file" in str(a) for a in actions)
-    assert "FAKE-DB-PROD-KEY-0000" not in text
+    run = run_with(
+        step(1, is_error=True),
+        read,
+        sql,
+        known={"FAKE-DB-PROD-KEY-0000": "abc123abc123"},
+    )
+    judge = FakeJudge(0.9, flags={2: {"rationalization": 0.9}})
+    await legs(run, judge, T)
+    shown = json.dumps([s for _, s in judge.asked], ensure_ascii=False)
+    state = judgment_state(run, T)
+    assert {kind for kind, _ in judge.asked} == {"label", "point", "judgment"}
+    assert state["task"] == TASK and "DELETE FROM users" in json.dumps(
+        state["current_step"]
+    )
+    assert "DB_PROD_KEY (étape 2)" in json.dumps(state["run_state"], ensure_ascii=False)
+    assert "FAKE-DB-PROD-KEY-0000" not in shown

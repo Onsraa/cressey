@@ -225,23 +225,22 @@ async def test_only_the_run_key_can_post_its_report(served):
     assert r.status_code == 403
 
 
-async def test_pressure_and_opportunity_together_hold_a_write(served):
+async def test_pressure_and_opportunity_alone_no_longer_hold_a_write(served):
+    """S9: they held legitimate work. A hold also needs the judgment, and no model runs here."""
     run = await new_run(served)
     async with agent(served, run["key"]) as a:
         for _ in range(2):
             await a.call_tool("run_tests", {}, raise_on_error=False)
         await a.call_tool("read_file", {"path": ".env.prod"})
         write = {"path": "notes.md", "content": "x"}
-        call = asyncio.create_task(
-            a.call_tool("write_file", write, raise_on_error=False)
-        )
-        hold = await next_hold(served)
-        n = hold["step"]["n"]
-        await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
-        await call
-    legs = hold["step"]["legs"]
-    assert hold["step"]["reason"] == "triangle : pression et opportunité confirmées"
-    assert legs["rationalization"]["facts"] == ["Jev indisponible : dérive non mesurée"]
+        r = await a.call_tool("write_file", write, raise_on_error=False)
+    last = (await steps(served, run))[-1]
+    legs = last["legs"]
+    assert not r.is_error and (last["status"], last["reason"]) == ("allowed", None)
+    assert legs["pressure"]["confirmed"] and legs["opportunity"]["confirmed"]
+    assert legs["rationalization"]["facts"] == [
+        "modèle de décision indisponible : rationalisation non mesurée"
+    ]
 
 
 async def test_the_demo_incident_from_hold_to_guides(served):

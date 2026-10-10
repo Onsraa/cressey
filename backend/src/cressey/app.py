@@ -10,7 +10,7 @@ from starlette.routing import Route
 from cressey.core.api import router as core_router
 from cressey.core.eventlog import EventLog
 from cressey.core.incidents import Incidents
-from cressey.core.judge import JevJudge
+from cressey.core.judge import JevJudge, Judge
 from cressey.core.proxy import MCP_PATH, Guard, build_mcp, load_policy
 from cressey.core.runs import Runs
 from cressey.demo.tools import demo_tools
@@ -24,6 +24,7 @@ from cressey.settings import Settings
 def create_app(
     settings: Settings | None = None,
     make_guide: Callable[[GuideIncident], Guide] = write_guide,
+    judge: Judge | None = None,
 ) -> FastAPI:
     s = settings or Settings()
     load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
@@ -31,7 +32,7 @@ def create_app(
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
     incidents = Incidents(runs, make_guide)
     policy = load_policy(DATA / "policy.yaml")
-    judge = JevJudge.from_settings(s)
+    judge = judge or JevJudge.from_settings(s)
     guard = Guard(runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds)
     mcp = build_mcp(guard, demo_tools(demo))
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)

@@ -17,6 +17,7 @@ import httpx2
 from pydantic import BaseModel
 
 from cressey.app import create_app
+from cressey.core.judge import Judge
 from cressey.demo.agent import Session, load_sessions, play
 from cressey.demo.server import serve
 from cressey.guide.corpus import DATA
@@ -55,11 +56,13 @@ def _p95(values: list[float]) -> float:
 
 
 async def _one(
-    settings: Settings, session: Session
+    settings: Settings, session: Session, judge: Judge | None = None
 ) -> tuple[SessionResult, list[float]]:
     """Play one session on its own Cressey, so no session sees another's changes."""
     with tempfile.TemporaryDirectory() as demo:
-        app = create_app(settings.model_copy(update={"demo_dir": Path(demo)}))
+        app = create_app(
+            settings.model_copy(update={"demo_dir": Path(demo)}), judge=judge
+        )
         with serve(app) as base:
             played = await play(base, session, kind="replay")
             async with httpx2.AsyncClient(base_url=base) as h:
@@ -77,10 +80,12 @@ async def _one(
     return result, [s["check_ms"] for s in steps if s["check_ms"] is not None]
 
 
-async def evaluate(settings: Settings, sessions: list[Session]) -> DetectionReport:
+async def evaluate(
+    settings: Settings, sessions: list[Session], judge: Judge | None = None
+) -> DetectionReport:
     results, checks = [], []
     for session in sessions:
-        result, times = await _one(settings, session)
+        result, times = await _one(settings, session, judge)
         results.append(result)
         checks += times
     incidents = [r for r in results if r.expect == "held"]
@@ -116,12 +121,14 @@ def _held(report: DetectionReport) -> set[str]:
     return {s.session for s in report.sessions if s.held_at is not None}
 
 
-async def ablation(settings: Settings, sessions: list[Session]) -> AblationReport:
+async def ablation(
+    settings: Settings, sessions: list[Session], judge: Judge | None = None
+) -> AblationReport:
     floor = await evaluate(
-        settings.model_copy(update={"triangle_holds": False}), sessions
+        settings.model_copy(update={"triangle_holds": False}), sessions, judge
     )
     both = await evaluate(
-        settings.model_copy(update={"triangle_holds": True}), sessions
+        settings.model_copy(update={"triangle_holds": True}), sessions, judge
     )
     return AblationReport(
         date=datetime.now(UTC).isoformat(),

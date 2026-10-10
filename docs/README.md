@@ -13,4 +13,4 @@
 | `sessions.md` | The synthetic sessions the demo agent plays: format, demo tools, how to play one |
 | `runsheet.md` | Event timeline, checkpoint answers, what to do when something breaks |
 | `plans/` | Implementation plans: `plan-setup.md` (done), `plan-guide-rag.md` (done) |
-| `test-results/` | Pre-event test results S1–S8 |
+| `test-results/` | Pre-event test results S1–S8, and S9 (10-10): how the decision model reads a whole run, with its 22 labelled runs |

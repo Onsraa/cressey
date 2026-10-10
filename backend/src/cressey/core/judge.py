@@ -1,39 +1,58 @@
-"""Jev labels one thing for the triangle: is this call needed for the task, given the run
-so far? Its answers are cached like the guide models', so the demo replays offline."""
+"""The decision model answers the triangle's typed questions: it labels each step once, then
+judges each write against the evidence kept (S9). It speaks the System One API (Jev's). Its
+answers are cached like the guide models', so the demo replays offline."""
 
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Literal, Protocol, Self
 
 import typesafe_sdk
 from pydantic import JsonValue
-from typesafe_sdk import AsyncTypeSafeClient, Noul, NoulAnswer, RetryPolicy
+from typesafe_sdk import (
+    AsyncTypeSafeClient,
+    Choice,
+    ChoiceAnswer,
+    Noul,
+    NoulAnswer,
+    RetryPolicy,
+)
 
 from cressey.guide.cache import cache_key
 from cressey.settings import Settings
 
-QUESTION = "Is this action needed for the task?"  # the wording measured in S2
-MODEL = "jev-1.13.0"
-Ask = Callable[[dict[str, JsonValue]], Awaitable[float | None]]
+MODEL = "jev-1.13.0"  # S9: the triangle's decision model
+
+Question = Noul | Choice
+Answers = dict[str, float | str]  # a Noul's probability, or the option a Choice picked
+Ask = Callable[
+    [dict[str, JsonValue], Mapping[str, Question]], Awaitable[Answers | None]
+]
 
 
 class Judge(Protocol):
-    async def needed(self, state: dict[str, JsonValue]) -> float | None:
-        """Probability the action is needed for the task; None when Jev can't answer."""
+    async def answers(
+        self, state: dict[str, JsonValue], questions: Mapping[str, Question]
+    ) -> Answers | None:
+        """Every question about one state, in one call; None when no model answers."""
         ...
 
 
-def jev_ask(client: AsyncTypeSafeClient) -> Ask:
-    async def ask(state: dict[str, JsonValue]) -> float | None:
+def system_one_ask(client: AsyncTypeSafeClient, model: str) -> Ask:
+    async def ask(
+        state: dict[str, JsonValue], questions: Mapping[str, Question]
+    ) -> Answers | None:
         try:
-            r = await client.system_one(
-                state, questions={"needed": Noul(instructions=QUESTION)}, model=MODEL
-            )
+            r = await client.system_one(state, questions=dict(questions), model=model)
         except typesafe_sdk.TypeSafeError:
             return None
-        answer = r.answers.get("needed")
-        return float(answer.noul) if isinstance(answer, NoulAnswer) else None
+        out: Answers = {}
+        for name, a in r.answers.items():
+            if isinstance(a, NoulAnswer):
+                out[name] = float(a.noul)
+            elif isinstance(a, ChoiceAnswer):
+                out[name] = a.choice
+        return out if out.keys() == questions.keys() else None
 
     return ask
 
@@ -44,8 +63,9 @@ class JevJudge:
         ask: Ask | None,
         mode: Literal["live", "record", "replay", "fallback"],
         cache_dir: Path,
+        model: str,
     ) -> None:
-        self.ask, self.mode, self.dir = ask, mode, cache_dir
+        self.ask, self.mode, self.dir, self.model = ask, mode, cache_dir, model
 
     @classmethod
     def from_settings(cls, s: Settings) -> Self:
@@ -59,18 +79,24 @@ class JevJudge:
             if key
             else None
         )
-        return cls(
-            jev_ask(client) if client else None, s.model_mode, s.cache_dir / "judge"
-        )
+        ask = system_one_ask(client, MODEL) if client else None
+        return cls(ask, s.model_mode, s.cache_dir / "judge", MODEL)
 
-    async def needed(self, state: dict[str, JsonValue]) -> float | None:
-        path = (
-            self.dir / f"{cache_key('judge', MODEL, QUESTION, {'state': state})}.json"
+    async def answers(
+        self, state: dict[str, JsonValue], questions: Mapping[str, Question]
+    ) -> Answers | None:
+        asked = json.dumps(
+            {n: q.model_dump() for n, q in questions.items()}, sort_keys=True
         )
-        recorded = float(json.loads(path.read_text())) if path.exists() else None
+        path = (
+            self.dir / f"{cache_key('judge', self.model, asked, {'state': state})}.json"
+        )
+        recorded: Answers | None = (
+            json.loads(path.read_text()) if path.exists() else None
+        )
         if self.mode == "replay":
             return recorded
-        live = await self.ask(state) if self.ask else None
+        live = await self.ask(state, questions) if self.ask else None
         if live is None:
             return recorded if self.mode == "fallback" else None
         if self.mode == "record":

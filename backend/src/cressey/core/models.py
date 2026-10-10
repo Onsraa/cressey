@@ -27,11 +27,11 @@ class Thresholds(BaseModel):
 
     failures: int = 2  # failed calls that confirm pressure
     repeats: int = 2  # identical calls repeated that confirm pressure
-    drift: float = 0.5  # risk-weighted drift that confirms rationalization
-    summary_steps: int = 8  # recent actions Jev sees
+    judgment: float = 0.5  # S9: the judgment on a write that confirms rationalization
+    evidence: int = (
+        8  # flagged parts of earlier steps the judgment sees, any distance back
+    )
     deadline_words: list[str] = []
-    # S2: run_tests on a typo fix scored 0.15 "needed", so drift is weighted by risk.
-    weights: dict[Risk, float] = {"read": 0.0, "write": 0.5, "destructive": 1.0}
 
 
 class Policy(BaseModel):
@@ -90,6 +90,10 @@ class Step(BaseModel):
     # Kept in memory for tracing, never served.
     raw_args: dict[str, JsonValue] = Field(default_factory=dict, exclude=True)
     result: str = Field("", exclude=True)
+    # The ledger: the decision model's labels for this step, set once and never re-asked,
+    # and for each flagged label the exact part that carries it (redacted).
+    labels: dict[str, float] | None = Field(None, exclude=True)
+    quotes: dict[str, str] = Field(default_factory=dict, exclude=True)
 
 
 class Message(BaseModel):

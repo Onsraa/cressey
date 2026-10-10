@@ -6,12 +6,11 @@ tools:
   run_sql: {kind: sql, arg: query}
   send_email: {kind: egress, arg: to}
 
-# When observed facts confirm a leg of the triangle. Two confirmed legs hold any call
-# that isn't a read.
+# When a leg of the triangle is confirmed. A call that isn't a read is held when the
+# judgment confirms rationalization and code confirms pressure or opportunity (S9).
 triangle:
   failures: 2
   repeats: 2
-  drift: 0.5
-  summary_steps: 8
+  judgment: 0.5
+  evidence: 8
   deadline_words: [ce soir, urgent, avant la mise en prod, asap, immédiatement, deadline]
-  weights: {read: 0, write: 0.5, destructive: 1}
