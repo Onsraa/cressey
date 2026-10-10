@@ -17,6 +17,7 @@ from cressey.guide.clients import (
     PROMPT_REWRITE_INCIDENT_V1,
     PROMPT_REWRITE_QUESTION_V1,
     PROMPT_WHY_V1,
+    BedrockEmbedder,
     BedrockReranker,
     JevReranker,
     ModelUnavailable,
@@ -104,11 +105,11 @@ class Cached:
             path.write_text(json.dumps(encode(out), ensure_ascii=False))
         return out
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         return self._call(
             "embed",
-            {"texts": texts},
-            lambda: self.inner.embed(texts),
+            {"texts": texts, "query": query},
+            lambda: self.inner.embed(texts, query),
             lambda v: v.tolist(),
             np.array,
         )
@@ -162,6 +163,12 @@ class Cached:
         )
 
 
+def _embedder(s: Settings) -> BedrockEmbedder | OpenAIEmbedder:
+    if s.models == "bedrock":
+        return BedrockEmbedder.from_settings(s)
+    return OpenAIEmbedder.from_settings(s)
+
+
 def _reranker(s: Settings) -> BedrockReranker | JevReranker:
     if s.reranker == "bedrock":
         return BedrockReranker.from_settings(s)
@@ -175,7 +182,7 @@ def wrap_all(s: Settings) -> tuple[Cached, Cached, Cached, Cached]:
     rewrite_v = _version(PROMPT_REWRITE_INCIDENT_V1 + PROMPT_REWRITE_QUESTION_V1)
     writer_v = _version(PROMPT_GUIDE_V1 + PROMPT_WHY_V1)
     return (
-        c(OpenAIEmbedder.from_settings(s), "embedder", s.embedding_model, "v1"),
+        c(_embedder(s), "embedder", s.embedding_model, "v1"),
         c(OpenAIRewriter.from_settings(s), "rewriter", s.rewrite_model, rewrite_v),
         c(_reranker(s), "reranker", s.rerank_model, "v1"),
         c(OpenAIWriter.from_settings(s), "writer", s.writer_model, writer_v),

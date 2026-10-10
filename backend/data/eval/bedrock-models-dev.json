@@ -1,0 +1,185 @@
+{
+ "split": "dev",
+ "about": "CRESSEY_MODELS=bedrock, Jev re-ranks at 0.4. Bedrock requests start at least paced_gap_s apart (event limit ~1/s); the waits are taken out of the latency. call_ms_*: one Responses call, Queries = rewrite, GuideDraft = write.",
+ "full_runs": [
+  {
+   "split": "dev",
+   "date": "2026-10-10T15:14:14.646436+00:00",
+   "models": {
+    "rewriter": "us.openai.gpt-5.4",
+    "writer": "us.openai.gpt-5.5",
+    "embedder": "cohere.embed-multilingual-v3",
+    "re_ranker": "jev-1.13.0"
+   },
+   "paced_gap_s": 1.05,
+   "wall_s": 213,
+   "bedrock_requests": 172,
+   "failed_requests": [],
+   "query_embedding_fallbacks": 0,
+   "call_ms_p50": {
+    "Queries": 820,
+    "GuideDraft": 5052
+   },
+   "call_ms_max": {
+    "Queries": 1296,
+    "GuideDraft": 5951
+   },
+   "report": {
+    "split": "dev",
+    "n_questions": 31,
+    "hit_at_3_bm25": 0.8387096774193549,
+    "hit_at_3_hybrid": 0.967741935483871,
+    "hit_at_3_reranked": 0.967741935483871,
+    "n_out_of_scope": 2,
+    "unsure_correct": 2,
+    "n_incidents": 8,
+    "citation_validity": 1.0,
+    "unsure_rate": 0.0,
+    "latency_p50_ms": 7091.687791004006,
+    "latency_p95_ms": 8322.269606402006
+   }
+  },
+  {
+   "split": "dev",
+   "date": "2026-10-10T15:17:54.221475+00:00",
+   "models": {
+    "rewriter": "us.openai.gpt-5.6-luna",
+    "writer": "us.openai.gpt-5.5",
+    "embedder": "cohere.embed-multilingual-v3",
+    "re_ranker": "jev-1.13.0"
+   },
+   "paced_gap_s": 1.05,
+   "wall_s": 220,
+   "bedrock_requests": 172,
+   "failed_requests": [],
+   "query_embedding_fallbacks": 0,
+   "call_ms_p50": {
+    "Queries": 1355,
+    "GuideDraft": 4435
+   },
+   "call_ms_max": {
+    "Queries": 1790,
+    "GuideDraft": 6237
+   },
+   "report": {
+    "split": "dev",
+    "n_questions": 31,
+    "hit_at_3_bm25": 0.8387096774193549,
+    "hit_at_3_hybrid": 1.0,
+    "hit_at_3_reranked": 0.967741935483871,
+    "n_out_of_scope": 2,
+    "unsure_correct": 2,
+    "n_incidents": 8,
+    "citation_validity": 1.0,
+    "unsure_rate": 0.0,
+    "latency_p50_ms": 6990.332520001175,
+    "latency_p95_ms": 8870.81346755458
+   }
+  },
+  {
+   "split": "dev",
+   "date": "2026-10-10T15:21:28.394072+00:00",
+   "models": {
+    "rewriter": "us.openai.gpt-5.6-sol",
+    "writer": "us.openai.gpt-5.5",
+    "embedder": "cohere.embed-multilingual-v3",
+    "re_ranker": "jev-1.13.0"
+   },
+   "paced_gap_s": 1.05,
+   "wall_s": 214,
+   "bedrock_requests": 172,
+   "failed_requests": [],
+   "query_embedding_fallbacks": 0,
+   "call_ms_p50": {
+    "Queries": 1058,
+    "GuideDraft": 4560
+   },
+   "call_ms_max": {
+    "Queries": 1842,
+    "GuideDraft": 5437
+   },
+   "report": {
+    "split": "dev",
+    "n_questions": 31,
+    "hit_at_3_bm25": 0.8387096774193549,
+    "hit_at_3_hybrid": 1.0,
+    "hit_at_3_reranked": 1.0,
+    "n_out_of_scope": 2,
+    "unsure_correct": 2,
+    "n_incidents": 8,
+    "citation_validity": 1.0,
+    "unsure_rate": 0.0,
+    "latency_p50_ms": 6625.0926250031625,
+    "latency_p95_ms": 8038.308386947756
+   }
+  }
+ ],
+ "question_runs_2": [
+  {
+   "split": "dev",
+   "date": "2026-10-10T15:24:46.114269+00:00",
+   "models": {
+    "rewriter": "us.openai.gpt-5.4",
+    "writer": "us.openai.gpt-5.5",
+    "embedder": "cohere.embed-multilingual-v3",
+    "re_ranker": "jev-1.13.0"
+   },
+   "paced_gap_s": 1.05,
+   "wall_s": 139,
+   "bedrock_requests": 132,
+   "failed_requests": [],
+   "query_embedding_fallbacks": 0,
+   "call_ms_p50": {
+    "Queries": 798
+   },
+   "call_ms_max": {
+    "Queries": 1085
+   },
+   "report": {
+    "split": "dev",
+    "n_questions": 31,
+    "hit_at_3_bm25": 0.8387096774193549,
+    "hit_at_3_hybrid": 0.967741935483871,
+    "hit_at_3_reranked": 0.967741935483871,
+    "n_out_of_scope": 2,
+    "unsure_correct": 2
+   }
+  },
+  {
+   "split": "dev",
+   "date": "2026-10-10T15:27:11.019968+00:00",
+   "models": {
+    "rewriter": "us.openai.gpt-5.6-sol",
+    "writer": "us.openai.gpt-5.5",
+    "embedder": "cohere.embed-multilingual-v3",
+    "re_ranker": "jev-1.13.0"
+   },
+   "paced_gap_s": 1.05,
+   "wall_s": 145,
+   "bedrock_requests": 132,
+   "failed_requests": [],
+   "query_embedding_fallbacks": 0,
+   "call_ms_p50": {
+    "Queries": 1073
+   },
+   "call_ms_max": {
+    "Queries": 2082
+   },
+   "report": {
+    "split": "dev",
+    "n_questions": 31,
+    "hit_at_3_bm25": 0.8387096774193549,
+    "hit_at_3_hybrid": 0.967741935483871,
+    "hit_at_3_reranked": 0.967741935483871,
+    "n_out_of_scope": 2,
+    "unsure_correct": 2
+   }
+  }
+ ],
+ "embeddings_alone_hit_at_3_raw_questions": {
+  "text-embedding-3-small": "31/31",
+  "cohere.embed-multilingual-v3": "30/31",
+  "cohere.embed-v4:0": "30/31",
+  "missed_by_both_cohere": "des instructions cachées dans un document lu par l'agent"
+ }
+}

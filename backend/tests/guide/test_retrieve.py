@@ -36,7 +36,7 @@ class FakeEmbedder:
     model = "fake"
     calls = 0
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         FakeEmbedder.calls += 1
         rows = []
         for t in texts:
@@ -52,7 +52,7 @@ class FakeEmbedder:
 class FailingEmbedder:
     model = "fake"
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         raise ModelUnavailable("down")
 
 
@@ -61,11 +61,11 @@ class FlakyQueries(FakeEmbedder):
 
     fail_next = False
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         if self.fail_next:
             self.fail_next = False
             raise ModelUnavailable("blip")
-        return super().embed(texts)
+        return super().embed(texts, query)
 
 
 def test_rrf_prefers_items_ranked_high_in_several_lists():
@@ -126,3 +126,17 @@ def test_embedding_cache_with_the_wrong_row_count_is_rebuilt(tmp_path):
     np.save(cache, np.load(cache)[:-1])
     Retriever(UNITS, FakeEmbedder(), cache)
     assert FakeEmbedder.calls == 2
+
+
+def test_the_corpus_is_embedded_as_documents_and_each_query_as_a_query(tmp_path):
+    class Recording(FakeEmbedder):
+        def __init__(self):
+            self.kinds: list[bool] = []
+
+        def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
+            self.kinds.append(query)
+            return super().embed(texts, query)
+
+    e = Recording()
+    Retriever(UNITS, e, tmp_path / "emb.npy").search(["validation", "cloisonner"])
+    assert e.kinds == [False, True, True]

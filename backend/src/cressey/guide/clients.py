@@ -9,8 +9,10 @@ import boto3
 import numpy as np
 import openai
 import typesafe_sdk
+from botocore.client import BaseClient
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
+from openai.providers import bedrock
 from pydantic import BaseModel, ValidationError
 from typesafe_sdk import Noul, RetryPolicy, TypeSafeClient
 
@@ -50,8 +52,9 @@ class ModelUnavailable(Exception):
 class Embedder(Protocol):
     model: str
 
-    def embed(self, texts: list[str]) -> np.ndarray:
-        """Rows L2-normalized, shape (len(texts), dim)."""
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
+        """Rows L2-normalized, shape (len(texts), dim). `query` marks search queries: Cohere
+        embeds them differently from the passages."""
         ...
 
 
@@ -123,12 +126,29 @@ def _openai(settings: Settings) -> openai.OpenAI | None:
     return (
         openai.OpenAI(
             api_key=key.get_secret_value(),
-            base_url=settings.openai_base_url,
             timeout=openai.Timeout(20, connect=5),
             max_retries=1,
         )
         if key
         else None
+    )
+
+
+def _responses(s: Settings) -> openai.OpenAI | None:
+    """The rewriter's and the writer's client. On Bedrock, the SDK's provider signs each request
+    with the AWS credentials (SigV4): no Bedrock API key to mint, none to expire."""
+    if s.models == "openai":
+        return _openai(s)
+    creds = _aws_credentials(s)
+    provider = bedrock(
+        endpoint="runtime",
+        region=s.aws_region,
+        access_key_id=creds.get("aws_access_key_id"),
+        secret_access_key=creds.get("aws_secret_access_key"),
+        session_token=creds.get("aws_session_token"),
+    )
+    return openai.OpenAI(
+        provider=provider, timeout=openai.Timeout(20, connect=5), max_retries=1
     )
 
 
@@ -138,7 +158,8 @@ class OpenAIEmbedder(_Adapter):
         s = settings or Settings()
         return cls(_openai(s), s.embedding_model)
 
-    def embed(self, texts: list[str]) -> np.ndarray:
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
+        # OpenAI embeds queries and passages alike.
         try:
             data = self._c().embeddings.create(model=self.model, input=texts).data
         except openai.OpenAIError as e:
@@ -151,7 +172,7 @@ class OpenAIRewriter(_Adapter):
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_openai(s), s.rewrite_model)
+        return cls(_responses(s), s.rewrite_model)
 
     def rewrite_incident(self, incident: GuideIncident) -> tuple[str, str]:
         q = self._parse(PROMPT_REWRITE_INCIDENT_V1, incident_text(incident), Queries)
@@ -166,7 +187,7 @@ class OpenAIWriter(_Adapter):
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_openai(s), s.writer_model)
+        return cls(_responses(s), s.writer_model)
 
     def write(self, incident: GuideIncident, units: list[Unit]) -> GuideDraft:
         user = f"<incident>{_data(incident.summary)} (source : {_data(incident.source)})</incident>\nPassages : {_passages(units, 1500)}"
@@ -201,25 +222,28 @@ def _aws_credentials(s: Settings) -> dict[str, str]:
     return {name: v.get_secret_value() for name, v in keys.items() if v}
 
 
+def _aws_client(service: str, s: Settings) -> BaseClient:
+    return boto3.client(
+        service,
+        region_name=s.aws_region,
+        # Fail fast, like _openai: the cache answers only after the live call gives up.
+        config=Config(
+            connect_timeout=5,
+            read_timeout=20,
+            retries={"total_max_attempts": 2, "mode": "standard"},
+        ),
+        **_aws_credentials(s),
+    )
+
+
 class BedrockReranker(_Adapter):
     """Cohere Rerank 3.5 on Amazon Bedrock: one call scores every passage against the query."""
 
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        client = boto3.client(
-            "bedrock-agent-runtime",
-            region_name=s.aws_region,
-            # Fail fast, like _openai: the cache answers only after the live call gives up.
-            config=Config(
-                connect_timeout=5,
-                read_timeout=20,
-                retries={"total_max_attempts": 2, "mode": "standard"},
-            ),
-            **_aws_credentials(s),
-        )
         arn = f"arn:aws:bedrock:{s.aws_region}::foundation-model/{s.rerank_model}"
-        return cls(client, arn)
+        return cls(_aws_client("bedrock-agent-runtime", s), arn)
 
     def relevance(self, question: str, units: list[Unit]) -> dict[str, float]:
         if not units:
@@ -250,6 +274,31 @@ class BedrockReranker(_Adapter):
         except (BotoCoreError, ClientError) as e:
             raise ModelUnavailable(type(e).__name__) from e
         return {units[x["index"]].id: float(x["relevanceScore"]) for x in r["results"]}
+
+
+class BedrockEmbedder(_Adapter):
+    """Cohere Embed on Amazon Bedrock, through boto3's InvokeModel."""
+
+    @classmethod
+    def from_settings(cls, settings: Settings | None = None) -> Self:
+        s = settings or Settings()
+        return cls(_aws_client("bedrock-runtime", s), s.embedding_model)
+
+    def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
+        rows: list[list[float]] = []
+        # The API takes at most 96 texts per call, of at most 2,048 characters each.
+        for i in range(0, len(texts), 96):
+            body = {
+                "texts": [t[:2048] for t in texts[i : i + 96]],
+                "input_type": "search_query" if query else "search_document",
+            }
+            try:
+                r = self._c().invoke_model(modelId=self.model, body=json.dumps(body))
+            except (BotoCoreError, ClientError) as e:
+                raise ModelUnavailable(type(e).__name__) from e
+            rows += json.loads(r["body"].read())["embeddings"]
+        m = np.array(rows)
+        return m / np.linalg.norm(m, axis=1, keepdims=True)
 
 
 class JevReranker(_Adapter):

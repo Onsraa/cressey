@@ -11,12 +11,12 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
   - each step is `GuideStep(action, source_id, quote, source_title)`.
 
 ## Steps
-1. **Rewrite** (gpt-5.4-mini, `PROMPT_REWRITE_INCIDENT_V1`): the incident becomes one French query and one English query. The prompt defines the triangle's three legs.
-2. **Search** (`retrieve.py`): three queries (French, English, raw text), each through BM25 and through embeddings, which makes 6 ranked lists. They're merged by reciprocal rank fusion (`k = 60`), keeping the top 8. If a query embedding fails, that search continues with BM25 only; the next search tries embeddings again.
+1. **Rewrite** (gpt-5.4-mini, or GPT-5.6 Sol on Bedrock; `PROMPT_REWRITE_INCIDENT_V1`): the incident becomes one French query and one English query. The prompt defines the triangle's three legs.
+2. **Search** (`retrieve.py`): three queries (French, English, raw text), each through BM25 and through embeddings, which makes 6 ranked lists. They're merged by reciprocal rank fusion (`k = 60`), keeping the top 8. The embeddings come from text-embedding-3-small, or from Cohere Embed Multilingual v3 on Bedrock, which embeds the corpus as passages (`search_document`) and each query as a query (`search_query`). If a query embedding fails, that search continues with BM25 only; the next search tries embeddings again.
 3. **Re-rank** (Jev `jev-1.13.0`): one yes/no question per passage (« The passage directly answers the question »). Passages scoring under **0.4** are discarded.
    - **Rerank 3.5 on Bedrock** (`CRESSEY_RERANKER=bedrock`): one call scores every passage, threshold 0.2. Measured weaker on 10-10 (6/8 guides against 8/8), like Strands Decider (3/8): see `evaluation.md`.
    - **Each re-ranker has its own threshold,** set on the dev set with `--calibrate` (the S6 method: expected passages kept against others kept, and no out-of-scope question kept). The model name is part of the cache key, so a switch needs a new recording.
-4. **Write** (gpt-5.5, `PROMPT_GUIDE_V1`): at most 4 steps. Each cites one passage id and a verbatim quote of 8–20 words. The incident text sits between `<incident>` tags and is treated as data, never as instructions. `<`, `>` and `&` in it are escaped, so it can't close the tag.
+4. **Write** (gpt-5.5, on OpenAI or on Bedrock; `PROMPT_GUIDE_V1`): at most 4 steps. Each cites one passage id and a verbatim quote of 8–20 words. The incident text sits between `<incident>` tags and is treated as data, never as instructions. `<`, `>` and `&` in it are escaped, so it can't close the tag.
 5. **Check, in code:** a step is kept only if its `source_id` is among the passages given to the writer and its quote appears in that passage. Matching ignores case, whitespace and typographic quotes, and quotes must be 8–30 words.
 
 ## When there is no guide
@@ -43,16 +43,17 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 
 ## Model cache (`cache.py`)
 - **Coverage:** every model call goes through `Cached`.
-- **Key:** the sha256 of the adapter and method, the model, the prompt version (a hash of the prompt text) and the input. The incident id is left out: the model never sees it, so a new incident with the same text replays.
+- **Key:** the sha256 of the adapter and method, the model, the prompt version (a hash of the prompt text) and the input. The incident id is left out: the model never sees it, so a new incident with the same text replays. An embedding's input says whether it's a query, so a query never gets the answer recorded for the same text as a passage.
 - **Modes:**
   - `live`: call the model.
   - `record`: call and store.
   - `replay`: cache only, never the network.
   - `fallback`: call, and serve the stored answer if the model fails. This is the mode for the stage.
 - **Recorded answers:** they're committed in `backend/data/cache/`, so re-record after changing a prompt, a model or the corpus.
-- **Corpus vectors** (`embeddings.npy`, local only): rebuilt when the corpus, the embedding model or the row count changes.
+- **Corpus vectors** (`embeddings.npy`, local only): rebuilt when the corpus, the embedding model or the row count changes. Switching `CRESSEY_MODELS` re-embeds the corpus once and overwrites the file.
 
 ## Model calls
-- `store=False` on every OpenAI call: the provider keeps nothing (both OpenAI and Bedrock keep responses 30 days by default).
+- **Providers** (`CRESSEY_MODELS`): `openai` by default. `bedrock` sends the rewrite and the writing to the Responses API of `bedrock-runtime`, each request signed with SigV4 from the AWS credentials, and the embeddings to Cohere Embed through boto3. Same prompts, same structured output (`evaluation.md`, « Bedrock models »).
+- `store=False` on every Responses call, OpenAI or Bedrock: the provider keeps nothing (both keep responses 30 days by default).
 - Fail fast, so `fallback` reaches the cache quickly: OpenAI and Bedrock 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry.
 - A refusal or a cut-off structured answer counts as unavailable.

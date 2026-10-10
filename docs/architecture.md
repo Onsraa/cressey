@@ -40,20 +40,20 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 
 | Field | Env var | Default |
 |---|---|---|
-| `openai_api_key` | `OPENAI_API_KEY` | none. An empty value counts as missing |
-| `openai_base_url` | `OPENAI_BASE_URL` | none (OpenAI). For Bedrock: `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`, with a Bedrock API key in `OPENAI_API_KEY` |
+| `openai_api_key` | `OPENAI_API_KEY` | none. An empty value counts as missing. Not needed with `CRESSEY_MODELS=bedrock` |
+| `models` | `CRESSEY_MODELS` | `openai`. `bedrock` moves the guides' rewriter, writer and embedder to Amazon Bedrock (« Deployment ») |
 | `typesafe_api_key` | `TYPESAFE_API_KEY` | none. An empty value counts as missing. Jev is the triangle's decision model |
 | `decider_url` | `CRESSEY_DECIDER_URL` | none: Jev's API. A URL, such as the local `strands-decider serve` on port 8100, switches the triangle's decision model to that server |
 | `web_dir` | `CRESSEY_WEB_DIR` | `web` |
 | `model_mode` | `CRESSEY_MODEL_MODE` | `live` (`live`, `record`, `replay` or `fallback`) |
 | `cache_dir` | `CRESSEY_CACHE_DIR` | `data/cache` |
-| `rewrite_model` | — | `gpt-5.4-mini` |
-| `writer_model` | — | `gpt-5.5` |
-| `embedding_model` | — | `text-embedding-3-small` |
+| `rewrite_model` | — | `gpt-5.4-mini`; on Bedrock `us.openai.gpt-5.6-sol` |
+| `writer_model` | — | `gpt-5.5`; on Bedrock `us.openai.gpt-5.5` |
+| `embedding_model` | — | `text-embedding-3-small`; on Bedrock `cohere.embed-multilingual-v3` |
 | `reranker` | `CRESSEY_RERANKER` | `jev`. `bedrock` re-ranks with Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) |
 | `relevance_min` | — | set per re-ranker on the dev set: `0.4` for Jev, `0.2` for Rerank 3.5 |
-| `aws_region` | `AWS_REGION` | `us-east-1` |
-| AWS credentials | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | none: boto3's own chain. The event's temporary credentials go in `.env`, never in Git |
+| `aws_region` | `AWS_REGION` | `us-east-1`. The `us.` inference profiles of the Bedrock models need a US region |
+| AWS credentials | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | none: boto3's own chain. They sign every Bedrock call. The event's temporary credentials go in `.env`, never in Git |
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
 | `triangle_holds` | `CRESSEY_TRIANGLE_HOLDS` | `true`. `false` measures the safety floor alone (the ablation); the legs are still computed |
@@ -151,16 +151,17 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 ## Deployment
 - **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The API has no authentication.
 - **After the event: AWS** (the Bedrock partnership covers hosting and models).
-- **Built:** the Bedrock re-ranker (Rerank 3.5), off by default. **Not built yet:** the container deploy, and Bedrock for the writer, rewriter and embedder.
-- **Where Bedrock plugs in:** the adapters in `clients.py`.
-  - Bedrock exposes an OpenAI-compatible endpoint at `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
-  - Claude models are reached through the Anthropic Messages API on that endpoint.
-  - Whether Claude also answers through Chat Completions there is not verified.
-- **Checked on 2026-10-10 in the AWS docs:**
-  - `bedrock-runtime` serves the OpenAI Responses API. The OpenAI SDK works by setting `OPENAI_BASE_URL` and a Bedrock API key; the writer and rewriter code stays.
-  - OpenAI models on Bedrock, listed from our account on 10-10: GPT-5.4, GPT-5.5 and GPT-5.6 Luna, Sol and Terra, through inference profiles such as `us.openai.gpt-5.5` (GPT-6 is listed too, but the event's allowlist excludes it). There's no gpt-5.4-mini, so the rewriter changes model and the eval is re-run.
-  - No OpenAI embedding model was found. Candidate: Cohere Embed Multilingual v3 (French), called through boto3. The embedder shares the OpenAI client, so `OPENAI_BASE_URL` alone would send it to Bedrock too.
-  - Not verified: structured output (`text_format`) through Bedrock. Needs one call with a Bedrock key.
+- **Built, off by default:** Bedrock for the re-ranker (`CRESSEY_RERANKER=bedrock`, Rerank 3.5) and for the rewriter, writer and embedder (`CRESSEY_MODELS=bedrock`). **Not built yet:** the container deploy.
+- **`CRESSEY_MODELS=bedrock`** (adapters in `clients.py`; measured in `evaluation.md`, « Bedrock models »):
+  - **Rewriter and writer:** the same `responses.parse(text_format=…, store=False)` calls, on the Responses API of `bedrock-runtime` (`https://bedrock-runtime.<region>.amazonaws.com/openai/v1`). Their models are inference profiles: `us.openai.gpt-5.6-sol` rewrites, `us.openai.gpt-5.5` writes.
+  - **Auth:** the openai SDK's Bedrock provider (`openai.providers.bedrock`, endpoint `runtime`, in openai 3.28) signs each request with SigV4 from the AWS credentials. No Bedrock API key is minted, so none expires before the credentials do.
+  - **Embedder:** Cohere Embed Multilingual v3 (1,024 dimensions) through boto3's `InvokeModel`, with `search_document` for the corpus and `search_query` for queries. At most 96 texts per call and 2,048 characters per text: 10 of the 111 units lose their end.
+  - **Switching** re-embeds the corpus once (`embeddings.npy`) and needs its own cache recording, because the model names are in the cache keys.
+- **Checked on 2026-10-10 from our account:**
+  - Structured output (`text_format`) and `store=False` work through `bedrock-runtime`, with no change to the account's data retention.
+  - OpenAI models on Bedrock: GPT-5.4, GPT-5.5 and GPT-5.6 Luna, Sol and Terra, through inference profiles such as `us.openai.gpt-5.5`. GPT-6 is listed too, but the event's allowlist excludes it. There's no gpt-5.4-mini.
+  - From the AWS docs: `bedrock-runtime` rejects `background=true` and has no `GET /models`. Neither is used.
+  - Claude models are reached through the Anthropic Messages API on that endpoint. Whether Claude also answers through Chat Completions there is not verified.
 - **Strands Decider 2B** (chosen 10-10, then measured weaker than Jev for both uses: `decisions.md`; facts from its GitHub README, checked 10-10):
   - Weights: `StrandsAgents/strands-decider-2B-qwen3.5-v1-2610` on Hugging Face (also under the `amazon` org), Apache 2.0. Released by AWS Strands Labs on 2026-10-01 as an experiment, not as a managed AWS service.
   - Install with `pip install strands-decider`. For Apple silicon's MLX, install from a clone with `pip install -e ".[mlx]"` until the next release.

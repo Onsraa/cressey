@@ -12,18 +12,17 @@ class Settings(BaseSettings):
     )
 
     openai_api_key: SecretStr | None = None
-    openai_base_url: str | None = (
-        None  # Bedrock: https://bedrock-runtime.<region>.amazonaws.com/openai/v1
-    )
     # The triangle's decision model: Jev's API by default, with TYPESAFE_API_KEY (S9: Strands
     # Decider 2B separates no subtle case). A URL here, such as the local Strands Decider's
     # http://127.0.0.1:8100, switches to that server. The guides' re-ranker is `reranker`.
     decider_url: str | None = Field(None, validation_alias="CRESSEY_DECIDER_URL")
     typesafe_api_key: SecretStr | None = None
     web_dir: Path = Field(Path("web"), validation_alias="CRESSEY_WEB_DIR")
-    rewrite_model: str = "gpt-5.4-mini"
-    writer_model: str = "gpt-5.5"  # S6: 23/23 verified quotes vs 19/21 for gpt-5.4-mini
-    embedding_model: str = "text-embedding-3-small"
+    # The guides' rewriter, writer and embedder: OpenAI direct, or Amazon Bedrock (GPT through
+    # the Responses API, Cohere Embed). The re-ranker is `reranker`.
+    models: Literal["openai", "bedrock"] = Field(
+        "openai", validation_alias="CRESSEY_MODELS"
+    )
     model_mode: Literal["live", "record", "replay", "fallback"] = Field(
         "live", validation_alias="CRESSEY_MODEL_MODE"
     )
@@ -64,6 +63,27 @@ class Settings(BaseSettings):
         return {"bedrock": "cohere.rerank-v3-5:0", "jev": "jev-1.13.0"}[self.reranker]
 
     @property
+    def rewrite_model(self) -> str:
+        # gpt-5.4-mini isn't on Bedrock. Dev, two runs (10-10): GPT-5.6 Sol re-ranked hit@3
+        # 61/62, GPT-5.4 60/62 but 0.27 s faster a call; Luna 30/31 in one run, the slowest.
+        return {"bedrock": "us.openai.gpt-5.6-sol", "openai": "gpt-5.4-mini"}[
+            self.models
+        ]
+
+    @property
+    def writer_model(self) -> str:
+        # S6: 23/23 verified quotes vs 19/21 for gpt-5.4-mini. Bedrock wants an inference
+        # profile; the us. ones need a US region.
+        return {"bedrock": "us.openai.gpt-5.5", "openai": "gpt-5.5"}[self.models]
+
+    @property
+    def embedding_model(self) -> str:
+        return {
+            "bedrock": "cohere.embed-multilingual-v3",
+            "openai": "text-embedding-3-small",
+        }[self.models]
+
+    @property
     def decision_model(self) -> str:
         """One switch: the local decider's model when its URL is set, otherwise Jev's."""
         return (
@@ -72,7 +92,6 @@ class Settings(BaseSettings):
 
     @field_validator(
         "openai_api_key",
-        "openai_base_url",
         "typesafe_api_key",
         "decider_url",
         mode="before",

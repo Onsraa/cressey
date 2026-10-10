@@ -1,5 +1,8 @@
+import io
+import json
 from types import SimpleNamespace
 
+import numpy as np
 import openai
 import pytest
 
@@ -140,25 +143,51 @@ def test_jev_answer_missing_for_a_passage_is_left_out():
     assert JevReranker(Partial()).relevance("q", UNITS) == {UNITS[0].id: 0.9}
 
 
-def test_openai_client_fails_fast_and_takes_its_base_url_from_settings(monkeypatch):
+def test_openai_client_fails_fast(monkeypatch):
     from cressey.guide.clients import _openai
     from cressey.settings import Settings
 
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    url = "https://bedrock-runtime.eu-west-3.amazonaws.com/openai/v1"
-    c = _openai(Settings(_env_file=None, openai_api_key="k", openai_base_url=url))
+    c = _openai(Settings(_env_file=None, openai_api_key="k"))
     assert c is not None
     assert (c.max_retries, c.timeout, str(c.base_url)) == (
         1,
         openai.Timeout(20, connect=5),
-        url + "/",
+        "https://api.openai.com/v1/",
     )
 
 
-def test_blank_base_url_means_the_default():
+def test_the_guide_models_are_openai_by_default_and_bedrock_an_option():
     from cressey.settings import Settings
 
-    assert Settings(_env_file=None, openai_base_url=" ").openai_base_url is None
+    default = Settings(_env_file=None)
+    bedrock = Settings(_env_file=None, models="bedrock")
+    assert (
+        default.models,
+        default.rewrite_model,
+        default.writer_model,
+        default.embedding_model,
+    ) == ("openai", "gpt-5.4-mini", "gpt-5.5", "text-embedding-3-small")
+    assert (bedrock.rewrite_model, bedrock.writer_model, bedrock.embedding_model) == (
+        "us.openai.gpt-5.6-sol",
+        "us.openai.gpt-5.5",
+        "cohere.embed-multilingual-v3",
+    )
+
+
+def test_bedrock_writer_and_rewriter_need_no_openai_key_and_fail_fast():
+    """The SDK's Bedrock provider signs each request with the AWS credentials."""
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None, models="bedrock", openai_api_key=None)
+    for adapter in (OpenAIWriter.from_settings(s), OpenAIRewriter.from_settings(s)):
+        c = adapter.client
+        assert (str(c.base_url), c.max_retries, c.timeout) == (
+            "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1/",
+            1,
+            openai.Timeout(20, connect=5),
+        )
+    assert OpenAIWriter.from_settings(s).model == "us.openai.gpt-5.5"
 
 
 @pytest.mark.live
@@ -277,3 +306,79 @@ def test_bedrock_client_fails_fast_like_the_openai_one():
         20,
         {"total_max_attempts": 2, "mode": "standard"},
     )
+
+
+class FakeRuntime:
+    """Stands in for boto3's bedrock-runtime client: the vector [3, 4] (norm 5) per text."""
+
+    def __init__(self, fail: bool = False):
+        self.fail, self.calls = fail, []
+
+    def invoke_model(self, modelId, body):
+        if self.fail:
+            from botocore.exceptions import ClientError
+
+            raise ClientError({"Error": {"Code": "ThrottlingException"}}, "InvokeModel")
+        sent = json.loads(body)
+        self.calls.append((modelId, sent))
+        vectors = [[3.0, 4.0]] * len(sent["texts"])
+        return {"body": io.BytesIO(json.dumps({"embeddings": vectors}).encode())}
+
+
+def test_bedrock_embedder_marks_the_corpus_and_the_queries_apart():
+    """Cohere embeds a search query differently from the passages it searches."""
+    from cressey.guide.clients import BedrockEmbedder
+
+    fake = FakeRuntime()
+    e = BedrockEmbedder(fake, "cohere.embed-multilingual-v3")
+    e.embed(["passage"])
+    e.embed(["question"], query=True)
+    assert [(m, b["input_type"]) for m, b in fake.calls] == [
+        ("cohere.embed-multilingual-v3", "search_document"),
+        ("cohere.embed-multilingual-v3", "search_query"),
+    ]
+
+
+def test_bedrock_embedder_sends_at_most_96_texts_of_2048_characters_per_call():
+    from cressey.guide.clients import BedrockEmbedder
+
+    fake = FakeRuntime()
+    m = BedrockEmbedder(fake, "m").embed(["x" * 3000] * 100)
+    assert [len(b["texts"]) for _, b in fake.calls] == [96, 4]
+    assert {len(t) for _, b in fake.calls for t in b["texts"]} == {2048}
+    assert m.shape == (100, 2) and np.allclose(np.linalg.norm(m, axis=1), 1.0)
+
+
+def test_bedrock_embedder_errors_become_model_unavailable():
+    from cressey.guide.clients import BedrockEmbedder
+
+    with pytest.raises(ModelUnavailable):
+        BedrockEmbedder(FakeRuntime(fail=True), "m").embed(["x"])
+
+
+def test_bedrock_embedder_fails_fast_like_the_re_ranker():
+    from cressey.guide.clients import BedrockEmbedder
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None, aws_access_key_id="k", aws_secret_access_key="s")
+    cfg = BedrockEmbedder.from_settings(s).client.meta.config
+    assert (cfg.connect_timeout, cfg.read_timeout, cfg.retries) == (
+        5,
+        20,
+        {"total_max_attempts": 2, "mode": "standard"},
+    )
+
+
+@pytest.mark.live
+def test_live_bedrock_rewrites_and_embeds():
+    """Checks Bedrock from here (TLS, credentials in .env, model access): two calls."""
+    from cressey.guide.clients import BedrockEmbedder
+    from cressey.settings import Settings
+
+    s = Settings(models="bedrock")
+    fr, en = OpenAIRewriter.from_settings(s).rewrite_question(
+        "Faut-il révoquer une clé de production lue par un agent ?"
+    )
+    assert fr.strip() and en.strip()
+    v = BedrockEmbedder.from_settings(s).embed([fr], query=True)
+    assert v.shape[0] == 1 and np.isclose(np.linalg.norm(v), 1.0)

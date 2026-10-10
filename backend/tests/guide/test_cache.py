@@ -1,9 +1,10 @@
 import numpy as np
 import pytest
 
-from cressey.guide.cache import Cached, cache_key
-from cressey.guide.clients import ModelUnavailable
+from cressey.guide.cache import Cached, cache_key, wrap_all
+from cressey.guide.clients import BedrockEmbedder, ModelUnavailable
 from cressey.guide.models import GuideDraft
+from cressey.settings import Settings
 from tests.guide.test_pipeline import GOOD, INC, R9, Rer, Rew, Wri
 
 
@@ -50,7 +51,7 @@ def test_prompt_version_change_misses_the_cache():
 
 def test_round_trips_every_output_type(tmp_path):
     class Emb:
-        def embed(self, texts):
+        def embed(self, texts, query=False):
             return np.array([[0.6, 0.8]])
 
     for mode in ("record", "replay"):
@@ -94,3 +95,28 @@ def test_a_new_incident_id_still_replays_the_guide(tmp_path):
         again, [R9]
     )
     assert draft == GuideDraft(steps=[GOOD])
+
+
+def test_query_and_corpus_embeddings_of_one_text_are_cached_apart(tmp_path):
+    class Emb:
+        def embed(self, texts, query=False):
+            return np.array([[1.0, 0.0]] if query else [[0.0, 1.0]])
+
+    rec = Cached(Emb(), "embedder", "m", "v1", "record", tmp_path)
+    rec.embed(["x"])
+    rec.embed(["x"], query=True)
+    rep = Cached(None, "embedder", "m", "v1", "replay", tmp_path)
+    assert np.allclose(rep.embed(["x"], query=True), [[1.0, 0.0]])
+    assert np.allclose(rep.embed(["x"]), [[0.0, 1.0]])
+
+
+def test_the_bedrock_models_get_their_own_cache_keys(tmp_path):
+    s = Settings(_env_file=None, models="bedrock", cache_dir=tmp_path)
+    emb, rew, _, wri = wrap_all(s)
+    assert isinstance(emb.inner, BedrockEmbedder)
+    assert (emb.model, rew.model, wri.model) == (
+        s.embedding_model,
+        s.rewrite_model,
+        s.writer_model,
+    )
+    assert wri.model != Settings(_env_file=None).writer_model

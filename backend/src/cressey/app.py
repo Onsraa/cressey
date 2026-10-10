@@ -54,7 +54,9 @@ def create_app(
 
     @api.get("/health")
     def health() -> dict[str, str]:
-        ok = s.openai_api_key is not None and s.typesafe_api_key is not None
+        # On Bedrock the guide models sign with the AWS credentials: .env or boto3's own chain.
+        guides = s.models == "bedrock" or s.openai_api_key is not None
+        ok = guides and s.typesafe_api_key is not None
         return {"status": "ok", "models": "configured" if ok else "missing-keys"}
 
     api.include_router(guide_router)

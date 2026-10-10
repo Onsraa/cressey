@@ -64,6 +64,8 @@ cp .env.example .env          # OPENAI_API_KEY, TYPESAFE_API_KEY (Jev)
 docker compose up --build     # image unique : web + API sur :8000
 ```
 
+**Modèles sur Bedrock :** `CRESSEY_MODELS=bedrock`, avec les identifiants AWS dans `.env` : GPT-5.6 Sol réécrit, GPT-5.5 rédige et Cohere Embed Multilingual v3 vectorise. Le défaut reste OpenAI.
+
 **Hors ligne (démo) :** `CRESSEY_MODEL_MODE=fallback` sert les réponses enregistrées si un modèle ne répond pas.
 
 ## Tests et qualité

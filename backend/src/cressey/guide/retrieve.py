@@ -66,7 +66,7 @@ class Retriever:
 
     def _emb_top(self, q: str, k: int) -> list[str]:
         assert self.embedder is not None and self.vectors is not None
-        v = self.embedder.embed([q])[0]
+        v = self.embedder.embed([q], query=True)[0]
         return [self.ids[j] for j in np.argsort(-(self.vectors @ v))[:k]]
 
     def search(self, queries: list[str], k: int = 8, top: int = 8) -> list[Unit]:

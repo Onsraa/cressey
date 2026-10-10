@@ -19,6 +19,12 @@ def test_health_with_keys():
     assert TestClient(create_app(s)).get("/api/health").json()["models"] == "configured"
 
 
+def test_bedrock_models_need_no_openai_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    s = Settings(_env_file=None, models="bedrock", typesafe_api_key="y")
+    assert TestClient(create_app(s)).get("/api/health").json()["models"] == "configured"
+
+
 def test_unknown_api_route_is_404():
     assert (
         TestClient(create_app(Settings(_env_file=None))).get("/api/nope").status_code

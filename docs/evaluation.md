@@ -42,6 +42,38 @@ Jev, Cohere Rerank 3.5 on Bedrock and Strands Decider 2B, each with a threshold 
 - **Commands:** `CRESSEY_RERANKER=bedrock uv run python -m cressey.guide.eval --split dev --calibrate`, then the guide eval with the same setting. Rerank 3.5 needs the AWS credentials in `.env`.
 - **Limits:** one run per re-ranker, and the query rewrite varies between runs, so the candidates differ. Every re-ranker gets the French rewrite; the raw question wasn't tried. Latency isn't compared, because an incident with no passage kept skips the writer.
 
+## Bedrock models (2026-10-10, dev, live)
+`CRESSEY_MODELS=bedrock`: GPT-5.5 writes and Cohere Embed Multilingual v3 embeds, both on Bedrock, and Jev re-ranks at 0.4. gpt-5.4-mini isn't on Bedrock, so three rewriters were measured, with one full run each. The baseline is OpenAI with Jev (`report-dev.json`, run 2 above).
+
+| Metric | OpenAI (baseline) | Bedrock, GPT-5.4 rewrites | GPT-5.6 Luna | **GPT-5.6 Sol** |
+|---|---|---|---|---|
+| Hit@3, BM25 alone | 26/31 | 26/31 | 26/31 | 26/31 |
+| Hit@3, hybrid | 30/31 | 30/31 | 31/31 | 31/31 |
+| Hit@3, after re-ranking | 30/31 | 30/31 | 30/31 | **31/31** |
+| Out-of-scope questions answered « je ne sais pas » | 2/2 | 2/2 | 2/2 | 2/2 |
+| Incidents with a sourced guide | 8/8 | 8/8 | 8/8 | 8/8 |
+| Citation validity | 100% | 100% | 100% | 100% |
+| Latency per incident | p50 8.1 s, p95 10.9 s | p50 7.1 s, p95 8.3 s | p50 7.0 s, p95 8.9 s | p50 6.6 s, p95 8.0 s |
+| Rewrite call, p50 (max) | — | 0.82 s (1.3 s) | 1.36 s (1.8 s) | 1.06 s (1.8 s) |
+| Second run, the 33 questions only: hybrid, after re-ranking, out of scope | — | 30/31, 30/31, 2/2 | not run | 30/31, 30/31, 2/2 |
+
+- **Sol rewrites on Bedrock.** Over the two runs, it gets 61/62 after re-ranking against 60/62 for GPT-5.4, and they tie on everything else. The rule was set before the second run: the higher re-ranked total wins, and the faster rewrite wins a tie. The margin is one question in 62, within the run-to-run noise. Sol's rewrite takes about 0.27 s more per call, once per guide and once per « Pourquoi ? ».
+- **Cohere Embed Multilingual v3 embeds on Bedrock.** Embeddings alone, on the 31 raw questions (no rewrite, no BM25), from recorded vectors:
+  - text-embedding-3-small: 31/31;
+  - Embed v3: 30/31;
+  - Embed v4 (`cohere.embed-v4:0`): 30/31, with the same miss (« des instructions cachées dans un document lu par l'agent »).
+
+  The full pipeline recovers that miss through BM25 and the rewrites (hybrid 30–31/31, as with OpenAI). v4 adds nothing here, and its vectors are larger (1,536 dimensions against 1,024).
+- **Bedrock requests:** 172 per full run. None failed, and no query embedding fell back to BM25.
+- **Pacing:** each request started at least 1.05 s after the previous one, for the event's limit of about 1 per second. The waits are taken out of the latency.
+- **Command:** `CRESSEY_MODELS=bedrock uv run python -m cressey.guide.eval --split dev` runs the same pipeline. It writes `report-dev.json` and re-embeds `embeddings.npy`, so copy both aside first. Our runs went through a scratch wrapper that paced the requests and swapped the rewriter. Results: `data/eval/bedrock-models-dev.json`, which `/api/eval` doesn't serve.
+- **Limits:**
+  - One full run per rewriter, plus a second run of the questions for GPT-5.4 and Sol. The rewrite varies between runs: the OpenAI baseline moved by one question between its two runs.
+  - 33 questions and 8 incidents, all written by the team.
+  - Latency is one run each, over the venue network. It's driven by the writer: the same GPT-5.5 had a p50 between 4.4 and 5.1 s across the three runs.
+  - Only whether every step is sourced was checked, not how good the guides are.
+  - The 2,048-character limit cuts the end of 10 of the 111 units for Embed v3.
+
 ## Detection (2026-10-10, live Jev)
 Every session in `backend/data/sessions/` is played on a fresh Cressey as a replay: nothing waits for a human, and a call that would be held is refused. A session passes when it's held exactly when `expect` says so. The sessions are synthetic and written by the team: 5 incidents (the demo DELETE, DROP TABLE, UPDATE without WHERE, the key sent by email in clear, then base64-encoded) and 5 normal tasks.
 
