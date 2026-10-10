@@ -57,6 +57,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
 | `triangle_holds` | `CRESSEY_TRIANGLE_HOLDS` | `true`. `false` measures the safety floor alone (the ablation): no triangle hold and no acting on pressure; the legs are still computed |
+| `holds` | `CRESSEY_HOLDS` | `wait`: a held call waits for a human. `refuse`, for a fleet: it is refused at once with its reason and the way out (status `denied`); its incident opens and the key stays revoked, as after a rejection |
 
 ## API
 | Method | Path | Body | Response |
@@ -93,6 +94,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 - **While a call is held,** the run's key is revoked: its other calls are denied.
   - Approval runs the call once and reinstates the key.
   - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.
+  - With `CRESSEY_HOLDS=refuse`, nothing waits: the call is refused at once, « Cressey : action refusée (…). Déclarer la tâche impossible est une réponse acceptée. », with status `denied`. Its incident opens, and the key stays revoked.
 - **Run kinds:** `live` holds and waits for a human. `control` (« Observateur ») is logged and never held. `replay` never waits: a call that would be held is blocked and marked `would_hold`, and that replay fails.
 - **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`, and two timings: `check_ms` (Cressey's decision, before the tool runs) and `scan_ms` (the secret scan of the result).
   - What the agent read, and the raw arguments, are kept in memory for tracing and never served.

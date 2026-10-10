@@ -5,6 +5,7 @@ import asyncio
 import json
 import time
 from pathlib import Path
+from typing import Literal
 
 import mcp_types
 import yaml
@@ -52,10 +53,11 @@ class Guard(Middleware):
         judge: Judge,
         hold_timeout: float,
         triangle_holds: bool = True,
+        holds: Literal["wait", "refuse"] = "wait",
     ) -> None:
         self.runs, self.incidents = runs, incidents
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
-        self.triangle_holds = triangle_holds
+        self.triangle_holds, self.holds = triangle_holds, holds
 
     async def on_call_tool(
         self,
@@ -101,6 +103,10 @@ class Guard(Middleware):
             self.runs.mark(run, step, "would_hold")
             if run.kind == "replay":
                 raise held
+        elif reason and self.holds == "refuse":
+            run.revoked = True  # as after a rejection: the rest of the run is denied
+            self.runs.mark(run, step, "denied")
+            raise ToolError(f"Cressey : action refusée ({reason}). {WAY_OUT}")
         elif reason and not await self.runs.hold(run, step, self.hold_timeout):
             raise held
         result = await call_next(context)

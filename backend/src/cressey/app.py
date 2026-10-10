@@ -45,7 +45,9 @@ def create_app(
     )
     policy = load_policy(DATA / "policy.yaml")
     judge = judge or JevJudge.from_settings(s)
-    guard = Guard(runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds)
+    guard = Guard(
+        runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds, s.holds
+    )
     mcp = build_mcp(guard, demo_tools(demo))
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s

@@ -38,6 +38,7 @@ The interface is in French. One theme, readable on a projector.
 - **End:** the run is finished when the agent sends its final report.
 
 ## Incidents
+- **With `CRESSEY_HOLDS=refuse`** (a fleet), no call waits: the would-be hold is refused at once, so there's no hold panel to decide. Its incident opens with the decision `denied`.
 - **Queue:** one incident per root cause, sorted by severity, then by time. Code sets the severity:
   - a safety-floor hit is « critique »;
   - two or more legs confirmed by facts is « haute »;

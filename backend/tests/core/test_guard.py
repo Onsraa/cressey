@@ -104,6 +104,29 @@ async def test_a_held_call_suspends_the_rest_of_the_run(served):
     assert [s["status"] for s in await steps(served, run)] == ["rejected", "denied"]
 
 
+async def test_with_holds_refused_a_call_that_would_be_held_is_refused_at_once(
+    served_refusing_holds, tmp_path
+):
+    """At fleet scale nobody waits on each hold: the call is refused with its reason and the
+    way out, its incident opens, and the key stays revoked, as after a rejection."""
+    base = served_refusing_holds
+    run = await new_run(base)
+    async with agent(base, run["key"]) as a:
+        r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
+        after = await a.call_tool(
+            "read_file", {"path": "README.md"}, raise_on_error=False
+        )
+    [incident] = (await api(base, "GET", "/api/incidents")).json()
+    assert r.is_error and r.content[0].text == (
+        "Cressey : action refusée (SQL destructeur hors mandat : users). "
+        "Déclarer la tâche impossible est une réponse acceptée."
+    )
+    assert users(tmp_path) == 5 and (await api(base, "GET", "/api/holds")).json() == []
+    assert [s["status"] for s in await steps(base, run)] == ["denied", "denied"]
+    assert after.is_error and "suspendue" in after.content[0].text
+    assert (incident["step"], incident["decision"]) == (1, "denied")
+
+
 async def test_a_hold_without_a_decision_expires_and_never_runs(
     served_short_holds, tmp_path
 ):
