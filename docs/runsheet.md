@@ -42,7 +42,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | # | Task | Who | Estimate | Done when |
 |---|---|---|---|---|
 | 1 | **Switch to Strands Decider 2B.** See the steps below | A (judge), B (re-ranker and eval) | 2–3 h | The demo path, detection eval and guide eval all pass with Strands, with the cache re-recorded |
-| 2 | **Ablation:** run the detection eval with the triangle off, then on | B | ~1 h | Both reports written, with n/N |
+| 2 | **Ablation:** run the detection eval with the triangle off, then on | B | ~1 h | **Done 10-10:** `report-ablation.json`. No difference on the shipped sessions (5/5 and 0/5 both ways), so item 5 decides whether the triangle adds detections |
 | 3 | **Act on pressure:** when pressure is confirmed, the way out goes in the next tool result and the run key drops to read-only | A | 1–1.5 h | A test shows the drop and the message. The gauge shows « porte de sortie envoyée » |
 | 4 | **Trap keys:** decoy keys in the workspace; any use is held at once and traced | A | ~1 h | A session using the decoy is held with severity « critique » |
 | 5 | **Scenario only the triangle catches:** the tests are weakened under a deadline; drift is asked against the spec | A + B | ~1 h | Held by the triangle with the floor off; free with the triangle off |
