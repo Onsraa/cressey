@@ -1,1 +1,1 @@
-["quelles mesures de remédiation pour une fuite d’une clé de production lue par un agent depuis .env.prod ?", "what remediation measures should be taken for a production key read by an agent from .env.prod?"]
+["Quelles mesures de remédiation recommandez-vous pour une exposition de clé de production lue par un agent à partir de .env.prod (étape 2) ?", "What remediation measures do you recommend for a production key exposure read by an agent from .env.prod (step 2)?"]
