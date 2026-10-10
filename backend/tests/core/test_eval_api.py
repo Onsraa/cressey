@@ -15,4 +15,5 @@ def test_the_eval_reports_are_served_with_their_file_and_date():
     assert guides["file"] == "data/eval/report-dev.json" and guides["split"] == "dev"
     assert detection["file"] == "data/eval/report-detection.json"
     assert detection["report"]["misses"] == []
+    assert reports["ablation"]["report"]["only_triangle"] == []
     assert all(datetime.fromisoformat(r["date"]) for r in reports.values())

@@ -51,6 +51,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `relevance_min` | — | `0.4` |
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
+| `triangle_holds` | `CRESSEY_TRIANGLE_HOLDS` | `true`. `false` measures the safety floor alone (the ablation); the legs are still computed |
 
 ## API
 | Method | Path | Body | Response |

@@ -31,7 +31,8 @@ def create_app(
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
     incidents = Incidents(runs, make_guide)
     policy = load_policy(DATA / "policy.yaml")
-    guard = Guard(runs, incidents, policy, JevJudge.from_settings(s), s.hold_timeout)
+    judge = JevJudge.from_settings(s)
+    guard = Guard(runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds)
     mcp = build_mcp(guard, demo_tools(demo))
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s

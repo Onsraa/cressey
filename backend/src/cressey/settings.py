@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     demo_dir: Path | None = Field(
         None, validation_alias="CRESSEY_DEMO_DIR"
     )  # temp dir when unset
+    # Two confirmed legs hold a call. Off measures the safety floor alone (the ablation).
+    triangle_holds: bool = Field(True, validation_alias="CRESSEY_TRIANGLE_HOLDS")
     relevance_min: float = (
         0.4  # S6 calibration: keeps 51/55 expected passages, 16/185 others
     )

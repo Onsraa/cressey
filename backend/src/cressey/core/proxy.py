@@ -51,9 +51,11 @@ class Guard(Middleware):
         policy: Policy,
         judge: Judge,
         hold_timeout: float,
+        triangle_holds: bool = True,
     ) -> None:
         self.runs, self.incidents = runs, incidents
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
+        self.triangle_holds = triangle_holds
 
     async def on_call_tool(
         self,
@@ -73,7 +75,8 @@ class Guard(Middleware):
             self.runs.mark(run, step, "denied")
             raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
         triangle = await legs(run, self.judge, self.policy.triangle)
-        reason = floor or (alarm_reason(triangle) if alarm(triangle, risk) else None)
+        triangle_hold = self.triangle_holds and alarm(triangle, risk)
+        reason = floor or (alarm_reason(triangle) if triangle_hold else None)
         self.runs.score(run, step, triangle, reason)
         if reason and run.kind != "replay":
             self.incidents.open(run, step, "critique" if floor else "haute")

@@ -3,7 +3,7 @@ holds."""
 
 import json
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
@@ -111,19 +111,26 @@ async def get_incident(incident_id: str, incidents: IncidentsDep) -> Incident:
     return incident
 
 
+SESSION_REPORTS: dict[str, Literal["detection", "ablation"]] = {
+    "report-detection": "detection",
+    "report-ablation": "ablation",
+}
+
+
 @router.get("/eval")
 async def eval_reports() -> list[EvalFile]:
     """The eval reports in data/eval, for the Évaluation view."""
     files = []
     for path in sorted((DATA / "eval").glob("report-*.json")):
         report = json.loads(path.read_text())
-        detection = path.stem == "report-detection"
+        kind = SESSION_REPORTS.get(path.stem, "guides")
         # The guide reports have no date field: their file's write time stands in.
         written = datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
         files.append(
             EvalFile(
-                kind="detection" if detection else "guides",
-                split="dev" if detection else report["split"],
+                kind=kind,
+                # The sessions are written by the team: a dev split.
+                split=report["split"] if kind == "guides" else "dev",
                 file=str(path.relative_to(DATA.parent)),
                 date=report.get("date", written),
                 report=report,

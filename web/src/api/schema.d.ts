@@ -285,7 +285,7 @@ export interface components {
 			 * Kind
 			 * @enum {string}
 			 */
-			kind: "guides" | "detection";
+			kind: "guides" | "detection" | "ablation";
 			/** Split */
 			split: string;
 			/** File */

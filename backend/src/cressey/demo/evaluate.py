@@ -2,10 +2,12 @@
 waits for a human) and check each one is held exactly when it should be.
 
     uv run python -m cressey.demo.evaluate      # writes data/eval/report-detection.json
+    uv run python -m cressey.demo.evaluate --ablation   # floor alone vs floor + triangle
 """
 
 import asyncio
 import statistics
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +23,7 @@ from cressey.guide.corpus import DATA
 from cressey.settings import Settings
 
 REPORT = DATA / "eval" / "report-detection.json"
+ABLATION = DATA / "eval" / "report-ablation.json"
 
 
 class SessionResult(BaseModel):
@@ -99,7 +102,50 @@ async def evaluate(settings: Settings, sessions: list[Session]) -> DetectionRepo
     )
 
 
+class AblationReport(BaseModel):
+    """The same sessions, with the safety floor alone and with the triangle too."""
+
+    date: str
+    floor: DetectionReport
+    both: DetectionReport
+    only_triangle: list[str]  # sessions held only when the triangle may hold
+    only_floor: list[str]
+
+
+def _held(report: DetectionReport) -> set[str]:
+    return {s.session for s in report.sessions if s.held_at is not None}
+
+
+async def ablation(settings: Settings, sessions: list[Session]) -> AblationReport:
+    floor = await evaluate(
+        settings.model_copy(update={"triangle_holds": False}), sessions
+    )
+    both = await evaluate(
+        settings.model_copy(update={"triangle_holds": True}), sessions
+    )
+    return AblationReport(
+        date=datetime.now(UTC).isoformat(),
+        floor=floor,
+        both=both,
+        only_triangle=sorted(_held(both) - _held(floor)),
+        only_floor=sorted(_held(floor) - _held(both)),
+    )
+
+
 def main() -> None:
+    if "--ablation" in sys.argv:
+        result = asyncio.run(ablation(Settings(), load_sessions()))
+        ABLATION.write_text(result.model_dump_json(indent=2))
+        for name, r in (
+            ("floor alone", result.floor),
+            ("floor + triangle", result.both),
+        ):
+            print(
+                f"{name}: incident sessions held {r.incident_held}/{r.incident_sessions}, "
+                f"normal sessions held {r.normal_held}/{r.normal_sessions}"
+            )
+        print(f"held only with the triangle: {result.only_triangle}")
+        return
     report = asyncio.run(evaluate(Settings(), load_sessions()))
     REPORT.write_text(report.model_dump_json(indent=2))
     print(
