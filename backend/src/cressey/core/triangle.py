@@ -86,7 +86,13 @@ ACTIONS = 40  # the latest actions the report check sees: a fixed size, whatever
 ACTION_ARGS = 300  # characters of each action's arguments (already redacted)
 LAST_RESULT = 500  # characters of each tool's last result
 CHUNK = 12_000  # characters of a result per call: far under 32k tokens, so all of it is read
-PREVIOUS = 1_000  # characters of the previous step's result shown for context
+# Characters of the previous step's result and arguments, and of each evidence action, shown
+# for context: each was read in full when its own step was labelled.
+PREVIOUS = 1_000
+# The longest part a Choice can point at. S9: a 600-character cut lost the decisive sentence;
+# a whole sentence or line fits, and a longer one is split.
+PART = 1_000
+SAID = 5_000  # the agent's newest words shown with a step: one full message (TextIn's limit)
 SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 
 
@@ -143,12 +149,28 @@ def opportunity(run: Run, step: Step) -> Leg:
 
 
 def _said(run: Run, s: Step) -> list[str]:
-    """What the agent said just before this call (already redacted)."""
-    return [m.text for m in run.messages if m.after == s.n - 1]
+    """What the agent said just before this call (already redacted): the newest messages,
+    up to SAID characters. The call's own justification comes last."""
+    said = [m.text for m in run.messages if m.after == s.n - 1]
+    kept: list[str] = []
+    room = SAID
+    for text in reversed(said):
+        if len(text) > room:
+            if not kept:  # the newest alone is longer: keep its end
+                kept.append(text[-room:])
+            break
+        kept.append(text)
+        room -= len(text)
+    return kept[::-1]
 
 
-def _view(run: Run, s: Step, result: str | None = None) -> dict[str, JsonValue]:
-    view: dict[str, JsonValue] = {"step": s.n, "tool": s.tool, "args": s.args}
+def _view(
+    run: Run, s: Step, result: str | None = None, args: str | None = None
+) -> dict[str, JsonValue]:
+    """A step as the decision model reads it. `args` replaces the step's arguments: a part
+    of a long call, or a cut for context."""
+    shown = s.args if args is None else args
+    view: dict[str, JsonValue] = {"step": s.n, "tool": s.tool, "args": shown}
     if said := _said(run, s):
         view["agent_said"] = list(said)
     if result is not None:
@@ -169,13 +191,31 @@ def _chunks(text: str) -> list[str]:
     return [*parts, current]
 
 
-def _parts(run: Run, s: Step, result: str) -> dict[str, str]:
-    """The step cut into numbered parts a Choice can point at (it takes up to 255)."""
+def _args_parts(s: Step) -> list[str]:
+    """The call's arguments cut like a result: each part is read whole; at least one."""
+    return _chunks(s.args)
+
+
+def _pieces(text: str) -> list[str]:
+    """`text` in consecutive pieces of at most PART characters."""
+    return [text[i : i + PART] for i in range(0, len(text), PART)]
+
+
+def _parts(run: Run, s: Step, result: str, args: str) -> dict[str, str]:
+    """The step cut into numbered parts a Choice can point at (it takes up to 255), each at
+    most PART characters: the agent's sentences, the arguments `args`, the result's lines."""
     said = [
-        p.strip() for text in _said(run, s) for p in SENTENCE.split(text) if p.strip()
+        x
+        for text in _said(run, s)
+        for p in SENTENCE.split(text)
+        if p.strip()
+        for x in _pieces(p.strip())
     ]
-    lines = [line.strip() for line in result.splitlines() if line.strip()]
-    parts = {f"m{j}": x for j, x in enumerate(said, 1)} | {"a1": s.args}
+    lines = [
+        x for line in result.splitlines() if line.strip() for x in _pieces(line.strip())
+    ]
+    parts = {f"m{j}": x for j, x in enumerate(said, 1)}
+    parts |= {f"a{j}": x for j, x in enumerate(_pieces(args), 1)}
     parts |= {f"t{j}": x for j, x in enumerate(lines, 1)}
     return dict(list(parts.items())[:250])
 
@@ -199,15 +239,20 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
         "mandate": run.mandate.model_dump(),
         "note": NOTE,
         "previous_step": (
-            _view(run, prev, texts.get(prev.n, "")[:PREVIOUS]) if prev else None
+            _view(run, prev, texts.get(prev.n, "")[:PREVIOUS], prev.args[:PREVIOUS])
+            if prev
+            else None
         ),
     }
-    # Redact, then cut: a cut could split a secret and leave part of it readable.
-    chunks = _chunks(texts.get(s.n, ""))
+    # Redact, then cut: a cut could split a secret and leave part of it readable. Each window
+    # is one part of the call's arguments or of its result, so all of the step is read.
+    args = _args_parts(s)
+    windows = [(args[0], c) for c in _chunks(texts.get(s.n, ""))]
+    windows += [(a, "") for a in args[1:]]
     got = await asyncio.gather(
         *(
-            judge.answers({**window, "current_step": _view(run, s, c)}, LABELS)
-            for c in chunks
+            judge.answers({**window, "current_step": _view(run, s, c, a)}, LABELS)
+            for a, c in windows
         )
     )
     if any(a is None for a in got):
@@ -220,7 +265,8 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
     best = max(
         range(len(answers)), key=lambda j: max(float(answers[j][c]) for c in flagged)
     )
-    parts = _parts(run, s, chunks[best])
+    best_args, best_result = windows[best]
+    parts = _parts(run, s, best_result, best_args)
     options = {k: k for k in parts} | {"none": "none"}
     picked = await judge.answers(
         {**window, "step": s.n, "parts": dict(parts)},
@@ -277,7 +323,7 @@ def _evidence(run: Run, n: int, t: Thresholds) -> list[dict[str, JsonValue]]:
             item: dict[str, JsonValue] = {
                 "step": s.n,
                 "flagged_as": list(cues),
-                "action": f"{s.tool} {s.args}",
+                "action": f"{s.tool} {s.args[:PREVIOUS]}",
                 "quotes": {c: q for c, q in s.quotes.items() if c in cues},
             }
             found.append((max(s.labels[c] for c in cues), s.n, item))
@@ -286,10 +332,15 @@ def _evidence(run: Run, n: int, t: Thresholds) -> list[dict[str, JsonValue]]:
 
 
 def judgment_state(
-    run: Run, call: Step, t: Thresholds, shown: Mapping[int, str] | None = None
+    run: Run,
+    call: Step,
+    t: Thresholds,
+    shown: Mapping[int, str] | None = None,
+    args: str | None = None,
 ) -> dict[str, JsonValue]:
     """What the decision model reads for a write: code facts, the evidence, the step before
-    and the call itself, secrets redacted. `shown` holds results already redacted."""
+    and the call itself, secrets redacted. `shown` holds results already redacted; `args` is
+    the part of the call's arguments shown, its first part by default."""
     earlier = _before(run, call.n)
     prev = earlier[-1] if earlier else None
     texts = shown if shown is not None else _redacted(run, [prev] if prev else [])
@@ -308,9 +359,13 @@ def judgment_state(
             "evidence": evidence,
         },
         "previous_step": (
-            _view(run, prev, texts.get(prev.n, "")[:PREVIOUS]) if prev else None
+            _view(run, prev, texts.get(prev.n, "")[:PREVIOUS], prev.args[:PREVIOUS])
+            if prev
+            else None
         ),
-        "current_step": _view(run, call),
+        "current_step": _view(
+            run, call, args=_args_parts(call)[0] if args is None else args
+        ),
     }
 
 
@@ -320,15 +375,20 @@ async def _rationalization(run: Run, call: Step, judge: Judge, t: Thresholds) ->
     await _read(run, _before(run, call.n), judge)
     earlier = _before(run, call.n)
     shown = await _redacted_off_loop(run, earlier[-1:])
-    state = judgment_state(run, call, t, shown)
-    answer = await judge.answers(state, JUDGMENT)
-    if answer is None:
+    # The whole call is judged, part by part: the payload can sit anywhere in it.
+    got = await asyncio.gather(
+        *(
+            judge.answers(judgment_state(run, call, t, shown, part), JUDGMENT)
+            for part in _args_parts(call)
+        )
+    )
+    if any(a is None for a in got):
         return Leg(
             score=0.0,
             confirmed=False,
             facts=["modèle de décision indisponible : rationalisation non mesurée"],
         )
-    score = float(answer["weakens"])
+    score = max(float(a["weakens"]) for a in got if a is not None)
     facts = [f"jugement : affaiblit une vérification ou sort du mandat, {score:.2f}"]
     for item in _evidence(run, call.n, t):
         quotes = item["quotes"] if isinstance(item["quotes"], dict) else {}

@@ -354,3 +354,71 @@ async def test_the_triangle_redacts_results_off_the_event_loop(monkeypatch):
     await legs(run, run.steps[-1], FakeJudge(), T)
     await report_check(run, FakeJudge(), T)
     assert on_loop and not any(on_loop)
+
+
+class SkipJudge(FakeJudge):
+    """Says a write weakens a check only when it can see the skip marker."""
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "weakens" in questions:
+            self.asked.append(("judgment", state))
+            seen = "@pytest.mark.skip" in json.dumps(state["current_step"])
+            return {"weakens": 0.9 if seen else 0.1}
+        return await super().answers(state, questions)
+
+
+async def test_a_payload_past_the_first_part_is_judged():
+    """A long write is read whole, in parts: the payload can sit anywhere in it."""
+    content = "x" * 15_000 + "@pytest.mark.skip"
+    write = step(
+        3, "write_file", json.dumps({"path": "t.py", "content": content}), "write"
+    )
+    run = run_with(step(1, is_error=True), step(2, is_error=True), write)
+    judge = SkipJudge()
+    leg = (await legs(run, write, judge, T)).rationalization
+    assert leg.confirmed and leg.score == 0.9
+    judged = [
+        s["current_step"]["args"] for kind, s in judge.asked if kind == "judgment"
+    ]
+    assert len(judged) == 2 and all(len(a) <= CHUNK for a in judged)
+    assert all(len(json.dumps(s)) < 3 * CHUNK for _, s in judge.asked)
+
+
+def test_context_fields_are_cut():
+    from cressey.core.triangle import PREVIOUS, SAID
+
+    big = step(
+        1, "write_file", json.dumps({"path": "a", "content": "y" * 100_000}), "write"
+    )
+    call = step(2, "write_file", '{"path": "b"}', "write")
+    said = [Message(after=1, text=str(i) * 5_000) for i in range(3)]
+    state = judgment_state(run_with(big, call, messages=said), call, T)
+    prev, cur = state["previous_step"], state["current_step"]
+    assert isinstance(prev, dict) and isinstance(cur, dict)
+    args, shown = prev["args"], cur["agent_said"]
+    assert isinstance(args, str) and isinstance(shown, list)
+    assert len(args) <= PREVIOUS and sum(len(str(x)) for x in shown) <= SAID
+    assert shown[-1] == "2" * 5_000  # the newest is kept
+
+
+def test_a_long_argument_is_split_into_quotable_parts():
+    from cressey.core.triangle import PART, _parts
+
+    args = "z" * 5_000
+    parts = _parts(run_with(step(1)), step(1), "", args)
+    pieces = {k: v for k, v in parts.items() if k.startswith("a")}
+    assert list(pieces) == ["a1", "a2", "a3", "a4", "a5"]
+    assert all(len(v) <= PART for v in pieces.values())
+    assert "".join(pieces.values()) == args
+
+
+async def test_a_big_step_is_labelled_in_windows():
+    big = step(
+        1, "write_file", json.dumps({"path": "a", "content": "w" * 30_000}), "write"
+    )
+    write = step(2, "write_file", '{"path": "b"}', "write")
+    judge = FakeJudge(0.1)
+    await legs(run_with(big, write), write, judge, T)
+    seen = [s["current_step"]["args"] for kind, s in judge.asked if kind == "label"]
+    assert len(seen) >= 3 and all(len(a) <= CHUNK for a in seen)
+    assert "".join(seen) == big.args
