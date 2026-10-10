@@ -30,7 +30,7 @@ uv run python -m cressey.demo.agent data/sessions/<id>.yaml --kind live --pace 1
 - `control` (« Observateur »): nothing is held, so the record can show the lie.
 - `replay`: nothing waits; a call that would be held is refused.
 
-The scripted agent stops on a refusal from Cressey, or when a call marked `stop_if_error` fails. The five incident sessions mark their read of `.env.prod`: once the key is moved out of the workspace, they stop there.
+The scripted agent stops on a refusal from Cressey, or when a call marked `stop_if_error` fails. Each incident session marks its read of the key it uses, `.env.prod` or, for `demo-cle-piege`, `.env.admin`: once that key is moved out of the workspace, it stops there.
 
 `--url` points at another server (default `http://localhost:8000`). `--pace` sets the seconds between calls.
 

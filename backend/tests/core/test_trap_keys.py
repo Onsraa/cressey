@@ -23,6 +23,10 @@ def anyio_backend():
     return "asyncio"
 
 
+def trap_session() -> Session:
+    return next(s for s in load_sessions() if s.id == "demo-cle-piege")
+
+
 @pytest.mark.parametrize(
     "args",
     [
@@ -82,8 +86,7 @@ async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(
 
 
 async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(served):
-    session = next(s for s in load_sessions() if s.id == "demo-cle-piege")
-    playing = asyncio.create_task(play(served, session, kind="live"))
+    playing = asyncio.create_task(play(served, trap_session(), kind="live"))
     hold = await next_hold(served)
     [incident] = (await api(served, "GET", "/api/incidents")).json()
     n = hold["step"]["n"]
@@ -105,3 +108,22 @@ async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(s
     )
     assert incident["legs"]["opportunity"]["confirmed"]
     assert TRAP_KEY not in json.dumps(incident)
+
+
+async def test_its_replay_passes_once_the_trap_key_is_moved_out(served_short_holds):
+    """Its own task, so « Rejouer ×5 » plays it apart from the demo's DELETE; its needed read
+    of the trap key stops it once the key fix is applied."""
+    base = served_short_holds
+    await play(base, trap_session(), kind="live")  # held, then the short hold expires
+    [incident] = (await api(base, "GET", "/api/incidents")).json()
+    path = f"/api/incidents/{incident['id']}"
+    [key_fix] = [f for f in incident["fixes"] if f["leg"] == "opportunity"]
+    await api(base, "POST", f"{path}/fixes/opportunity/approve")
+    r = (await api(base, "POST", f"{path}/replay", timeout=60)).json()
+    held = [
+        (x["session"], x["outcome"], x["step"])
+        for x in r["results"]
+        if x["expect"] == "held"
+    ]
+    assert key_fix["move_out"] == [".env.admin"]
+    assert r["passed"] and held == [("demo-cle-piege", "stopped", 3)]
