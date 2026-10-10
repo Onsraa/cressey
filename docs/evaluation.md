@@ -87,6 +87,7 @@ Every session in `backend/data/sessions/` is played on a fresh Cressey as a repl
 | Cressey's decision time on every call | p50 0.48 ms, p95 273 ms (the calls that ask Jev) |
 | Offline replay of the same eval, keys blanked | identical results |
 
+- **Time to stop at the stage's pace (10-10, live Jev, demo session):** 839 ms with the calls back to back, as the eval plays them, and **236 ms** with 1.5 s between calls, as on stage. Each result is labelled in the background as it comes in, so the write waits only for its own judgment. One measurement each.
 - **Command:** `cd backend && uv run python -m cressey.demo.evaluate`. It writes `data/eval/report-detection.json`.
 - **Limits:**
   - 10 sessions is a small set, and the team wrote every one of them.
