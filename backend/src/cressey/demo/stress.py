@@ -23,6 +23,7 @@ from typing import Any
 import httpx2
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from typesafe_sdk import Choice
 
 from cressey.app import create_app
 from cressey.core.floor import check
@@ -79,7 +80,10 @@ class CountingJudge:
             return {"weakens": 0.0}
         if "serves_task" in questions:
             return {q: 0.0 for q in questions}
-        return {q: {"none": 1.0} for q in questions}
+        return {
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
+        }
 
 
 def _fake_guide(gi: GuideIncident) -> Guide:

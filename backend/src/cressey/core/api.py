@@ -1,6 +1,7 @@
 """Runs and holds: register a run (Cressey issues its key), follow its steps, decide
 holds."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal
@@ -8,7 +9,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from cressey.core.eventlog import verify
-from cressey.core.incidents import Incidents
+from cressey.core.incidents import AssessTask, Incidents
 from cressey.core.models import (
     EvalFile,
     FleetSignal,
@@ -46,9 +47,26 @@ def get_incidents(request: Request) -> Incidents:
 IncidentsDep = Annotated[Incidents, Depends(get_incidents)]
 
 
+# The assessments in flight: the event loop keeps only weak references to its tasks.
+_assessing: set[asyncio.Task[None]] = set()
+
+
+async def _assess(run: Run, assess_task: AssessTask) -> None:
+    run.preflight = await assess_task(run.task, run.mandate)
+
+
 @router.post("/runs", status_code=201)
-async def create_run(spec: RunIn, runs: RunsDep) -> RunCreated:
-    return runs.create(spec)
+async def create_run(spec: RunIn, request: Request, runs: RunsDep) -> RunCreated:
+    """The run starts at once; its task is assessed in the background (« Avant le run »)."""
+    created = runs.create(spec)
+    run = runs.get(created.id)
+    assert run is not None
+    if run.kind != "replay":  # « Rejouer ×5 » plays in throwaway instances
+        assessing = _assess(run, request.app.state.assess_task)
+        task = asyncio.get_running_loop().create_task(assessing)
+        _assessing.add(task)
+        task.add_done_callback(_assessing.discard)
+    return created
 
 
 @router.get("/runs")

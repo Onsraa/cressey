@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from typesafe_sdk import Choice
 
 from cressey.core import proxy
 from cressey.core.proxy import WAY_OUT
@@ -480,7 +481,10 @@ class CountingJudge:
             return dict.fromkeys(questions, 0.0)
         if "weakens" in questions or "contradicted" in questions:
             return dict.fromkeys(questions, 0.0)
-        return {q: {"none": 1.0} for q in questions}
+        return {
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
+        }
 
 
 async def test_each_result_is_labelled_as_it_comes_in(tmp_path):
@@ -648,7 +652,8 @@ class WeakensTestsJudge:
                 "weakens": 0.9 if "tests/" in state["current_step"]["args"] else 0.1
             }
         return {
-            q: 0.0 if "serves_task" in questions else {"none": 1.0} for q in questions
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
         }
 
 
@@ -696,7 +701,10 @@ class GatedJudge:
             return dict.fromkeys(questions, 0.0)
         if "contradicted" in questions:
             return dict.fromkeys(questions, 0.0)
-        return {q: {"none": 1.0} for q in questions}
+        return {
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
+        }
 
 
 async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_path):
@@ -743,7 +751,8 @@ class WritesWeakenJudge:
             write = state["current_step"]["tool"] == "write_file"
             return {"weakens": 0.9 if write else 0.1}
         return {
-            q: 0.0 if "serves_task" in questions else {"none": 1.0} for q in questions
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
         }
 
 

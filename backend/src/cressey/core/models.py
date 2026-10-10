@@ -161,6 +161,14 @@ class Message(BaseModel):
     text: str  # agent text, secrets redacted
 
 
+class Preflight(BaseModel):
+    """The task and its mandate, assessed before the run (« Avant le run »). Display only:
+    no decision uses it."""
+
+    scores: dict[str, float]  # each factor's answer; high means yes
+    facts: list[str]  # the factors at risk: « libellé (p) → propriétaire : correction »
+
+
 class Run(BaseModel):
     id: str
     task: str
@@ -177,6 +185,7 @@ class Run(BaseModel):
     messages: list[Message] = []
     report: str | None = None  # the agent's final report: agent text, secrets redacted
     report_check: Leg | None = None  # that report against the log (S9)
+    preflight: Preflight | None = None  # set in the background, after the run starts
     ended_at: str | None = None
     # Secret value -> fingerprint, to redact it wherever it shows up later. Never served.
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
@@ -233,6 +242,7 @@ class Fix(BaseModel):
     text: str  # what changes, for the owner
     move_out: list[str] = []  # workspace files the secret leaves
     add_to_task: str | None = None  # appended to the task
+    preflight: Preflight | None = None  # the fixed task, assessed: the before and after
     approved: bool = False
 
 

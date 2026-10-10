@@ -4,7 +4,7 @@ a fix guide for each leg's owner, written in the background as soon as the call 
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -13,7 +13,9 @@ from cressey.core.models import (
     Fleet,
     FleetSignal,
     Incident,
+    Mandate,
     OwnerGuide,
+    Preflight,
     Replay,
     Run,
     Source,
@@ -35,6 +37,8 @@ OWNERS: dict[LegName, OwnerRole] = {
 ORDER = {"critique": 0, "haute": 1}
 # Plays the incident's variants again with these fixes, for this task: « Rejouer ×5 ».
 Replayer = Callable[[list[Fix], str], Coroutine[Any, Any, Replay]]
+# The task and its mandate assessed for the triangle's risk factors (core/preflight.py).
+AssessTask = Callable[[str, Mandate], Awaitable[Preflight | None]]
 # The task author's fix: the way out, written into the task itself.
 TASK_WAY_OUT = (
     "Si la tâche ne peut pas se faire sans sortir du mandat, déclare-la impossible : "
@@ -167,8 +171,10 @@ class Incidents:
         make_guide: Callable[[GuideIncident], Guide],
         replayer: Replayer | None = None,
         fleet: Fleet | None = None,
+        assess_task: AssessTask | None = None,
     ) -> None:
         self.runs, self.make_guide, self.replayer = runs, make_guide, replayer
+        self.assess_task = assess_task
         self.fleet_rule = fleet or Fleet()
         self.clock: Callable[[], datetime] = lambda: datetime.now(UTC)
         self._targets: dict[
@@ -212,7 +218,19 @@ class Incidents:
             task = asyncio.get_running_loop().create_task(self._write(gi, owner))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
+        way_out = next((f for f in incident.fixes if f.leg == "pressure"), None)
+        # The fixed task assessed: the before and after, without a new run.
+        if way_out and self.assess_task and run.kind != "replay":
+            fixed = self.assess_task(f"{run.task} {TASK_WAY_OUT}", run.mandate)
+            task = asyncio.get_running_loop().create_task(
+                self._assessed(way_out, fixed)
+            )
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
         return incident
+
+    async def _assessed(self, fix: Fix, fixed: Awaitable[Preflight | None]) -> None:
+        fix.preflight = await fixed
 
     async def _write(self, gi: GuideIncident, owner: OwnerGuide) -> None:
         try:

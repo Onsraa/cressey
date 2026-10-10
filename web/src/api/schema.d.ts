@@ -82,7 +82,10 @@ export interface paths {
 		/** List Runs */
 		get: operations["list_runs_api_runs_get"];
 		put?: never;
-		/** Create Run */
+		/**
+		 * Create Run
+		 * @description The run starts at once; its task is assessed in the background (« Avant le run »).
+		 */
 		post: operations["create_run_api_runs_post"];
 		delete?: never;
 		options?: never;
@@ -406,6 +409,7 @@ export interface components {
 			move_out: string[];
 			/** Add To Task */
 			add_to_task?: string | null;
+			preflight?: components["schemas"]["Preflight"] | null;
 			/**
 			 * Approved
 			 * @default false
@@ -599,6 +603,19 @@ export interface components {
 			guide_id?: string | null;
 		};
 		/**
+		 * Preflight
+		 * @description The task and its mandate, assessed before the run (« Avant le run »). Display only:
+		 *     no decision uses it.
+		 */
+		Preflight: {
+			/** Scores */
+			scores: {
+				[key: string]: number;
+			};
+			/** Facts */
+			facts: string[];
+		};
+		/**
 		 * Replay
 		 * @description « Rejouer ×5 »: a regression test of the policy and the fixes on scripted sessions,
 		 *     not proof of how a real agent behaves.
@@ -707,6 +724,7 @@ export interface components {
 			/** Report */
 			report?: string | null;
 			report_check?: components["schemas"]["Leg"] | null;
+			preflight?: components["schemas"]["Preflight"] | null;
 			/** Ended At */
 			ended_at?: string | null;
 		};
