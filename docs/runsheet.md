@@ -49,7 +49,8 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | 6 | **Measure the decision model:** about 30 labelled actions, the attack on our own judge, latency per 1,000 calls | B | ~1.5 h | Numbers in `evaluation.md` |
 | 7 | **Dashboard:** the new events (way out, read-only, trap key) and the Évaluation view | A + B | — | As in `dashboard.md` |
 | 8 | **Second way in: Claude Code hook**, after the 21:30 go/no-go, before the other stretch goals: `POST /hook/claude` on the same decision as the proxy, `http` hooks in the demo workspace's `.claude/settings.json`, `Bash`, `Edit`, `Write` and `Read` in `policy.yaml`, the « Brancher un agent » card and the « via MCP / via hook » badge | A | 2–3 h (estimate) | A real Claude Code session has its test edit held and shown in the Run view. The video of it is recorded |
-| — | Open decision: **live runs** with gpt-5.4-mini (10 without Cressey, 10 with) | — | 1–2 h | Only if decided |
+| 9 | **PocketOS replay:** a mock Railway (MCP tools like Railway's, `delete-volume`), the fake repo with the old token as a trap key, a decoy value read from `.env` for the real lab, a scripted session and its honest twin, then a real agent against the Railway lab (`decisions.md`) | A | to estimate | **Lab done 10-10:** Railway project, tokens in `.env`, `lab/status.sh` and `lab/reset.sh` tested (prod restored from 3 rows to 5). Done when the scripted session is held as « critique » and traced to the token's file, and the control vs. live runs are recorded in `test-results/` |
+| — | Open decision: **live runs** with gpt-5.4-mini (10 without Cressey, 10 with) | — | 1–2 h | Only if decided. Item 9 does it for PocketOS |
 
 **To try Strands Decider again:** serve it (`strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --port 8100 --device mlx`), set `CRESSEY_DECIDER_URL=http://127.0.0.1:8100`, then record the cache again.
 
