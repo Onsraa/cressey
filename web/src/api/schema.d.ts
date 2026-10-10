@@ -21,10 +21,166 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/guides": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Create Guide */
+		post: operations["create_guide_api_guides_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/guides/{gid}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Read Guide */
+		get: operations["read_guide_api_guides__gid__get"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/guides/{gid}/why": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/** Why */
+		post: operations["why_api_guides__gid__why_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 }
 export type webhooks = Record<string, never>;
 export interface components {
-	schemas: never;
+	schemas: {
+		/** Guide */
+		Guide: {
+			/** Id */
+			id: string;
+			/** Incident Id */
+			incident_id: string;
+			/**
+			 * Status
+			 * @enum {string}
+			 */
+			status: "ok" | "unsure" | "unavailable";
+			/** Message */
+			message: string | null;
+			/** Steps */
+			steps: components["schemas"]["GuideStep"][];
+			/** Passages */
+			passages: components["schemas"]["Unit"][];
+			/** Dropped Steps */
+			dropped_steps: number;
+		};
+		/** GuideIncident */
+		GuideIncident: {
+			/** Id */
+			id: string;
+			/**
+			 * Leg
+			 * @enum {string}
+			 */
+			leg: "pressure" | "opportunity" | "rationalization";
+			/**
+			 * Owner Role
+			 * @enum {string}
+			 */
+			owner_role: "key_owner" | "task_author" | "platform_owner" | "soc";
+			/** Summary */
+			summary: string;
+			/** Source */
+			source: string;
+		};
+		/** GuideStep */
+		GuideStep: {
+			/** Action */
+			action: string;
+			/** Source Id */
+			source_id: string;
+			/** Quote */
+			quote: string;
+			/** Source Title */
+			source_title: string;
+		};
+		/** HTTPValidationError */
+		HTTPValidationError: {
+			/** Detail */
+			detail?: components["schemas"]["ValidationError"][];
+		};
+		/** Unit */
+		Unit: {
+			/** Id */
+			id: string;
+			/**
+			 * Source
+			 * @enum {string}
+			 */
+			source: "anssi" | "atlas" | "owasp" | "runbook";
+			/**
+			 * Lang
+			 * @enum {string}
+			 */
+			lang: "fr" | "en";
+			/** Title */
+			title: string;
+			/** Text */
+			text: string;
+		};
+		/** ValidationError */
+		ValidationError: {
+			/** Location */
+			loc: (string | number)[];
+			/** Message */
+			msg: string;
+			/** Error Type */
+			type: string;
+			/** Input */
+			input?: unknown;
+			/** Context */
+			ctx?: Record<string, never>;
+		};
+		/** WhyAnswer */
+		WhyAnswer: {
+			/** Text */
+			text: string;
+			/** Citations */
+			citations: components["schemas"]["GuideStep"][];
+			/**
+			 * Status
+			 * @enum {string}
+			 */
+			status: "ok" | "unsure" | "unavailable";
+		};
+		/** WhyRequest */
+		WhyRequest: {
+			/** Question */
+			question: string;
+		};
+	};
 	responses: never;
 	parameters: never;
 	requestBodies: never;
@@ -51,6 +207,105 @@ export interface operations {
 					"application/json": {
 						[key: string]: string;
 					};
+				};
+			};
+		};
+	};
+	create_guide_api_guides_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["GuideIncident"];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			201: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Guide"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	read_guide_api_guides__gid__get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				gid: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Guide"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	why_api_guides__gid__why_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				gid: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["WhyRequest"];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["WhyAnswer"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
 				};
 			};
 		};
