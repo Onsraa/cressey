@@ -6,7 +6,7 @@ pressure or opportunity."""
 
 import asyncio
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from pydantic import JsonValue
 from typesafe_sdk import Choice, Noul
@@ -192,18 +192,17 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
     """Read the finished step at position i once, in parts that fit, and keep the exact part
     behind each flag. Without an answer it stays unlabelled and is asked again next time."""
     s, prev = run.steps[i], run.steps[i - 1] if i else None
+    texts = await _redacted_off_loop(run, [prev, s] if prev else [s])
     window: dict[str, JsonValue] = {
         "task": run.task,
         "mandate": run.mandate.model_dump(),
         "note": NOTE,
         "previous_step": (
-            _view(run, prev, redact(prev.result, run.known)[:PREVIOUS])
-            if prev
-            else None
+            _view(run, prev, texts.get(prev.n, "")[:PREVIOUS]) if prev else None
         ),
     }
     # Redact, then cut: a cut could split a secret and leave part of it readable.
-    chunks = _chunks(redact(s.result, run.known))
+    chunks = _chunks(texts.get(s.n, ""))
     got = await asyncio.gather(
         *(
             judge.answers({**window, "current_step": _view(run, s, c)}, LABELS)
@@ -228,6 +227,20 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
     )
     if picked:
         s.quotes = {c: _quote(parts, str(k)) for c, k in picked.items() if k in parts}
+
+
+def _redacted(run: Run, steps: Sequence[Step]) -> dict[int, str]:
+    """Each step's result, redacted with every secret known so far."""
+    return {s.n: redact(s.result, run.known) for s in steps if s.result}
+
+
+async def _redacted_off_loop(run: Run, steps: Sequence[Step]) -> dict[int, str]:
+    """The same in a thread: a large result's redaction would stall every run. The secrets
+    are copied, since other calls may add to them meanwhile."""
+    known, chosen = dict(run.known), list(steps)
+    return await asyncio.to_thread(
+        lambda: {s.n: redact(s.result, known) for s in chosen if s.result}
+    )
 
 
 # Labels being read: (run, step position) -> the task reading it. A write or a report waits
@@ -271,11 +284,14 @@ def _evidence(run: Run, t: Thresholds) -> list[dict[str, JsonValue]]:
     return [item for _, _, item in sorted(strongest, key=lambda f: f[1])]
 
 
-def judgment_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
+def judgment_state(
+    run: Run, t: Thresholds, shown: Mapping[int, str] | None = None
+) -> dict[str, JsonValue]:
     """What the decision model reads for a write: code facts, the evidence, the step before
-    and the call itself, secrets redacted."""
+    and the call itself, secrets redacted. `shown` holds results already redacted."""
     earlier, call = _earlier(run), run.steps[-1]
     prev = earlier[-1] if earlier else None
+    texts = shown if shown is not None else _redacted(run, [prev] if prev else [])
     secrets: list[JsonValue] = [
         f"{x.name or x.kind} (étape {s.n})" for s in earlier for x in s.secrets
     ]
@@ -291,9 +307,7 @@ def judgment_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
             "evidence": evidence,
         },
         "previous_step": (
-            _view(run, prev, redact(prev.result, run.known)[:PREVIOUS])
-            if prev
-            else None
+            _view(run, prev, texts.get(prev.n, "")[:PREVIOUS]) if prev else None
         ),
         "current_step": _view(run, call),
     }
@@ -303,7 +317,9 @@ async def _rationalization(run: Run, judge: Judge, t: Thresholds) -> Leg:
     if run.steps[-1].risk == "read":
         return Leg(score=0.0, confirmed=False, facts=[])
     await _read(run, _earlier(run), judge)
-    state = judgment_state(run, t)
+    earlier = _earlier(run)
+    shown = await _redacted_off_loop(run, earlier[-1:])
+    state = judgment_state(run, t, shown)
     answer = await judge.answers(state, JUDGMENT)
     if answer is None:
         return Leg(
@@ -323,9 +339,12 @@ async def _rationalization(run: Run, judge: Judge, t: Thresholds) -> Leg:
     return Leg(score=score, confirmed=score >= t.judgment, facts=facts)
 
 
-def report_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
+def report_state(
+    run: Run, t: Thresholds, shown: Mapping[int, str] | None = None
+) -> dict[str, JsonValue]:
     """The final report against the log: what the agent did or failed at, each tool's last
-    result, and the evidence kept, secrets redacted."""
+    result, and the evidence kept, secrets redacted. `shown` holds results already redacted."""
+    texts = shown if shown is not None else _redacted(run, run.steps)
     done = [s for s in run.steps if s.risk != "read" or s.is_error][-ACTIONS:]
     actions: list[JsonValue] = [
         {
@@ -339,7 +358,7 @@ def report_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
     ]
     # Redact before cutting: a cut could split a secret and leave part of it readable.
     last: dict[str, JsonValue] = {
-        s.tool: redact(s.result, run.known)[:LAST_RESULT] for s in run.steps if s.result
+        s.tool: texts[s.n][:LAST_RESULT] for s in run.steps if s.result
     }
     return {
         "task": run.task,
@@ -355,7 +374,8 @@ def report_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
 async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
     """S9: is the agent's final report contradicted by the log? Flagged at t.report."""
     await _read(run, run.steps, judge)
-    answer = await judge.answers(report_state(run, t), REPORT)
+    shown = await _redacted_off_loop(run, run.steps)
+    answer = await judge.answers(report_state(run, t, shown), REPORT)
     if answer is None:
         return Leg(
             score=0.0,

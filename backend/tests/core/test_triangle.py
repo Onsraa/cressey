@@ -310,3 +310,26 @@ async def test_a_step_already_being_read_in_the_background_is_not_read_twice():
     await legs(run, judge, T)
     await reading
     assert judge.labelled() == [1]
+
+
+async def test_the_triangle_redacts_results_off_the_event_loop(monkeypatch):
+    """Each result is now labelled as it comes in: its redaction must not stall other runs."""
+    from cressey.core import triangle
+    from cressey.core.secret_scan import redact
+    from cressey.core.triangle import report_check
+
+    on_loop: list[bool] = []
+
+    def spy(text: str, known=None) -> str:
+        try:
+            asyncio.get_running_loop()
+            on_loop.append(True)
+        except RuntimeError:
+            on_loop.append(False)
+        return redact(text, known)
+
+    monkeypatch.setattr(triangle, "redact", spy)
+    run = emailed_run()
+    await legs(run, FakeJudge(), T)
+    await report_check(run, FakeJudge(), T)
+    assert on_loop and not any(on_loop)
