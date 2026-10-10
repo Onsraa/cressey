@@ -8,10 +8,17 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "bm25s>=0.3.13",
     "fastapi>=0.143.0",
+    "fonttools>=4.66.1",
+    "numpy>=2.5.3",
+    "openai>=3.28.0",
     "pydantic>=2.14.0",
     "pydantic-settings>=2.15.0",
+    "pypdf>=6.20.0",
+    "pyyaml>=6.0.3",
     "sse-starlette>=3.5.0",
+    "typesafe-sdk>=0.7.4",
     "uvicorn>=0.54.0",
 ]
 

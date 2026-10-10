@@ -1,0 +1,283 @@
+[
+ {
+  "q": "validation humaine avant une action critique",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R9",
+   "atlas:AML.M0029"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "human validation before a critical action by the AI system",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R9",
+   "atlas:AML.M0029"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "journalisation et traçabilité des actions du système d'IA",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R29",
+   "atlas:AML.M0024"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "log all the processing performed by the AI system",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R29",
+   "atlas:AML.M0024"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "droits minimaux du système d'IA sur les applications métier",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R35",
+   "anssi-fr:R26",
+   "runbook:droits-agents"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "least privilege permissions for an AI agent's tools",
+  "lang": "en",
+  "expected": [
+   "atlas:AML.M0028",
+   "atlas:AML.M0026",
+   "atlas:AML.M0027",
+   "runbook:droits-agents"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "révoquer une clé exposée et en émettre une nouvelle limitée à l'usage",
+  "lang": "fr",
+  "expected": [
+   "runbook:rotation-des-cles"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "rotate a leaked database credential",
+  "lang": "en",
+  "expected": [
+   "runbook:rotation-des-cles"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "retirer les secrets de l'espace de travail de l'agent",
+  "lang": "fr",
+  "expected": [
+   "runbook:rotation-des-cles",
+   "runbook:separer-dev-prod"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "separate development and production environments for agents",
+  "lang": "en",
+  "expected": [
+   "runbook:separer-dev-prod",
+   "anssi-en:R28",
+   "atlas:AML.M0032"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "cloisonner chaque phase du système d'IA dans un environnement dédié",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R12"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "stocker les sauvegardes sur un volume séparé de la base",
+  "lang": "fr",
+  "expected": [
+   "runbook:separer-dev-prod"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "l'agent échoue plusieurs fois, il faut escalader vers un humain",
+  "lang": "fr",
+  "expected": [
+   "runbook:rediger-tache-agent",
+   "atlas:AML.M0029"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "allow the agent to report that a task is impossible",
+  "lang": "en",
+  "expected": [
+   "runbook:rediger-tache-agent"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "un test contredit la spécification de la tâche",
+  "lang": "fr",
+  "expected": [
+   "runbook:rediger-tache-agent"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "limit automatic actions when the AI system handles untrusted inputs",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R27",
+   "atlas:AML.M0030"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "limiter les actions automatiques d'un système d'IA qui traite des entrées non maîtrisées",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R27"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "des instructions cachées dans un document lu par l'agent",
+  "lang": "fr",
+  "expected": [
+   "runbook:quarantaine-source",
+   "atlas:AML.M0030",
+   "anssi-fr:R25"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "malicious instructions hidden in an MCP tool description",
+  "lang": "en",
+  "expected": [
+   "runbook:quarantaine-source",
+   "atlas:AML.M0030",
+   "atlas:AML.M0033"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "épingler les descriptions des outils MCP approuvés",
+  "lang": "fr",
+  "expected": [
+   "runbook:quarantaine-source"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "filter the user input and output of the AI system",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R25",
+   "atlas:AML.M0033"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "contrôler systématiquement le code source généré par l'IA",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R30"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "review AI-generated source code systematically",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R30"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "sécuriser les accès à privilèges des développeurs et administrateurs du système d'IA",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R10"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "manage and secure the interactions of the AI system with business applications",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R26"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "revoir chaque mois les droits des agents",
+  "lang": "fr",
+  "expected": [
+   "runbook:droits-agents",
+   "anssi-fr:R35"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "an agent must not reuse the full session of a human user",
+  "lang": "en",
+  "expected": [
+   "runbook:droits-agents",
+   "atlas:AML.M0027"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "vérifier les journaux d'utilisation de l'ancienne clé",
+  "lang": "fr",
+  "expected": [
+   "runbook:rotation-des-cles"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "do not retrain the AI model in production",
+  "lang": "en",
+  "expected": [
+   "anssi-en:R21"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "mener une analyse de risque avant le déploiement du système d'IA",
+  "lang": "fr",
+  "expected": [
+   "anssi-fr:R2"
+  ],
+  "split": "dev"
+ },
+ {
+  "q": "comment configurer le chiffrement des disques des postes de travail",
+  "lang": "fr",
+  "expected": [],
+  "split": "dev"
+ },
+ {
+  "q": "quels sont les horaires d'ouverture de la cafétéria",
+  "lang": "fr",
+  "expected": [],
+  "split": "dev"
+ },
+ {
+  "q": "le rapport de l'agent ne correspond pas au journal des actions",
+  "lang": "fr",
+  "expected": [
+   "runbook:verifier-rapport-agent"
+  ],
+  "split": "dev"
+ }
+]

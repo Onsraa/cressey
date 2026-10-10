@@ -1,0 +1,11 @@
+{
+ "ATLAS.yaml": "c9c23971d0db07e2782423d795a20e78d5c2c9bcdc78fc67e24530657daaec41",
+ "anssi_genai_en.pdf": "b717710f6b886ba6318ea22df50d0e8bb23455c4b2754f010c529b7cbb54cc80",
+ "anssi_genai_fr.pdf": "30d86707d665ff085e32c69de501c9997b89a8894aa7b2b085efad97409e64d1",
+ "runbooks/droits-agents.md": "2a90f5f8c9ad3fa2ccbad103fd4b1ce88b3309d95bfef7b58a95dc7b7e628744",
+ "runbooks/quarantaine-source.md": "8ffd3378c0d219db02d67c33e7c876d51ab01845b083b59bd189e32e372c7115",
+ "runbooks/rediger-tache-agent.md": "0837387c79aa02eaf59eff4fca3d38d3cb0c86b3585bc3fa569ef6c3a87acc48",
+ "runbooks/rotation-des-cles.md": "114148b952aebf2ee2dc5cec01e46e6bb1f104f75c09324a68285303655ed7eb",
+ "runbooks/separer-dev-prod.md": "61038ab86d8a87c46722beb0246438a8690d3e4d87479164ec0b88a442e9384d",
+ "runbooks/verifier-rapport-agent.md": "6018cebfb767c932ae5f0c3ceeb7c49b13794d016ea78a2f470cea7304920ff8"
+}
