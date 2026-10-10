@@ -72,3 +72,12 @@ async def test_writing_a_file_creates_its_folders_inside_the_workspace(tmp_path)
             await c.call_tool("write_file", args, raise_on_error=False)
         ).is_error
     assert (tmp_path / "workspace" / "scripts" / "fresh_install.sql").exists()
+
+
+async def test_a_missing_file_is_reported_without_the_machine_path(tmp_path):
+    """The error goes into the decision model's state: a temp path there changes on every
+    run, so no recorded answer could ever replay it."""
+    async with Client(demo_tools(tmp_path)) as c:
+        r = await c.call_tool("read_file", {"path": "absent.md"}, raise_on_error=False)
+    told = r.content[0].text
+    assert r.is_error and "absent.md" in told and str(tmp_path) not in told

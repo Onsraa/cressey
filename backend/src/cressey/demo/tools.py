@@ -63,7 +63,12 @@ def demo_tools(root: Path) -> FastMCP:
     @mcp.tool
     def read_file(path: str) -> str:
         """Read a file of the workspace."""
-        return inside(path).read_text()
+        try:
+            return inside(path).read_text()
+        except FileNotFoundError as e:
+            # The path the agent gave, never the machine's: a temp folder in the error
+            # would make every decision state on it unique, so it could never replay.
+            raise ToolError(f"fichier introuvable : {path}") from e
 
     @mcp.tool
     def write_file(path: str, content: str) -> str:
