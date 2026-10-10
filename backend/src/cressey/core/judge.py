@@ -1,6 +1,7 @@
 """The decision model answers the triangle's typed questions: it labels each step once, then
-judges each write against the evidence kept (S9). It speaks the System One API (Jev's). Its
-answers are cached like the guide models', so the demo replays offline."""
+judges each write against the evidence kept (S9). It speaks the System One API: Jev's, or a
+local Strands Decider when its URL is set. Its answers are cached like the guide models',
+so the demo replays offline."""
 
 import json
 from collections.abc import Awaitable, Callable, Mapping
@@ -19,9 +20,8 @@ from typesafe_sdk import (
 )
 
 from cressey.guide.cache import cache_key
+from cressey.guide.clients import decision_auth
 from cressey.settings import Settings
-
-MODEL = "jev-1.13.0"  # S9: the triangle's decision model
 
 Question = Noul | Choice
 Answers = dict[str, float | str]  # a Noul's probability, or the option a Choice picked
@@ -69,18 +69,19 @@ class JevJudge:
 
     @classmethod
     def from_settings(cls, s: Settings) -> Self:
-        key = s.typesafe_api_key
+        auth = decision_auth(s)
         client = (
             AsyncTypeSafeClient(
-                api_key=key.get_secret_value(),
+                api_key=auth[0],
+                base_url=auth[1],
                 timeout=5,
                 retry=RetryPolicy(max_retries=1),
             )
-            if key
+            if auth
             else None
         )
-        ask = system_one_ask(client, MODEL) if client else None
-        return cls(ask, s.model_mode, s.cache_dir / "judge", MODEL)
+        ask = system_one_ask(client, s.decision_model) if client else None
+        return cls(ask, s.model_mode, s.cache_dir / "judge", s.decision_model)
 
     async def answers(
         self, state: dict[str, JsonValue], questions: Mapping[str, Question]

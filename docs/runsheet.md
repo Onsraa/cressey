@@ -41,7 +41,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 
 | # | Task | Who | Estimate | Done when |
 |---|---|---|---|---|
-| 1 | **Switch to Strands Decider 2B.** See the steps below | A (judge), B (re-ranker and eval) | 2–3 h | The demo path, detection eval and guide eval all pass with Strands, with the cache re-recorded |
+| 1 | **Switch to Strands Decider 2B** | A (judge), B (re-ranker and eval) | 2–3 h | **Closed 10-10: Jev stays for both.** The triangle by S9, the re-ranking by the guide eval (Strands Decider 3/8 guides, Rerank 3.5 on Bedrock 6/8, Jev 8/8). Left: re-record the judge cache (`decisions.md`, Open) |
 | 2 | **Ablation:** run the detection eval with the triangle off, then on | B | ~1 h | **Done 10-10:** `report-ablation.json`. No difference on the shipped sessions (5/5 and 0/5 both ways), so item 5 decides whether the triangle adds detections |
 | 3 | **Act on pressure:** when pressure is confirmed, the way out goes in the next tool result and the run key drops to read-only | A | 1–1.5 h | A test shows the drop and the message. The gauge shows « porte de sortie envoyée » |
 | 4 | **Trap keys:** decoy keys in the workspace; any use is held at once and traced | A | ~1 h | A session using the decoy is held with severity « critique » |
@@ -51,17 +51,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | 8 | **Second way in: Claude Code hook**, after the 21:30 go/no-go, before the other stretch goals: `POST /hook/claude` on the same decision as the proxy, `http` hooks in the demo workspace's `.claude/settings.json`, `Bash`, `Edit`, `Write` and `Read` in `policy.yaml`, the « Brancher un agent » card and the « via MCP / via hook » badge | A | 2–3 h (estimate) | A real Claude Code session has its test edit held and shown in the Run view. The video of it is recorded |
 | — | Open decision: **live runs** with gpt-5.4-mini (10 without Cressey, 10 with) | — | 1–2 h | Only if decided |
 
-**Strands Decider switch, steps:**
-1. Install it on the stage Mac: `pip install strands-decider`. For MLX, install from a clone with `pip install -e ".[mlx]"`.
-2. Serve it: `strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --port 8100`. Port 8000 is the backend.
-3. Check: one `noul` call answers with `model` and `latency_ms`.
-4. Try `typesafe-sdk` against it through its base URL. If the formats differ, write a small client for `/v1/systemone` behind the same interface in `core/judge.py` and `guide/clients.py`.
-5. Re-run the S2 check (typo fix: read, edit, `run_tests`, DROP) and the demo path. Set the drift threshold (0.5) again.
-6. Re-run the guide eval (`--split dev`) and set the relevance threshold (0.4) again, using the S6 method.
-7. Re-record the cache (judge and re-ranker), then run once with the Wi-Fi off.
-8. Drop `TYPESAFE_API_KEY` from `.env.example` and the README once nothing uses it.
-
-**If the switch isn't done by 21:30,** keep Jev for the demo and present Strands Decider as the target, with the numbers measured so far.
+**To try Strands Decider again:** serve it (`strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --port 8100 --device mlx`), set `CRESSEY_DECIDER_URL=http://127.0.0.1:8100`, then record the cache again.
 
 **Kept cut:** S3 Object Lock, the owner MCP connector, Slack, and the Blue Team challenge, unless the 21:30 go/no-go passes with time to spare. The Claude Code hook (item 8) comes first among the stretch goals.
 
@@ -84,7 +74,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 - **Solution :** Les passerelles du marché jugent l'action ; Cressey traite les conditions qui la produisent, avec le triangle de la fraude (pression, opportunité, rationalisation). Branché en une ligne comme proxy MCP, il retient les actions irréversibles hors mandat. Sous pression, il offre une porte de sortie à l'agent et réduit ses droits. Il remonte à la source et envoie à chaque propriétaire, y compris l'auteur de la tâche, un guide de correction sourcé (ANSSI, MITRE ATLAS, OWASP).
 - **Stack :**
   - Python : FastAPI et Pydantic, proxy fastmcp ;
-  - modèles : Strands Decider 2B en local (décisions typées avec confiance, open source, AWS), gpt-5.5 et gpt-5.4-mini, recherche hybride BM25 et text-embedding-3-small ;
+  - modèles : Jev (décisions typées avec confiance), gpt-5.5 et gpt-5.4-mini, recherche hybride BM25 et text-embedding-3-small ; Strands Decider 2B et Cohere Rerank 3.5 (Bedrock) mesurés, moins bons ;
   - web : React, Vite, Tailwind et shadcn ;
   - livraison : Docker, CI avec ggshield.
 
@@ -93,7 +83,6 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 |---|---|
 | The venue Wi-Fi goes down | Switch to the 4G hotspot. If the models don't answer, `CRESSEY_MODEL_MODE=fallback` serves the recorded guides |
 | A model API is down | Same: fallback mode. A guide comes back `unavailable` with its sources, never a crash |
-| The local Strands Decider server is down or too slow | Restart `strands-decider serve`. Meanwhile rationalization shows « indisponible » and the floor keeps holding. Fallback mode serves the recorded labels |
 | The live demo crashes | Play the 2–3 minute video. Prepare it before 09:30 |
 | Claude Code can't reach its model on stage | Play the recorded hook beat. The main demo is the scripted replay and doesn't need it |
 | A laptop fails | The second laptop has the repo cloned and the image built (`docker compose up`) |

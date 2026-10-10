@@ -74,7 +74,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 
 **7. Intégration et modèle.**
 - The proxy is one URL in the agent's config. The key broker means moving the agent's secrets to short-lived keys; that's the part that closes a PocketOS. An optional model gateway too.
-- Decision model: Strands Decider 2B, open source (AWS Strands Labs) and run locally, so no agent data leaves the company. It can be swapped for another model.
+- Decision model: Jev, typed decisions with a confidence. It can be swapped for another model: Strands Decider 2B (open source, local) and Cohere Rerank 3.5 on Bedrock were measured and set aside (`evaluation.md`, S9).
 - Cressey can sit behind an existing gateway, for example as an AgentCore Gateway interceptor.
 - Three modes: Observer, then Guard, then Fix.
 - One Docker container; outputs to a SIEM, Slack or Jira.
@@ -122,7 +122,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
    - Without the reasoning, the agent gets less autonomy: « Pas de transparence, pas d'autonomie ».
 6. **« Latence ? »**
    - The proxy adds 1–9 ms per call, and the policy decision takes about 0.05 ms.
-   - The decision model runs only on writes. Strands Decider runs locally (its authors measured a 153 ms median on an M3 Pro); our measure is **[mesure]**. The LLM writes guides asynchronously.
+   - The decision model runs only on writes. Jev answered in 0.21 s per call in S9; per 1,000 calls is **[mesure]**. The LLM writes guides asynchronously.
 7. **« Qu'est-ce qui existe déjà ? »**
    - **Lasso:** its open-source MCP gateway classifies the content of each call on its own, and lets the call through if its API doesn't answer (we read the source). Intent Deputy, its closed product, checks each action against the agent's purpose; its docs aren't public.
    - **AgentCore Policy** (AWS): fixed Cedar rules on every tool call, which is our safety floor. **Zenity:** inline blocking with the run's history.
@@ -142,9 +142,9 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 11. **« Rejouer un script scripté prouve quoi ? »**
     - That the policy now holds five variants of the attack. It's a regression test of the policy, not proof about a real agent.
     - Live runs: **[mesure]**, if that decision is taken.
-12. **« Pourquoi Strands Decider et pas Jev ? »**
-    - It runs locally, so no agent data leaves; there's no per-call fee; it works offline; and it comes from AWS.
-    - Its confidence isn't calibrated for our task, so we set our thresholds on labelled actions: **[mesure]**.
+12. **« Pourquoi Jev, et pas Strands Decider ou un modèle Bedrock ? »**
+    - We measured both. Strands Decider 2B separates none of S9's subtle cases (its scores sit between 0.15 and 0.42 for incidents and legitimate actions alike), and gives 3/8 guides as a re-ranker. Cohere Rerank 3.5 on Bedrock gives 6/8 guides; Jev gives 8/8.
+    - The model is a setting: one variable switches it, and the measurements re-run with one command.
 
 ## Numbers checked against their sources (2026-10-09)
 | Claim on the slides | Exact wording at the source | Source |

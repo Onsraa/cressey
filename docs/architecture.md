@@ -10,7 +10,7 @@
 | Core loop, piece 2: secret scan, event log, triangle scoring (each step read once, each write judged on the evidence kept: S9) | `core/secret_scan.py`, `core/eventlog.py`, `core/triangle.py`, `core/judge.py` | built |
 | Core loop, piece 3: incidents with source tracing, guides per owner written in the background | `core/incidents.py` | built |
 | Core loop, next: fixes and « Rejouer ×5 », the agent's messages, the full-run review on hold, the eval endpoint | — | to build |
-| Decision model switch to Strands Decider 2B: reversed for the triangle (S9: it separates no subtle case), which keeps Jev. The guides' re-ranking (`guide/clients.py`) is handled separately | `core/judge.py` | triangle: decided 10-10, built |
+| Decision model switch to Strands Decider 2B: reversed. The triangle keeps Jev (S9: it separates no subtle case), and so does the guides' re-ranking (Strands Decider 3/8 guides, Cohere Rerank 3.5 on Bedrock 6/8, Jev 8/8: `evaluation.md`). One setting switches each: `CRESSEY_DECIDER_URL`, `CRESSEY_RERANKER` | `core/judge.py`, `guide/clients.py` | decided and built 10-10 |
 | Acting on pressure: when pressure is confirmed, add the way out to the next tool result and drop the run key to read-only | `core/proxy.py`, `core/runs.py` | decided 10-10, to build |
 | Trap keys: decoy keys in the workspace; any use is held at once and traced to where it was read | `demo/tools.py`, `core/floor.py`, `core/trace.py` | decided 10-10, to build |
 | Demo tools (synthetic): a workspace holding a fake production key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
@@ -42,14 +42,17 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `openai_api_key` | `OPENAI_API_KEY` | none. An empty value counts as missing |
 | `openai_base_url` | `OPENAI_BASE_URL` | none (OpenAI). For Bedrock: `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`, with a Bedrock API key in `OPENAI_API_KEY` |
 | `typesafe_api_key` | `TYPESAFE_API_KEY` | none. An empty value counts as missing. Jev is the triangle's decision model |
-| the decision model's URL | `CRESSEY_DECIDER_URL`, with the Strands work in progress | none: Jev's API. A URL, such as the local `strands-decider serve` on port 8100, will switch the decision model to that server |
+| `decider_url` | `CRESSEY_DECIDER_URL` | none: Jev's API. A URL, such as the local `strands-decider serve` on port 8100, switches the triangle's decision model to that server |
 | `web_dir` | `CRESSEY_WEB_DIR` | `web` |
 | `model_mode` | `CRESSEY_MODEL_MODE` | `live` (`live`, `record`, `replay` or `fallback`) |
 | `cache_dir` | `CRESSEY_CACHE_DIR` | `data/cache` |
 | `rewrite_model` | — | `gpt-5.4-mini` |
 | `writer_model` | — | `gpt-5.5` |
 | `embedding_model` | — | `text-embedding-3-small` |
-| `relevance_min` | — | `0.4` |
+| `reranker` | `CRESSEY_RERANKER` | `jev`. `bedrock` re-ranks with Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) |
+| `relevance_min` | — | set per re-ranker on the dev set: `0.4` for Jev, `0.2` for Rerank 3.5 |
+| `aws_region` | `AWS_REGION` | `us-east-1` |
+| AWS credentials | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | none: boto3's own chain. The event's temporary credentials go in `.env`, never in Git |
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
 | `triangle_holds` | `CRESSEY_TRIANGLE_HOLDS` | `true`. `false` measures the safety floor alone (the ablation); the legs are still computed |
@@ -134,17 +137,17 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 ## Deployment
 - **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The API has no authentication.
 - **After the event: AWS** (the Bedrock partnership covers hosting and models).
-- **Not built yet:** the container deploy and the Bedrock adapters.
+- **Built:** the Bedrock re-ranker (Rerank 3.5), off by default. **Not built yet:** the container deploy, and Bedrock for the writer, rewriter and embedder.
 - **Where Bedrock plugs in:** the adapters in `clients.py`.
   - Bedrock exposes an OpenAI-compatible endpoint at `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
   - Claude models are reached through the Anthropic Messages API on that endpoint.
   - Whether Claude also answers through Chat Completions there is not verified.
 - **Checked on 2026-10-10 in the AWS docs:**
   - `bedrock-runtime` serves the OpenAI Responses API. The OpenAI SDK works by setting `OPENAI_BASE_URL` and a Bedrock API key; the writer and rewriter code stays.
-  - OpenAI models on Bedrock: GPT-5.6 Sol, Terra and Luna (`global.openai.gpt-5.6-sol`, …). gpt-5.5 and gpt-5.4-mini were not found, so the models change and the eval is re-run.
-  - No OpenAI embedding model was found. Candidate: Cohere Embed Multilingual v3 (French), called through boto3.
+  - OpenAI models on Bedrock, listed from our account on 10-10: GPT-5.4, GPT-5.5 and GPT-5.6 Luna, Sol and Terra, through inference profiles such as `us.openai.gpt-5.5` (GPT-6 is listed too, but the event's allowlist excludes it). There's no gpt-5.4-mini, so the rewriter changes model and the eval is re-run.
+  - No OpenAI embedding model was found. Candidate: Cohere Embed Multilingual v3 (French), called through boto3. The embedder shares the OpenAI client, so `OPENAI_BASE_URL` alone would send it to Bedrock too.
   - Not verified: structured output (`text_format`) through Bedrock. Needs one call with a Bedrock key.
-- **Decision model: Strands Decider 2B** (decided 10-10; facts from its GitHub README, checked 10-10):
+- **Strands Decider 2B** (chosen 10-10, then measured weaker than Jev for both uses: `decisions.md`; facts from its GitHub README, checked 10-10):
   - Weights: `StrandsAgents/strands-decider-2B-qwen3.5-v1-2610` on Hugging Face (also under the `amazon` org), Apache 2.0. Released by AWS Strands Labs on 2026-10-01 as an experiment, not as a managed AWS service.
   - Install with `pip install strands-decider`. For Apple silicon's MLX, install from a clone with `pip install -e ".[mlx]"` until the next release.
   - Serve with `strands-decider serve <model> --port 8100`.

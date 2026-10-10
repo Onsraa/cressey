@@ -14,14 +14,15 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 1. **Rewrite** (gpt-5.4-mini, `PROMPT_REWRITE_INCIDENT_V1`): the incident becomes one French query and one English query. The prompt defines the triangle's three legs.
 2. **Search** (`retrieve.py`): three queries (French, English, raw text), each through BM25 and through embeddings, which makes 6 ranked lists. They're merged by reciprocal rank fusion (`k = 60`), keeping the top 8. If a query embedding fails, that search continues with BM25 only; the next search tries embeddings again.
 3. **Re-rank** (Jev `jev-1.13.0`): one yes/no question per passage (« The passage directly answers the question »). Passages scoring under **0.4** are discarded.
-   - **Switching to Strands Decider 2B** (decided 10-10): the same question goes to the local server. The 0.4 threshold was set on Jev's scores, so set it again on the dev set (the S6 method: count expected passages kept against others kept). Then re-run the eval and re-record the cache, since the model name is part of the cache key.
+   - **Rerank 3.5 on Bedrock** (`CRESSEY_RERANKER=bedrock`): one call scores every passage, threshold 0.2. Measured weaker on 10-10 (6/8 guides against 8/8), like Strands Decider (3/8): see `evaluation.md`.
+   - **Each re-ranker has its own threshold,** set on the dev set with `--calibrate` (the S6 method: expected passages kept against others kept, and no out-of-scope question kept). The model name is part of the cache key, so a switch needs a new recording.
 4. **Write** (gpt-5.5, `PROMPT_GUIDE_V1`): at most 4 steps. Each cites one passage id and a verbatim quote of 8–20 words. The incident text sits between `<incident>` tags and is treated as data, never as instructions. `<`, `>` and `&` in it are escaped, so it can't close the tag.
 5. **Check, in code:** a step is kept only if its `source_id` is among the passages given to the writer and its quote appears in that passage. Matching ignores case, whitespace and typographic quotes, and quotes must be 8–30 words.
 
 ## When there is no guide
 | Case | Status | Message |
 |---|---|---|
-| No passage scores 0.4 or more | `unsure` | « Je ne sais pas : aucune source fiable ne couvre ce cas. Voir l'équipe sécurité. » The writer isn't called |
+| No passage reaches the threshold (0.4 with Jev) | `unsure` | « Je ne sais pas : aucune source fiable ne couvre ce cas. Voir l'équipe sécurité. » The writer isn't called |
 | Every step was dropped | `unsure` | « Je ne sais pas : aucune étape n'a pu être sourcée. Voir l'équipe sécurité. » |
 | A model is unavailable (error, timeout, 429, refusal, cut-off answer, missing key) | `unavailable` | « Guide indisponible : les modèles ne répondent pas. Sources trouvées ci-dessous. » The passages found are returned |
 
@@ -53,5 +54,5 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 
 ## Model calls
 - `store=False` on every OpenAI call: the provider keeps nothing (both OpenAI and Bedrock keep responses 30 days by default).
-- Fail fast, so `fallback` reaches the cache quickly: OpenAI 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry.
+- Fail fast, so `fallback` reaches the cache quickly: OpenAI and Bedrock 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry.
 - A refusal or a cut-off structured answer counts as unavailable.

@@ -49,7 +49,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ outils 
         guide : réécriture (gpt-5.4-mini) → BM25 + embeddings (fusion RRF)
                 → reclassement (seuil 0,4) → rédaction (gpt-5.5) → citations vérifiées par le code
 
-modèle de décision : Strands Decider 2B, servi en local (open source, AWS Strands Labs) ; Jev jusqu'à la bascule
+modèle de décision : Jev (étiquettes du triangle, reclassement des guides)
                  │
                  ▼
         API FastAPI /api/*  ──▶  tableau de bord React (types générés depuis l'OpenAPI)
@@ -59,8 +59,7 @@ modèle de décision : Strands Decider 2B, servi en local (open source, AWS Stra
 **Prérequis :** uv 0.12, Bun 1.4, Docker.
 
 ```bash
-cp .env.example .env          # OPENAI_API_KEY (TYPESAFE_API_KEY jusqu'à la bascule vers Strands Decider)
-strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --port 8100   # modèle de décision local
+cp .env.example .env          # OPENAI_API_KEY, TYPESAFE_API_KEY (Jev)
 ./dev.sh                      # backend :8000 + web :5173 (proxy /api)
 docker compose up --build     # image unique : web + API sur :8000
 ```
@@ -112,7 +111,7 @@ docker compose up --build     # image unique : web + API sur :8000
 - **« Pas de transparence, pas d'autonomie » :** moins Cressey voit l'agent, plus il passe la main à un humain.
 - **Traçabilité :** journal chaîné par hachage ; chaque étape d'un guide cite sa source mot pour mot.
 - **Erreurs :** si un modèle est indisponible, le guide revient `unavailable` avec ses sources, jamais une erreur 500. Sans source fiable, il répond « je ne sais pas, voir l'équipe sécurité ».
-- **Le modèle de décision tourne en local** (Strands Decider 2B) : les données des agents ne sortent pas. S'il est indisponible, la rationalisation reste non confirmée et le plancher continue de retenir.
+- **Modèle de décision : Jev**, par API ; il reçoit les étapes avec les secrets masqués. S'il est indisponible, la rationalisation reste non confirmée et le plancher continue de retenir.
 
 ## Référentiels couverts
 - **NIST CSF 2.0 :** DE.CM, DE.AE, RS.AN, RS.CO, RS.MI, PR.AA.

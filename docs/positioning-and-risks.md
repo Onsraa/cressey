@@ -92,7 +92,7 @@ Status as of 2026-10-10 14:00.
 | M3 | **Holds tire the approver,** and they go to a SOC analyst who can't judge a developer's file edit. The autonomy table sends every write to a human when only tool calls are visible | Open. Hold only on alarms, report holds per 100 normal runs, and let the way out and the shorter leash cut holds |
 | M4 | **The evaluation sets are ours:** dev sets tuned by the team, and sessions written by the team | Open. Always show n/N, plus the held-out set, live runs and public data |
 | M5 | **The decision model can be swayed:** agent text goes into the run summary | The floor never depends on the model. Show it: attack our own judge and measure (`evaluation.md`) |
-| M6 | **The decision model's confidence isn't calibrated for us.** For Strands Decider, the yes/no answer isn't a probability (« closer to 1 leans yes »), and its calibration was fitted on short classification tasks | Open. Re-set the 0.4 and 0.5 thresholds on about 30 labelled actions |
+| M6 | **The decision model's confidence isn't calibrated for us.** Jev stays the decision model (10-10); its 0.4 and 0.5 thresholds were set on a few cases (S6, S9) | Open. Re-set the 0.4 and 0.5 thresholds on about 30 labelled actions |
 
 ### Minor
 - **The key broker isn't one URL.** It's what actually closes the PocketOS case, and it means migrating how secrets are managed.
@@ -110,7 +110,7 @@ Status as of 2026-10-10 14:00.
 - **Hold timeout is 240 s,** under the MCP client's 300 s, so the agent receives the way out.
 
 ## Where to focus (in order of value for the time)
-1. **Switch the decision model to Strands Decider 2B** (decided 10-10): the steps are in `runsheet.md`. It runs locally, so no data leaves, there's no per-call fee, and it works when the venue Wi-Fi is down.
+1. **Switch the decision model to Strands Decider 2B:** closed 10-10. Jev stays for the triangle (S9) and the re-ranking (`evaluation.md`).
 2. **Ablation**, about 1 h: floor alone against floor plus triangle on the sessions. If the difference is zero, pitch the triangle as diagnosis and routing, not detection.
 3. **Act on pressure,** 1–1.5 h. When the pressure leg is confirmed, the proxy adds the way out to the next tool result and drops the run key to read-only. No human is needed.
 4. **Trap keys,** about 1 h. The workspace holds decoy keys, and real keys come only from the broker. Any use of a decoy means an instant hold, and the tracer names where it was read. For production, name GitGuardian Honeytoken, which alerts wherever the key is used, even outside the proxy.

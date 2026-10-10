@@ -81,3 +81,34 @@ def test_report_counts_exact_hits_citations_and_unsure(tmp_path):
     )
     assert rep.unsure_correct == 0 and rep.n_out_of_scope == 1
     assert rep.citation_validity == 0.75 and rep.n_incidents == 1
+
+
+class ScoredRer:
+    """A re-ranker with one fixed score per passage."""
+
+    def __init__(self, scores: dict[str, float]):
+        self.scores = scores
+
+    def relevance(self, question, units):
+        return {u.id: self.scores[u.id] for u in units}
+
+
+def test_calibration_counts_what_each_threshold_keeps(tmp_path):
+    from cressey.guide.eval import calibrate
+
+    rset = tmp_path / "r.json"
+    rset.write_text(
+        json.dumps(
+            [
+                {"q": "a", "lang": "fr", "expected": ["anssi-en:R9"], "split": "dev"},
+                {"q": "c", "lang": "fr", "expected": [], "split": "dev"},
+            ]
+        )
+    )
+    rer = ScoredRer({R9.id: 0.8, R12.id: 0.3})
+    pipe = GuidePipeline(Retr([R9, R12]), Rew(), rer, Wri())
+    rows = {r.threshold: r for r in calibrate(pipe, rset, "dev", [0.2, 0.5])}
+    high, low = rows[0.5], rows[0.2]
+    assert (high.expected_kept, high.expected_total) == (1, 1)
+    assert (high.others_kept, high.others_total, low.others_kept) == (0, 1, 1)
+    assert high.out_of_scope_answered == 1 and high.out_of_scope_total == 1

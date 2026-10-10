@@ -17,6 +17,7 @@ from cressey.guide.clients import (
     PROMPT_REWRITE_INCIDENT_V1,
     PROMPT_REWRITE_QUESTION_V1,
     PROMPT_WHY_V1,
+    BedrockReranker,
     JevReranker,
     ModelUnavailable,
     OpenAIEmbedder,
@@ -161,6 +162,12 @@ class Cached:
         )
 
 
+def _reranker(s: Settings) -> BedrockReranker | JevReranker:
+    if s.reranker == "bedrock":
+        return BedrockReranker.from_settings(s)
+    return JevReranker.from_settings(s)
+
+
 def wrap_all(s: Settings) -> tuple[Cached, Cached, Cached, Cached]:
     def c(inner: Any, adapter: str, model: str, version: str) -> Cached:
         return Cached(inner, adapter, model, version, s.model_mode, s.cache_dir)
@@ -170,6 +177,6 @@ def wrap_all(s: Settings) -> tuple[Cached, Cached, Cached, Cached]:
     return (
         c(OpenAIEmbedder.from_settings(s), "embedder", s.embedding_model, "v1"),
         c(OpenAIRewriter.from_settings(s), "rewriter", s.rewrite_model, rewrite_v),
-        c(JevReranker.from_settings(s), "reranker", "jev-1.13.0", "v1"),
+        c(_reranker(s), "reranker", s.rerank_model, "v1"),
         c(OpenAIWriter.from_settings(s), "writer", s.writer_model, writer_v),
     )

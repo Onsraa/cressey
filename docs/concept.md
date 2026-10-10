@@ -1,7 +1,7 @@
 # Cressey: concept v0
 
 - **Date:** 2026-10-08
-- **Status:** being built. The decisions are in `decisions.md`. Re-centered after the 10-10 review (`positioning-and-risks.md`), and the decision model switched from Jev to Strands Decider 2B.
+- **Status:** being built. The decisions are in `decisions.md`. Re-centered after the 10-10 review (`positioning-and-risks.md`). The decision model stays Jev: Strands Decider 2B was measured weaker (S9, guide eval).
 - **Event:** ESSECKATHON "Secure Horizons", ESSEC Cergy, 10–11 October 2026. Product code is written between Saturday 11:30 and Sunday 12:00, so 24.5 hours.
 - **Track:** 2, "Defenders Augmented". It covers two of the track's axes: supervising the agents' tool layer (axis 2), and agent identity and privileges (axis 3).
 - **Jury:** GitGuardian, ESSEC MetaLab, KPMG.

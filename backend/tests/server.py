@@ -33,6 +33,7 @@ def serving(demo: Path, hold_timeout: float) -> Generator[str]:
         _env_file=None,
         openai_api_key=None,
         typesafe_api_key=None,
+        decider_url=None,
         demo_dir=demo,
         hold_timeout=hold_timeout,
     )

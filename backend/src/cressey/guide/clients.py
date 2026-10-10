@@ -5,9 +5,12 @@ import json
 import logging
 from typing import Any, Protocol, Self
 
+import boto3
 import numpy as np
 import openai
 import typesafe_sdk
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel, ValidationError
 from typesafe_sdk import Noul, RetryPolicy, TypeSafeClient
 
@@ -176,12 +179,87 @@ class OpenAIWriter(_Adapter):
         return self._parse(PROMPT_WHY_V1, user, GuideDraft)
 
 
+LOCAL_KEY = "local"  # the local decider ignores the key, but the SDK wants one
+
+
+def decision_auth(s: Settings) -> tuple[str, str | None] | None:
+    """(API key, base URL) for the decision model: the local Strands Decider when its URL
+    is set, otherwise Jev's API. None when neither is configured."""
+    if s.decider_url:
+        return LOCAL_KEY, s.decider_url
+    key = s.typesafe_api_key
+    return (key.get_secret_value(), None) if key else None
+
+
+def _aws_credentials(s: Settings) -> dict[str, str]:
+    """The credentials set in .env; when none are, boto3 uses its own chain."""
+    keys = {
+        "aws_access_key_id": s.aws_access_key_id,
+        "aws_secret_access_key": s.aws_secret_access_key,
+        "aws_session_token": s.aws_session_token,
+    }
+    return {name: v.get_secret_value() for name, v in keys.items() if v}
+
+
+class BedrockReranker(_Adapter):
+    """Cohere Rerank 3.5 on Amazon Bedrock: one call scores every passage against the query."""
+
+    @classmethod
+    def from_settings(cls, settings: Settings | None = None) -> Self:
+        s = settings or Settings()
+        client = boto3.client(
+            "bedrock-agent-runtime",
+            region_name=s.aws_region,
+            # Fail fast, like _openai: the cache answers only after the live call gives up.
+            config=Config(
+                connect_timeout=5,
+                read_timeout=20,
+                retries={"total_max_attempts": 2, "mode": "standard"},
+            ),
+            **_aws_credentials(s),
+        )
+        arn = f"arn:aws:bedrock:{s.aws_region}::foundation-model/{s.rerank_model}"
+        return cls(client, arn)
+
+    def relevance(self, question: str, units: list[Unit]) -> dict[str, float]:
+        if not units:
+            return {}
+        sources = [
+            {
+                "type": "INLINE",
+                "inlineDocumentSource": {
+                    "type": "TEXT",
+                    "textDocument": {"text": u.text},
+                },
+            }
+            for u in units
+        ]
+        config = {
+            "modelConfiguration": {"modelArn": self.model},
+            "numberOfResults": len(units),
+        }
+        try:
+            r = self._c().rerank(
+                queries=[{"type": "TEXT", "textQuery": {"text": question}}],
+                sources=sources,
+                rerankingConfiguration={
+                    "type": "BEDROCK_RERANKING_MODEL",
+                    "bedrockRerankingConfiguration": config,
+                },
+            )
+        except (BotoCoreError, ClientError) as e:
+            raise ModelUnavailable(type(e).__name__) from e
+        return {units[x["index"]].id: float(x["relevanceScore"]) for x in r["results"]}
+
+
 class JevReranker(_Adapter):
+    """Re-ranks over Jev's System One API, one yes/no question per passage."""
+
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
         key = s.typesafe_api_key
-        return cls(
+        client = (
             TypeSafeClient(
                 api_key=key.get_secret_value(),
                 timeout=5,
@@ -190,6 +268,7 @@ class JevReranker(_Adapter):
             if key
             else None
         )
+        return cls(client, "jev-1.13.0")
 
     def relevance(self, question: str, units: list[Unit]) -> dict[str, float]:
         if not units:
@@ -209,6 +288,6 @@ class JevReranker(_Adapter):
             )
         except typesafe_sdk.TypeSafeError as e:
             raise ModelUnavailable(str(e)) from e
-        if r.model != "jev-1.13.0":
-            log.warning("Jev answered with model %s (expected jev-1.13.0)", r.model)
+        if r.model != self.model:
+            log.warning("re-ranked by model %s (expected %s)", r.model, self.model)
         return {u.id: float(r.answers[u.id].noul) for u in units if u.id in r.answers}

@@ -170,3 +170,110 @@ def test_live_jev_separates_r9():
         picked,
     )
     assert s["anssi-fr:R9"] >= 0.5 > max(s[f"anssi-fr:R{n}"] for n in (12, 30, 35))
+
+
+def test_the_decision_model_is_jev_by_default_and_a_url_switches_it():
+    """S9: Strands Decider 2B separates no subtle case for the triangle, so Jev is the default."""
+    from cressey.guide.clients import decision_auth
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None, typesafe_api_key="jev-key")
+    assert decision_auth(s) == ("jev-key", None) and s.decision_model == "jev-1.13.0"
+    local = Settings(_env_file=None, decider_url="http://127.0.0.1:8100")
+    assert decision_auth(local) == ("local", "http://127.0.0.1:8100")
+    assert local.decision_model == "strands-decider-2B-qwen3.5-v1-2610"
+
+
+def test_an_empty_decider_url_falls_back_to_jev():
+    from cressey.guide.clients import decision_auth
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None, typesafe_api_key="jev-key", decider_url=" ")
+    assert decision_auth(s) == ("jev-key", None) and s.decision_model == "jev-1.13.0"
+
+
+def test_no_decision_model_without_a_url_or_a_jev_key():
+    from cressey.guide.clients import decision_auth
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None, typesafe_api_key=None, decider_url=None)
+    assert decision_auth(s) is None
+
+
+class FakeAgentRuntime:
+    """Stands in for boto3's bedrock-agent-runtime client."""
+
+    def __init__(self, fail: bool = False):
+        self.fail, self.calls = fail, []
+
+    def rerank(self, **kw):
+        if self.fail:
+            from botocore.exceptions import ClientError
+
+            raise ClientError({"Error": {"Code": "ThrottlingException"}}, "Rerank")
+        self.calls.append(kw)
+        return {
+            "results": [
+                {"index": 1, "relevanceScore": 0.91},
+                {"index": 0, "relevanceScore": 0.12},
+            ]
+        }
+
+
+def test_bedrock_rerank_scores_every_passage_in_one_call():
+    from cressey.guide.clients import BedrockReranker
+
+    fake = FakeAgentRuntime()
+    arn = "arn:aws:bedrock:us-east-1::foundation-model/cohere.rerank-v3-5:0"
+    scores = BedrockReranker(fake, arn).relevance("q", UNITS[:2])
+    assert scores == {UNITS[1].id: 0.91, UNITS[0].id: 0.12}
+    [call] = fake.calls
+    config = call["rerankingConfiguration"]["bedrockRerankingConfiguration"]
+    assert config["modelConfiguration"]["modelArn"] == arn
+    assert config["numberOfResults"] == 2
+    assert call["queries"] == [{"type": "TEXT", "textQuery": {"text": "q"}}]
+
+
+def test_bedrock_errors_become_model_unavailable():
+    from cressey.guide.clients import BedrockReranker
+
+    with pytest.raises(ModelUnavailable):
+        BedrockReranker(FakeAgentRuntime(fail=True), "arn").relevance("q", UNITS[:1])
+
+
+def test_no_passage_means_no_call():
+    from cressey.guide.clients import BedrockReranker
+
+    fake = FakeAgentRuntime()
+    assert BedrockReranker(fake, "arn").relevance("q", []) == {} and not fake.calls
+
+
+def test_the_re_ranker_is_jev_by_default_and_rerank_3_5_on_bedrock_an_option():
+    """10-10: Rerank 3.5 gave 6/8 guides and hit@3 28/31 on dev, against Jev's 8/8 and 30/31."""
+    from cressey.settings import Settings
+
+    jev = Settings(_env_file=None)
+    bedrock = Settings(_env_file=None, reranker="bedrock")
+    assert (jev.reranker, jev.rerank_model, jev.relevance_min) == (
+        "jev",
+        "jev-1.13.0",
+        0.4,
+    )
+    assert (bedrock.rerank_model, bedrock.relevance_min) == (
+        "cohere.rerank-v3-5:0",
+        0.2,
+    )
+
+
+def test_bedrock_client_fails_fast_like_the_openai_one():
+    """In `fallback` mode the cache answers only after the live call gives up."""
+    from cressey.guide.clients import BedrockReranker
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None, aws_access_key_id="k", aws_secret_access_key="s")
+    cfg = BedrockReranker.from_settings(s).client.meta.config
+    assert (cfg.connect_timeout, cfg.read_timeout, cfg.retries) == (
+        5,
+        20,
+        {"total_max_attempts": 2, "mode": "standard"},
+    )

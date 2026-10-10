@@ -13,7 +13,9 @@ def anyio_backend():
 
 
 async def test_every_shipped_session_is_held_exactly_when_it_should_be():
-    settings = Settings(_env_file=None, openai_api_key=None, typesafe_api_key=None)
+    settings = Settings(
+        _env_file=None, openai_api_key=None, typesafe_api_key=None, decider_url=None
+    )
     report = await evaluate(settings, load_sessions())
     assert report.misses == []
     assert report.incident_held == report.incident_sessions >= 5
@@ -41,7 +43,9 @@ async def test_the_ablation_shows_what_only_the_triangle_holds():
         report="Tous les tests passent.",
         report_if_blocked="Je m'arrête.",
     )
-    settings = Settings(_env_file=None, openai_api_key=None, typesafe_api_key=None)
+    settings = Settings(
+        _env_file=None, openai_api_key=None, typesafe_api_key=None, decider_url=None
+    )
     sessions = [s for s in load_sessions() if s.id == "demo-tests-impossibles"]
     report = await ablation(settings, [*sessions, weaken], WeakenedTestsJudge())
     assert report.floor.incident_held == 1 and report.both.incident_held == 2

@@ -32,6 +32,56 @@ class EvalReport(BaseModel):
     latency_p95_ms: float
 
 
+class ThresholdRow(BaseModel):
+    """What one relevance threshold keeps on a split (the S6 method)."""
+
+    threshold: float
+    expected_kept: int
+    expected_total: int
+    others_kept: int  # candidates kept that aren't the expected passage
+    others_total: int
+    out_of_scope_answered: int  # out-of-scope questions left with a passage
+    out_of_scope_total: int
+
+
+def calibrate(
+    pipeline: GuidePipeline, retrieval_set: Path, split: str, thresholds: list[float]
+) -> list[ThresholdRow]:
+    """Score every candidate once, then count what each threshold would keep."""
+    qs = [q for q in json.loads(retrieval_set.read_text()) if q["split"] == split]
+    scored: list[tuple[list[str], list[tuple[str, float]]]] = []
+    for q in qs:
+        fr, en = pipeline.rewriter.rewrite_question(q["q"])
+        found = pipeline.retriever.search([fr, en, q["q"]])
+        scores = pipeline.reranker.relevance(fr, found)
+        scored.append((q["expected"], [(u.id, scores.get(u.id, 0.0)) for u in found]))
+    rows = []
+    for t in thresholds:
+        exp_kept = exp_total = oth_kept = oth_total = oos_answered = 0
+        for expected, candidates in scored:
+            if not expected:
+                oos_answered += any(score >= t for _, score in candidates)
+                continue
+            for uid, score in candidates:
+                hit = any(same_unit(e, uid) for e in expected)
+                exp_total += hit
+                oth_total += not hit
+                exp_kept += hit and score >= t
+                oth_kept += not hit and score >= t
+        rows.append(
+            ThresholdRow(
+                threshold=t,
+                expected_kept=exp_kept,
+                expected_total=exp_total,
+                others_kept=oth_kept,
+                others_total=oth_total,
+                out_of_scope_answered=oos_answered,
+                out_of_scope_total=sum(not e for e, _ in scored),
+            )
+        )
+    return rows
+
+
 def same_unit(a: str, b: str) -> bool:
     """anssi-fr:Rn and anssi-en:Rn are the same recommendation."""
     return a.replace("anssi-en:", "anssi-fr:") == b.replace("anssi-en:", "anssi-fr:")
@@ -101,16 +151,40 @@ def evaluate(
 
 
 if __name__ == "__main__":
+    from datetime import UTC, datetime
+
     from cressey.guide.api import get_pipeline
     from cressey.guide.corpus import DATA
     from cressey.guide.retrieve import Retriever
+    from cressey.settings import Settings
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="dev")
-    split = ap.parse_args().split
+    ap.add_argument("--calibrate", action="store_true", help="relevance thresholds")
+    args = ap.parse_args()
+    split = args.split
     pipe = get_pipeline()
     if not isinstance(pipe.retriever, Retriever):
         raise SystemExit("eval needs the real Retriever")
+    if args.calibrate:
+        thresholds = [round(0.05 * i, 2) for i in range(1, 20)]
+        rows = calibrate(pipe, DATA / "eval" / "retrieval.json", split, thresholds)
+        s = Settings()
+        out = DATA / "eval" / f"calibration-relevance-{split}-{s.reranker}.json"
+        measured = {
+            "split": split,
+            "re_ranker": s.rerank_model,
+            "date": datetime.now(UTC).isoformat(),
+            "rows": [r.model_dump() for r in rows],
+        }
+        out.write_text(json.dumps(measured, indent=1))
+        for r in rows:
+            print(
+                f"{r.threshold:.2f}  expected {r.expected_kept}/{r.expected_total}  "
+                f"others {r.others_kept}/{r.others_total}  "
+                f"out of scope answered {r.out_of_scope_answered}/{r.out_of_scope_total}"
+            )
+        raise SystemExit(0)
     report = evaluate(
         pipe,
         pipe.retriever,
