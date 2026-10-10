@@ -88,7 +88,7 @@ docker compose up --build     # image unique : web + API sur :8000
 | Temps pour arrêter | **[mesure] ms**, avec un surcoût proxy mesuré de 1 à 9 ms par appel |
 | Source trouvée du premier coup | **[mesure]** |
 | Citations vérifiées dans les guides | 100 % sur le jeu de dev (8 incidents) |
-| hit@3 au passage exact, BM25 → hybride → reclassé | 26 → 30 → 31 sur 31 (jeu de dev) |
+| hit@3 au passage exact, BM25 → hybride → reclassé | 26 → 30 → 30 ou 31 sur 31 selon le run (jeu de dev, 2 runs) |
 
 **Méthode :**
 - un jeu de développement pour régler ;
