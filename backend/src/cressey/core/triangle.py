@@ -197,12 +197,13 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
         "mandate": run.mandate.model_dump(),
         "note": NOTE,
         "previous_step": (
-            _view(run, prev, redact(prev.result[:PREVIOUS], run.known))
+            _view(run, prev, redact(prev.result, run.known)[:PREVIOUS])
             if prev
             else None
         ),
     }
-    chunks = [redact(c, run.known) for c in _chunks(s.result)]
+    # Redact, then cut: a cut could split a secret and leave part of it readable.
+    chunks = _chunks(redact(s.result, run.known))
     got = await asyncio.gather(
         *(
             judge.answers({**window, "current_step": _view(run, s, c)}, LABELS)
@@ -267,7 +268,7 @@ def judgment_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
             "evidence": evidence,
         },
         "previous_step": (
-            _view(run, prev, redact(prev.result[:PREVIOUS], run.known))
+            _view(run, prev, redact(prev.result, run.known)[:PREVIOUS])
             if prev
             else None
         ),

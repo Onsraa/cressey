@@ -271,3 +271,20 @@ async def test_without_a_model_the_report_stays_unchecked_and_says_so():
 
     leg = await report_check(emailed_run(), FakeJudge(report=None), T)
     assert not leg.confirmed and "indisponible" in leg.facts[0]
+
+
+async def test_a_secret_cut_in_two_never_reaches_the_model():
+    """Redact, then cut: a key across the previous-step cut or a chunk boundary stays hidden."""
+    from cressey.core.triangle import CHUNK, PREVIOUS
+
+    judge = FakeJudge()
+    run = run_with(
+        step(1, "read_file", '{"path": "a"}', result="x" * (PREVIOUS - 8) + PROD_KEY),
+        step(2, "read_file", '{"path": "b"}', result="y" * (CHUNK - 8) + PROD_KEY),
+        step(3, "write_file", '{"path": "c"}', "write"),
+        known={PROD_KEY: "fp-key"},
+    )
+    await legs(run, judge, T)
+    sent = json.dumps([state for _, state in judge.asked])
+    assert judge.labelled() == [1, 2, 2]  # step 2 is read in two chunks
+    assert PROD_KEY[:8] not in sent and PROD_KEY[-8:] not in sent
