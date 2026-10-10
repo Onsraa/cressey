@@ -242,14 +242,13 @@ function Text({ run, row }: { run: Run; row: Exclude<Row, { kind: "call" }> }) {
 			{check && (
 				<div className="flex flex-col gap-[5px] border-line border-t py-2">
 					<span className="label">le rapport face au journal</span>
+					{/* Unconfirmed can also mean unchecked: the facts say which. */}
 					<div className="flex items-center gap-2">
-						<span
-							className={`chip text-[11px] ${TONE[check.confirmed ? "held" : "grey"]}`}
-						>
-							{check.confirmed
-								? "rapport contredit par le journal"
-								: "non contredit par le journal"}
-						</span>
+						{check.confirmed && (
+							<span className={`chip text-[11px] ${TONE.held}`}>
+								rapport contredit par le journal
+							</span>
+						)}
 						<span className="flex-1" />
 						<span className="font-pixel text-[22px] leading-[0.8]">
 							{fmt(check.score)}
