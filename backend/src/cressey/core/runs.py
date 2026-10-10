@@ -151,7 +151,9 @@ class Runs:
         ]
 
     async def hold(self, run: Run, step: Step, timeout: float) -> bool:
-        """Wait for a human decision. The run's key stays revoked unless it's approved."""
+        """Wait for a human decision; True when this call is approved. The run's key stays
+        revoked while any of its calls is held, rejected or expired: with parallel calls,
+        one approval must not free a key another hold still needs."""
         run.revoked = True
         step.status = "held"
         step.held_until = (_now() + timedelta(seconds=timeout)).isoformat()
@@ -170,8 +172,12 @@ class Runs:
                 step.status = "approved" if decision.result() else "rejected"
             step.decided_at = _now().isoformat()
             self._log(run, step, "status", status=step.status)
-        run.revoked = step.status != "approved"
-        return not run.revoked
+        blocking = ("held", "rejected", "expired")
+        others = [s for s in run.steps if s is not step]
+        run.revoked = step.status != "approved" or any(
+            s.status in blocking for s in others
+        )
+        return step.status == "approved"
 
     def decide(self, run_id: str, n: int, approve: bool) -> bool:
         decision = self._waiting.get((run_id, n))

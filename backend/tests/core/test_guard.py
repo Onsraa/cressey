@@ -675,3 +675,59 @@ async def test_on_alert_the_triangle_lets_the_write_through_with_its_incident(tm
         [incident] = (await api(base, "GET", "/api/incidents")).json()
     assert not r.is_error and page[-1]["status"] == "alerted"
     assert (incident["severity"], incident["decision"]) == ("haute", "alerted")
+
+
+class GatedJudge:
+    """Holds the judgment of a write until the test opens the gate; everything else is a
+    plain no. The server runs on its own loop in a thread, hence threading events."""
+
+    def __init__(self) -> None:
+        import threading
+
+        self.entered, self.gate = threading.Event(), threading.Event()
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "weakens" in questions and state["current_step"]["tool"] == "write_file":
+            self.entered.set()
+            await asyncio.to_thread(self.gate.wait, 10)
+        if "serves_task" in questions or "weakens" in questions:
+            return dict.fromkeys(questions, 0.0)
+        if "contradicted" in questions:
+            return dict.fromkeys(questions, 0.0)
+        return dict.fromkeys(questions, "none")
+
+
+async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_path):
+    """Parallel calls: a write still being judged when another call is held must not run."""
+    from cressey.app import create_app
+    from cressey.demo.server import serve
+    from cressey.settings import Settings
+    from tests.server import fake_guide
+
+    s = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+        hold_timeout=10,
+    )
+    judge = GatedJudge()
+    with serve(create_app(s, make_guide=fake_guide, judge=judge)) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            note = {"path": "notes.md", "content": "x"}
+            write = asyncio.create_task(
+                a.call_tool("write_file", note, raise_on_error=False)
+            )
+            assert await asyncio.to_thread(judge.entered.wait, 10)
+            delete = asyncio.create_task(
+                a.call_tool("run_sql", DELETE, raise_on_error=False)
+            )
+            n = (await next_hold(base))["step"]["n"]
+            judge.gate.set()
+            written = await write
+            await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+            await delete
+    assert written.is_error and "suspendue" in written.content[0].text
+    assert not (tmp_path / "workspace" / "notes.md").exists()
