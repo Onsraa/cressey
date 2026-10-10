@@ -11,7 +11,8 @@ export const acted = (i: Incident) =>
 	i.decision === "approved" || i.decision === "alerted";
 
 // A control run opens an incident too: the call ran, and Cressey would have held it.
-export const OBSERVER_TIP = "Run sans Cressey : cet appel aurait été retenu";
+export const OBSERVER_TIP =
+	"Run without Cressey: this call would have been held";
 
 function parse(json: string): unknown {
 	try {

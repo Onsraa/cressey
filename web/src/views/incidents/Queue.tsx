@@ -17,13 +17,13 @@ export function Queue({ selected }: { selected?: string }) {
 		runs.filter((r) => r.kind === "control").map((r) => r.id),
 	);
 	return (
-		<section aria-label="File des incidents" className="panel rise">
+		<section aria-label="Incident queue" className="panel rise">
 			<div className="panel-head">
 				<span>INCIDENTS</span>
 				<span className="opacity-70">{incidents.length}</span>
 				<div className="flex-1" />
 				<Tip
-					tip="Un incident par cause racine, trié par gravité, puis par heure"
+					tip="One incident per root cause, sorted by severity, then by time"
 					className="inline-flex"
 				>
 					<ArrowDownWideNarrow size={14} />
@@ -42,14 +42,14 @@ export function Queue({ selected }: { selected?: string }) {
 				{!incidents.length && (
 					<div className="flex flex-col gap-2 p-5 text-[13px] text-mute">
 						<span>
-							L'incident du run en direct apparaît ici à sa première retenue.
+							The live run's incident shows up here at its first hold.
 						</span>
 						<button
 							type="button"
 							onClick={() => go("live")}
 							className="btn gap-1.5 self-start text-[13px]"
 						>
-							Aller au run en direct
+							Go to live run
 							<ArrowRight size={14} />
 						</button>
 					</div>
@@ -89,10 +89,10 @@ function Item({
 				<span className="font-medium font-mono text-xs">{i.id}</span>
 				{acted(i) && (
 					<span
-						data-tip="L'action a eu lieu : ce qu'elle a révélé reste réel"
+						data-tip="The action took place: what it revealed is still real"
 						className="inline-flex"
 					>
-						<SquareCheck size={13} aria-label="action approuvée" />
+						<SquareCheck size={13} aria-label="action approved" />
 					</span>
 				)}
 				<span className="flex-1" />
@@ -120,7 +120,7 @@ function Item({
 						className={`inline-flex h-5 items-center gap-1 border px-1.5 font-mono text-[11px] ${TONE.info}`}
 					>
 						<Eye size={11} />
-						Observateur
+						Observer
 					</span>
 				)}
 			</span>

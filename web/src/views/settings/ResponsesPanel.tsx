@@ -13,9 +13,9 @@ const NO_REVIEW: readonly Responses["fleet"][] = ["alert", "stop"];
 // shortcut: 240 s, 3 runs and 15 min mirror the backend defaults (CRESSEY_HOLD_TIMEOUT,
 // policy.yaml fleet), which the API doesn't serve; read them from /api/status once it does.
 const EFFECT: Record<Response, string> = {
-	alert: "l'appel passe et un incident s'ouvre",
-	review: "l'appel attend un humain, annulé sans risque après 240 s",
-	stop: "refusé tout de suite, clé du run suspendue",
+	alert: "the call goes through and an incident opens",
+	review: "the call waits for a human, safely cancelled after 240 s",
+	stop: "refused at once, run key suspended",
 };
 
 function Choice<T extends Response>({
@@ -83,17 +83,17 @@ export function ResponsesPanel() {
 	};
 
 	return (
-		<section aria-label="Que fait Cressey quand… ?" className="panel rise">
+		<section aria-label="What does Cressey do when…?" className="panel rise">
 			<div className="panel-head">
 				<SlidersHorizontal size={14} />
-				QUE FAIT CRESSEY QUAND… ?
+				WHAT DOES CRESSEY DO WHEN…?
 			</div>
 			<div className="flex flex-col gap-4 px-5 pt-1.5 pb-5">
 				{r ? (
 					<div className="flex flex-col">
 						<Row
 							check="floor"
-							what="destructif hors mandat, chemin protégé ou gelé"
+							what="destructive outside the mandate, protected or frozen path"
 						>
 							<Choice
 								label={CHECK.floor}
@@ -104,7 +104,7 @@ export function ResponsesPanel() {
 						</Row>
 						<Row
 							check="trap_key"
-							what="un appel porte une clé leurre, même encodée"
+							what="a call carries a decoy key, even encoded"
 						>
 							<Choice
 								label={CHECK.trap_key}
@@ -115,7 +115,7 @@ export function ResponsesPanel() {
 						</Row>
 						<Row
 							check="triangle"
-							what="une écriture, rationalisation confirmée avec pression ou opportunité"
+							what="a write, with rationalization confirmed alongside pressure or opportunity"
 						>
 							<Choice
 								label={CHECK.triangle}
@@ -126,7 +126,7 @@ export function ResponsesPanel() {
 						</Row>
 						<Row
 							check="fleet"
-							what="3 runs retenus pour la même cible hors mandat en 15 min. Alerte : le bandeau s'affiche ; Arrêt : leurs appels vers cette cible sont refusés"
+							what="3 runs held for the same target outside their mandate within 15 min. Alert: the banner shows; Stop: their calls to that target are refused"
 						>
 							<Choice
 								label={CHECK.fleet}
@@ -138,27 +138,26 @@ export function ResponsesPanel() {
 					</div>
 				) : (
 					<p className="py-3 font-mono text-[13px] text-mute">
-						Lecture des réponses…
+						Reading the responses…
 					</p>
 				)}
 				<ul className="flex flex-col gap-1 text-[13px] leading-[1.4]">
 					{ALL.map((o) => (
 						<li key={o}>
 							<span className="font-medium">{RESPONSE[o]}</span>
-							<span className="text-mute"> : {EFFECT[o]}</span>
+							<span className="text-mute">: {EFFECT[o]}</span>
 						</li>
 					))}
 				</ul>
 				<p className="font-mono text-[12px] text-mute-2 leading-[1.5]">
-					Chaque changement est inscrit au journal. Les rejeux ne s'arrêtent
-					jamais pour un humain.
+					Every change is written to the log. Replays never stop for a human.
 				</p>
 				{error && (
 					<p
 						role="alert"
 						className="border border-held-bd bg-held px-2.5 py-1.5 text-[13px] text-held-fg"
 					>
-						Le changement n'a pas été enregistré : {error}
+						The change wasn't saved: {error}
 					</p>
 				)}
 			</div>

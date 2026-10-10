@@ -46,10 +46,10 @@ export function Inspector({
 }) {
 	const { incidents, now, go } = useLive();
 	return (
-		<section aria-label="Inspecteur" className={`panel rise ${className}`}>
+		<section aria-label="Inspector" className={`panel rise ${className}`}>
 			<div
 				role="tablist"
-				aria-label="Inspecteur"
+				aria-label="Inspector"
 				className="flex h-[34px] flex-none items-stretch bg-ink"
 			>
 				{held && (
@@ -57,7 +57,7 @@ export function Inspector({
 						on={tab === "hold"}
 						onClick={() => onTab("hold")}
 						Icon={Pause}
-						label="RETENUE"
+						label="HOLD"
 						dot={held.status === "held"}
 					/>
 				)}
@@ -65,7 +65,7 @@ export function Inspector({
 					on={tab === "step"}
 					onClick={() => onTab("step")}
 					Icon={List}
-					label="ÉTAPE"
+					label="STEP"
 				/>
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
@@ -88,8 +88,8 @@ export function Inspector({
 					<div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-2.5 p-6 text-center">
 						<MousePointerClick size={22} />
 						<span className="max-w-[220px] text-[13px] text-mute-2 leading-[1.45]">
-							Sélectionnez une étape de la trace pour voir ses arguments, ses
-							secrets et ses scores.
+							Select a step in the trace to see its arguments, its secrets and
+							its scores.
 						</span>
 					</div>
 				)}
@@ -130,17 +130,15 @@ function Call({ run, step }: { run: Run; step: Step }) {
 	const legs = step.legs;
 	const secrets = carried(step);
 	const timing = [
-		typeof step.check_ms === "number" ? `décision ${ms(step.check_ms)}` : "",
-		typeof step.scan_ms === "number"
-			? `scan des secrets ${ms(step.scan_ms)}`
-			: "",
+		typeof step.check_ms === "number" ? `decision ${ms(step.check_ms)}` : "",
+		typeof step.scan_ms === "number" ? `secret scan ${ms(step.scan_ms)}` : "",
 	]
 		.filter(Boolean)
 		.join(" · ");
 	return (
 		<div className="rise flex flex-col gap-[18px] p-5">
 			<div className="flex flex-col gap-2">
-				<span className="label">étape sélectionnée</span>
+				<span className="label">selected step</span>
 				<div className="flex min-w-0 items-baseline gap-2.5">
 					<span className="font-pixel text-4xl leading-[0.8]">#{step.n}</span>
 					<span className="truncate font-medium font-mono text-[15px]">
@@ -151,22 +149,22 @@ function Call({ run, step }: { run: Run; step: Step }) {
 					<RiskChip risk={step.risk} tall />
 					<StatusChip status={step.status} tall />
 					{step.is_error && (
-						<span className={`chip text-[11px] ${TONE.held}`}>échec</span>
+						<span className={`chip text-[11px] ${TONE.held}`}>failed</span>
 					)}
 				</div>
 			</div>
 			<Labeled label="arguments">
-				<Code>{argsText(run, step.args, "\n") || "aucun argument"}</Code>
+				<Code>{argsText(run, step.args, "\n") || "no arguments"}</Code>
 			</Labeled>
 			{step.reason && (
-				<Labeled label="raison">
+				<Labeled label="reason">
 					<span className="font-medium text-sm leading-[1.4]">
 						{step.reason}
 					</span>
 				</Labeled>
 			)}
 			{secrets.length > 0 && (
-				<Labeled label="secret · valeur jamais affichée">
+				<Labeled label="secret · value never shown">
 					{secrets.map((fp) => {
 						const own = step.secrets.find((s) => s.fingerprint === fp);
 						return (
@@ -176,7 +174,7 @@ function Call({ run, step }: { run: Run; step: Step }) {
 							>
 								<KeyRound size={14} className="mt-0.5 flex-none text-warn-fg" />
 								{originText(run, fp)}
-								{own && ` · ${own.kind} · ligne ${own.line}`}
+								{own && ` · ${own.kind} · line ${own.line}`}
 							</span>
 						);
 					})}
@@ -185,7 +183,7 @@ function Call({ run, step }: { run: Run; step: Step }) {
 			{timing && <span className="label">{timing}</span>}
 			{legs && (
 				<div className="flex flex-col">
-					<span className="label mb-1">scores à cette étape</span>
+					<span className="label mb-1">scores at this step</span>
 					{LEGS.map((g) => (
 						<LegRow key={g.k} g={g} leg={legs[g.k]} />
 					))}
@@ -230,9 +228,9 @@ function Text({ run, row }: { run: Run; row: Exclude<Row, { kind: "call" }> }) {
 	return (
 		<div className="rise flex flex-col gap-[18px] p-5">
 			<div className="flex flex-col gap-2">
-				<span className="label">étape sélectionnée</span>
+				<span className="label">selected step</span>
 				<span className="font-medium font-mono text-[15px]">
-					{row.kind === "report" ? "rapport final" : "message"}
+					{row.kind === "report" ? "final report" : "message"}
 				</span>
 			</div>
 			<div className="flex flex-col items-start gap-1.5">
@@ -241,12 +239,12 @@ function Text({ run, row }: { run: Run; row: Exclude<Row, { kind: "call" }> }) {
 			</div>
 			{check && (
 				<div className="flex flex-col gap-[5px] border-line border-t py-2">
-					<span className="label">le rapport face au journal</span>
+					<span className="label">the report against the log</span>
 					{/* Unconfirmed can also mean unchecked: the facts say which. */}
 					<div className="flex items-center gap-2">
 						{check.confirmed && (
 							<span className={`chip text-[11px] ${TONE.held}`}>
-								rapport contredit par le journal
+								report contradicted by the log
 							</span>
 						)}
 						<span className="flex-1" />

@@ -29,7 +29,7 @@ export function Tiles({ file, tiles }: { file: EvalFile; tiles: Tile[] }) {
 			{tiles.map((t) => (
 				<div
 					key={t.label}
-					data-tip={`${t.label} : ${t.value}\nLecture : ${t.reading}\n${split(t)}${t.sub}\n${source(file)}`}
+					data-tip={`${t.label}: ${t.value}\nReading: ${t.reading}\n${split(t)}${t.sub}\n${source(file)}`}
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 					tabIndex={0}
 					className="flex min-w-0 flex-col gap-2 border-line border-r-[1px] px-[22px] py-5"
@@ -50,7 +50,7 @@ export function Tiles({ file, tiles }: { file: EvalFile; tiles: Tile[] }) {
 					{/* shortcut: one report per kind, as /api/eval serves today; show a held-out file's numbers once it serves one */}
 					{!t.price && file.split !== "held-out" && (
 						<span className="font-mono text-[11px] text-mute-2">
-							held-out : pas encore mesuré
+							held-out: not measured yet
 						</span>
 					)}
 				</div>

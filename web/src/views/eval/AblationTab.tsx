@@ -36,7 +36,7 @@ function Ids({
 					</li>
 				))}
 				{ids.length === 0 && (
-					<li className="py-2 font-mono text-mute-2 text-xs">aucune</li>
+					<li className="py-2 font-mono text-mute-2 text-xs">none</li>
 				)}
 			</ul>
 		</section>
@@ -55,38 +55,38 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 			: `${signed(b.stop_ms_p50 - f.stop_ms_p50)} ms`;
 	const tiles: Tile[] = [
 		{
-			label: "Incidents retenus par le triangle seul",
+			label: "Incidents held by the triangle alone",
 			value: signed(gained),
-			sub: `${f.incident_held} → ${b.incident_held} sur ${b.incident_sessions}`,
-			reading: "bon, plus haut est mieux",
+			sub: `${f.incident_held} → ${b.incident_held} of ${b.incident_sessions}`,
+			reading: "good, higher is better",
 		},
 		{
-			label: "Retenues en trop",
+			label: "Extra holds",
 			value: signed(b.normal_held - f.normal_held),
-			sub: `${f.normal_held} → ${b.normal_held} sur ${b.normal_sessions}`,
-			reading: "à surveiller, le coût du triangle",
+			sub: `${f.normal_held} → ${b.normal_held} of ${b.normal_sessions}`,
+			reading: "to watch, the triangle's cost",
 			watch: true,
 		},
 		{
-			label: "Arrêt · p50",
+			label: "Time to stop · p50",
 			value: stop,
 			sub: `${ms(f.stop_ms_p50)} → ${ms(b.stop_ms_p50)} ms`,
-			reading: "bon, plus bas est mieux",
+			reading: "good, lower is better",
 		},
 	];
 	const rows: { label: string; floor: Cell; both: Cell }[] = [
 		{
-			label: "Sessions d'incident retenues",
+			label: "Incident sessions held",
 			floor: held(f.incident_held, f.incident_sessions),
 			both: held(b.incident_held, b.incident_sessions),
 		},
 		{
-			label: "Sessions normales retenues par erreur",
+			label: "Normal sessions held by mistake",
 			floor: held(f.normal_held, f.normal_sessions),
 			both: held(b.normal_held, b.normal_sessions),
 		},
 		{
-			label: "Temps d'arrêt · p50",
+			label: "Time to stop · p50",
 			floor: { value: `${ms(f.stop_ms_p50)} ms` },
 			both: { value: `${ms(b.stop_ms_p50)} ms` },
 		},
@@ -103,10 +103,10 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 					>
 						<span className="px-3.5 py-2.5 text-mute-2">{file.split}</span>
 						<span className="border-line border-l px-3.5 py-2.5">
-							plancher seul
+							floor alone
 						</span>
 						<span className="bg-ink px-3.5 py-2.5 text-surface">
-							plancher + triangle
+							floor + triangle
 						</span>
 					</div>
 					{rows.map((r) => (
@@ -141,13 +141,13 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 				</section>
 				<div className="flex flex-col gap-4">
 					<Ids
-						title="TRIANGLE SEUL"
-						note="Sessions retenues seulement quand le triangle peut retenir."
+						title="TRIANGLE ONLY"
+						note="Sessions held only when the triangle may hold."
 						ids={a.only_triangle}
 					/>
 					<Ids
-						title="PLANCHER SEUL"
-						note="Sessions retenues par le plancher seul, mais pas quand le triangle s'y ajoute."
+						title="FLOOR ONLY"
+						note="Sessions held by the floor alone, but not once the triangle is added."
 						ids={a.only_floor}
 					/>
 				</div>

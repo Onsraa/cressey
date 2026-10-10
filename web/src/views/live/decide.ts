@@ -5,7 +5,7 @@ const ARMED_MS = 4000; // the design's window for the second click
 
 export type Decision = ReturnType<typeof useDecision>;
 
-// « Rejeter », and « Approuver » behind a second click, for the held call #n of a run.
+// “Reject”, and “Approve” behind a second click, for the held call #n of a run.
 export function useDecision(
 	run: string,
 	n: number | undefined,
@@ -29,8 +29,8 @@ export function useDecision(
 			.catch((e: unknown) =>
 				setError(
 					e instanceof ApiError && e.status === 404
-						? "Cette retenue n'attend plus de décision."
-						: "Décision non enregistrée : réessayez.",
+						? "This hold is no longer waiting for a decision."
+						: "Decision not saved: try again.",
 				),
 			)
 			.finally(() => {

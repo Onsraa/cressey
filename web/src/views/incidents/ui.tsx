@@ -23,7 +23,7 @@ export function Tip({
 	);
 }
 
-// A titled box inside a tab: SOURCE, CORRECTIFS, REJOUER ×5…
+// A titled box inside a tab: SOURCE, FIXES, REPLAY ×5…
 export function Box({
 	Icon,
 	title,

@@ -18,21 +18,21 @@ import { FitCells, type LegLook, Letter } from "./ui";
 export type CenterTab = "triangle" | "time";
 
 const TABS: { k: CenterTab; label: string; tip: string }[] = [
-	{ k: "triangle", label: "Triangle", tip: "Où chaque appel se place (T)" },
+	{ k: "triangle", label: "Triangle", tip: "Where each call lands (T)" },
 	{
 		k: "time",
-		label: "Au fil des étapes",
-		tip: "Les scores appel par appel (T)",
+		label: "Across steps",
+		tip: "The scores, call by call (T)",
 	},
 ];
 
 const LEGEND = [
-	"Comment le lire",
-	"Chaque appel se place selon ses trois scores : plus un score est haut, plus il tire vers son sommet.",
-	"Gris plus foncé : scores plus hauts.",
-	"Saumon : l'appel retenu.",
-	"Un côté devient plein quand ses deux sommets sont confirmés par les faits.",
-	"Le cadre suit le dernier appel, ou l'appel sélectionné.",
+	"How to read it",
+	"Each call lands by its three scores: the higher a score, the more it pulls toward its vertex.",
+	"Darker grey: higher scores.",
+	"Salmon: the held call.",
+	"A side turns solid once facts confirm both its vertices.",
+	"The frame follows the latest call, or the selected one.",
 ].join("\n");
 
 const NONE: Leg = { score: 0, confirmed: false, facts: [] };
@@ -61,8 +61,8 @@ export function Center({
 					? [
 							{
 								Icon: DoorOpen,
-								t: `porte de sortie envoyée · étape ${run.way_out_step}`,
-								tip: `Envoyée à l'agent avec le résultat de l'étape ${run.way_out_step}, sans humain : la pression est confirmée.`,
+								t: `way out sent · step ${run.way_out_step}`,
+								tip: `Sent to the agent with the result of step ${run.way_out_step}, without a human: the pressure is confirmed.`,
 							},
 						]
 					: []),
@@ -70,8 +70,8 @@ export function Center({
 					? [
 							{
 								Icon: Lock,
-								t: `clé en lecture seule · étape ${run.read_only_step}`,
-								tip: `Depuis l'étape ${run.read_only_step}, sans humain : pression et opportunité confirmées, les appels destructifs sont refusés.`,
+								t: `key read-only · step ${run.read_only_step}`,
+								tip: `Since step ${run.read_only_step}, without a human: pressure and opportunity confirmed, destructive calls are refused.`,
 							},
 						]
 					: []),
@@ -81,22 +81,19 @@ export function Center({
 				{
 					Icon: KeyRound,
 					t: TRAP,
-					tip: `${trap.reason} (étape ${trap.n})`,
+					tip: `${trap.reason} (step ${trap.n})`,
 				},
 			];
 		return [];
 	};
 	return (
-		<section
-			aria-label="Triangle de la fraude"
-			className={`panel rise ${className}`}
-		>
+		<section aria-label="Fraud triangle" className={`panel rise ${className}`}>
 			<div className="panel-head pr-1.5">
-				<span className="min-w-0 truncate">TRIANGLE DE LA FRAUDE</span>
+				<span className="min-w-0 truncate">FRAUD TRIANGLE</span>
 				<div className="flex-1" />
 				<div
 					role="tablist"
-					aria-label="Vue du triangle"
+					aria-label="Triangle view"
 					className="flex flex-none border border-surface"
 				>
 					{TABS.map((x) => (
@@ -121,7 +118,7 @@ export function Center({
 						<button
 							type="button"
 							data-tip={LEGEND}
-							aria-label="Comment lire le triangle"
+							aria-label="How to read the triangle"
 							className="absolute top-2 right-2 inline-flex size-6 cursor-help items-center justify-center bg-surface"
 						>
 							<Info size={15} />
@@ -162,7 +159,7 @@ function Gauge({ g, leg, auto }: { g: LegLook; leg: Leg; auto: Auto[] }) {
 					className={`chip h-[22px] gap-1 px-1.5 text-[11px] ${TONE[leg.confirmed ? "warn" : "grey"]}`}
 				>
 					{leg.confirmed ? <Check size={11} /> : <Minus size={11} />}
-					{leg.confirmed ? "confirmé" : "non confirmé"}
+					{leg.confirmed ? "confirmed" : "not confirmed"}
 				</span>
 				{auto.map((a) => (
 					<span
@@ -177,11 +174,11 @@ function Gauge({ g, leg, auto }: { g: LegLook; leg: Leg; auto: Auto[] }) {
 				{n > 0 && (
 					<details className="ml-auto">
 						<summary className="inline-flex min-h-[22px] items-center gap-1 border border-ink bg-surface px-1.5 py-0.5 font-mono text-[11px] leading-[1.3]">
-							{n} fait{n > 1 ? "s" : ""} du journal
+							{n} fact{n > 1 ? "s" : ""} from the log
 							<ChevronUp size={11} />
 						</summary>
 						<div className="absolute right-2 bottom-[calc(100%+8px)] left-2 z-[5] flex flex-col gap-1.5 border-[1.2px] border-ink bg-surface px-3 py-2.5 shadow-[0_18px_40px_-16px_rgba(30,30,30,0.32),0_2px_6px_rgba(30,30,30,0.06)]">
-							<span className="label">{g.name} · faits du journal</span>
+							<span className="label">{g.name} · facts from the log</span>
 							{leg.facts.map((f) => (
 								<span
 									key={f}

@@ -33,17 +33,17 @@ export function LiveView() {
 	return (
 		<div className={ROOT}>
 			<header className="rise flex flex-col gap-[7px]">
-				<span className="font-mono text-mute text-xs">Run en direct</span>
+				<span className="font-mono text-mute text-xs">Live run</span>
 				<h1 className="m-0 font-medium text-[22px] leading-[1.15] tracking-[-0.02em]">
-					En attente d'un agent
+					Waiting for an agent
 				</h1>
 			</header>
-			<section aria-label="En attente d'un agent" className="panel rise flex-1">
+			<section aria-label="Waiting for an agent" className="panel rise flex-1">
 				<div className="panel-head">
-					<span>EN ATTENTE D'UN AGENT</span>
+					<span>WAITING FOR AN AGENT</span>
 					<span className="blink h-3.5 w-2 bg-surface" />
 				</div>
-				<Waiting title="Aucun run pour l'instant" />
+				<Waiting title="No runs yet" />
 			</section>
 		</div>
 	);

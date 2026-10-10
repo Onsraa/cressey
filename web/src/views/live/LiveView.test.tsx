@@ -147,28 +147,28 @@ test("a held call: trace, gauges and the hold with its countdown", () => {
 	state = live([demo({})]);
 	const out = html();
 	for (const s of [
-		"Run en direct",
+		"Live run",
 		"a1b2c3d4e5f6",
-		"en cours",
-		"mandat",
-		"clé suspendue",
+		"running",
+		"mandate",
+		"key suspended",
 		"Fais passer les tests avant la mise en prod de ce soir.",
 		"query: DELETE FROM users, key: ‹DB_PROD_KEY›",
 		"SQL destructeur hors mandat : users",
-		"DB_PROD_KEY (lue dans .env.prod, étape 3)",
-		"échec",
-		"texte de l&#x27;agent",
-		"porte de sortie envoyée · étape 3",
-		"clé en lecture seule · étape 4",
-		"1 fait du journal",
-		"RETENUE",
-		"annulation sûre dans",
+		"DB_PROD_KEY (read in .env.prod, step 3)",
+		"failed",
+		"agent text",
+		"way out sent · step 3",
+		"key read-only · step 4",
+		"1 fact from the log",
+		"HOLD",
+		"safe cancel in",
 		"3:20",
-		"Rejeter",
-		"Approuver",
-		"critique",
-		"Clé du run suspendue",
-		"Porte de sortie envoyée à l&#x27;agent",
+		"Reject",
+		"Approve",
+		"critical",
+		"Run key suspended",
+		"Way out sent to the agent",
 	])
 		expect(out).toContain(s);
 	expect(out).toMatch(/aria-current="true"[^>]*>\+ Messages</);
@@ -200,30 +200,30 @@ test("after the decision: the outcome, the incident link, the contradicted repor
 	]);
 	const out = html();
 	for (const s of [
-		"terminé",
-		"rejeté à",
-		"Rejeté par un humain : non exécuté",
-		"Ouvrir l&#x27;incident",
-		"rapport final",
-		"rapport contredit par le journal",
+		"finished",
+		"rejected at",
+		"Rejected by a human: not run",
+		"Open incident",
+		"final report",
+		"report contradicted by the log",
 	])
 		expect(out).toContain(s);
-	expect(out).not.toContain("annulation sûre dans");
+	expect(out).not.toContain("safe cancel in");
 });
 
 test("a link to a step selects it in the inspector", () => {
 	state = live([demo({})], { run: "a1b2c3d4e5f6", step: 3 });
 	const out = html();
-	expect(out).toContain("étape sélectionnée");
-	expect(out).toContain("secret · valeur jamais affichée");
-	expect(out).toContain("Named secret · ligne 1");
-	expect(out).toContain("décision 0.8 ms");
+	expect(out).toContain("selected step");
+	expect(out).toContain("secret · value never shown");
+	expect(out).toContain("Named secret · line 1");
+	expect(out).toContain("decision 0.8 ms");
 });
 
 test("waiting: the MCP URL to paste", () => {
 	state = live([demo({}, { steps: [], messages: [], revoked: false })]);
-	expect(html()).toContain("Aucune étape pour l&#x27;instant");
+	expect(html()).toContain("No steps yet");
 	expect(html()).toContain("http://localhost:8000/mcp");
 	state = live([]);
-	expect(html()).toContain("En attente d&#x27;un agent");
+	expect(html()).toContain("Waiting for an agent");
 });

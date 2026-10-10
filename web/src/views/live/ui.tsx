@@ -114,10 +114,10 @@ export function RiskChip({
 export function AgentText() {
 	return (
 		<span
-			data-tip="Texte de l'agent : non fiable, affiché en texte brut"
+			data-tip="Agent text: untrusted, shown as plain text"
 			className={`${chip} h-[18px] border-line-2 px-[5px] text-[10.5px] text-mute-2`}
 		>
-			texte de l'agent
+			agent text
 		</span>
 	);
 }

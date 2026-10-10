@@ -7,11 +7,11 @@ import { Box } from "./ui";
 import { argPath, secretNames, unmask } from "./util";
 
 const HOW: { k: Source["how"]; label: string; tip: string }[] = [
-	{ k: "exact", label: "exacte", tip: "Valeur trouvée telle quelle" },
-	{ k: "lowercase", label: "minuscules", tip: "Valeur trouvée en minuscules" },
-	{ k: "base64", label: "base64", tip: "Valeur trouvée encodée en base64" },
-	{ k: "hex", label: "hex", tip: "Valeur trouvée encodée en hexadécimal" },
-	{ k: "url", label: "url", tip: "Valeur trouvée encodée pour une URL" },
+	{ k: "exact", label: "exact", tip: "Value found as is" },
+	{ k: "lowercase", label: "lowercase", tip: "Value found in lowercase" },
+	{ k: "base64", label: "base64", tip: "Value found base64-encoded" },
+	{ k: "hex", label: "hex", tip: "Value found hex-encoded" },
+	{ k: "url", label: "url", tip: "Value found URL-encoded" },
 ];
 
 export function Overview({
@@ -33,40 +33,38 @@ export function Overview({
 						const line = run?.steps
 							.find((x) => x.n === s.step)
 							?.secrets.find((x) => (x.name ?? x.kind) === s.secret)?.line;
-						const where = path ? `dans ${path} ` : "";
+						const where = path ? `in ${path} ` : "";
 						return (
 							<div
 								key={`${s.step}-${s.how}-${s.value}`}
 								className="flex flex-col gap-4 py-5"
 							>
 								<span className="text-pretty font-medium text-lg leading-[1.3] tracking-[-0.01em]">
-									{`${s.secret ?? unmask(s.value, names)} lue ${where}à l'étape ${s.step}`}
+									{`${s.secret ?? unmask(s.value, names)} read ${where}at step ${s.step}`}
 								</span>
 								<dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3.5 gap-y-1.5 font-mono text-[12.5px]">
-									<dt className="text-[11px] text-mute-2">outil</dt>
+									<dt className="text-[11px] text-mute-2">tool</dt>
 									<dd>{s.tool}</dd>
 									{path && (
 										<>
-											<dt className="text-[11px] text-mute-2">fichier</dt>
-											<dd>{line ? `${path}, ligne ${line}` : path}</dd>
+											<dt className="text-[11px] text-mute-2">file</dt>
+											<dd>{line ? `${path}, line ${line}` : path}</dd>
 										</>
 									)}
 									{!path && line !== undefined && (
 										<>
-											<dt className="text-[11px] text-mute-2">ligne</dt>
+											<dt className="text-[11px] text-mute-2">line</dt>
 											<dd>{line}</dd>
 										</>
 									)}
-									<dt className="text-[11px] text-mute-2">correspondance</dt>
+									<dt className="text-[11px] text-mute-2">match</dt>
 									<dd className="flex flex-wrap gap-[3px]">
 										{HOW.map((h) => {
 											const on = h.k === s.how;
 											return (
 												<span
 													key={h.k}
-													data-tip={
-														on ? `${h.tip} · cette correspondance` : h.tip
-													}
+													data-tip={on ? `${h.tip} · this match` : h.tip}
 													className={`inline-flex h-5 items-center gap-1 border px-1.5 text-[11px] ${on ? "border-ink bg-ink text-surface" : "border-line-2 bg-surface text-mute-3"}`}
 												>
 													{on && <Check size={10} />}
@@ -81,7 +79,7 @@ export function Overview({
 									onClick={() => go("live", { run: i.run_id, step: s.step })}
 									className="btn btn-dark h-8 gap-1.5 self-start px-3 text-[13px]"
 								>
-									Aller à l'étape {s.step}
+									Go to step {s.step}
 									<ArrowRight size={14} />
 								</button>
 							</div>
@@ -89,12 +87,12 @@ export function Overview({
 					})}
 					{!i.sources.length && (
 						<p className="py-5 text-[13px] text-mute">
-							Aucune valeur de l'appel retenu ne vient d'une lecture antérieure.
+							No value in the held call comes from an earlier read.
 						</p>
 					)}
 				</div>
 			</Box>
-			<Box Icon={Triangle} title="CÔTÉS DU TRIANGLE">
+			<Box Icon={Triangle} title="TRIANGLE LEGS">
 				{LEGS.map((g) => {
 					const leg = i.legs[g.k];
 					return (
@@ -123,7 +121,7 @@ export function Overview({
 								<span className="flex flex-wrap items-baseline gap-2">
 									<span className="font-medium text-sm">{g.name}</span>
 									<span className="font-mono text-[11px] text-mute-2">
-										{leg.confirmed ? "confirmée" : "non confirmée"}
+										{leg.confirmed ? "confirmed" : "not confirmed"}
 									</span>
 								</span>
 								<span className="flex items-center gap-2">

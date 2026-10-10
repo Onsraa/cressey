@@ -19,8 +19,8 @@ export function Waiting({ title }: { title: string }) {
 		Promise.resolve()
 			.then(() => navigator.clipboard.writeText(url))
 			.then(
-				() => setCopied("Copié"),
-				() => setCopied("Copie impossible"),
+				() => setCopied("Copied"),
+				() => setCopied("Copy failed"),
 			);
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-2.5 p-6 text-center">
@@ -29,7 +29,7 @@ export function Waiting({ title }: { title: string }) {
 			</span>
 			<span className="font-medium text-[15px]">{title}</span>
 			<span className="max-w-[260px] text-[13px] text-mute-2 leading-[1.45]">
-				Collez cette URL MCP dans la configuration de l'agent.
+				Paste this MCP URL into the agent's configuration.
 			</span>
 			<div className="flex w-full max-w-[320px] border-[1.2px] border-ink text-left">
 				<code className="min-w-0 flex-1 select-all truncate px-2.5 py-2 font-mono text-[12.5px]">
@@ -42,13 +42,13 @@ export function Waiting({ title }: { title: string }) {
 					className="inline-flex flex-none items-center gap-1.5 border-ink border-l-[1.2px] px-3 font-medium text-[13px] hover:bg-paper"
 				>
 					<Copy size={14} />
-					{copied || "Copier"}
+					{copied || "Copy"}
 				</button>
 			</div>
 			<span className="max-w-[280px] text-[12.5px] text-mute-2 leading-[1.45]">
-				L'agent envoie{" "}
+				The agent sends{" "}
 				<code className="whitespace-nowrap font-mono text-ink">
-					Authorization: Bearer &lt;clé du run&gt;
+					Authorization: Bearer &lt;run key&gt;
 				</code>
 			</span>
 		</div>

@@ -8,12 +8,12 @@ import { Keyed, useKeyed } from "./store";
 import { Box, Pending, Tip } from "./ui";
 import { LEG } from "./util";
 
-const DECIDE_FIRST = "Décidez d'abord l'appel retenu.";
+const DECIDE_FIRST = "Decide on the held call first.";
 
 const OUTCOME: Record<ReplayResult["outcome"], string> = {
-	refused: "refusé",
-	stopped: "s'est arrêté seul",
-	completed: "terminé",
+	refused: "refused",
+	stopped: "stopped on its own",
+	completed: "completed",
 };
 
 const replays = new Keyed<"running" | "failed" | "done">();
@@ -35,10 +35,10 @@ export function Fixes({ incident: i }: { incident: Incident }) {
 		<div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4">
 			<Box
 				Icon={Wrench}
-				title="CORRECTIFS"
+				title="FIXES"
 				aside={
 					<span className="ml-auto font-mono text-[11px] text-mute-2 tracking-normal">
-						{approved} sur {i.fixes.length} approuvés
+						{approved} of {i.fixes.length} approved
 					</span>
 				}
 			>
@@ -47,7 +47,7 @@ export function Fixes({ incident: i }: { incident: Incident }) {
 				))}
 				{!i.fixes.length && (
 					<p className="p-5 text-[13px] text-mute">
-						Aucun correctif proposé pour cet incident.
+						No fixes proposed for this incident.
 					</p>
 				)}
 			</Box>
@@ -93,27 +93,23 @@ function FixRow({ id, fix, held }: { id: string; fix: Fix; held: boolean }) {
 				{fix.approved ? (
 					<span className={`chip self-start ${TONE.ok}`}>
 						<Check size={12} />
-						approuvé
+						approved
 					</span>
 				) : (
 					<button
 						type="button"
 						onClick={approve}
 						disabled={held || busy}
-						data-tip={
-							held
-								? DECIDE_FIRST
-								: "Un humain approuve ; aucun modèle ne le peut."
-						}
+						data-tip={held ? DECIDE_FIRST : "A human approves; no model can."}
 						className="btn h-[30px] gap-1.5 self-start px-[11px] text-[13px]"
 					>
 						<Check size={14} />
-						Approuver le correctif
+						Approve fix
 					</button>
 				)}
 				{failed && (
 					<p className="font-mono text-[11px] text-held-fg">
-						L'approbation n'a pas abouti.
+						The approval didn't go through.
 					</p>
 				)}
 			</div>
@@ -136,14 +132,14 @@ function ReplayBox({
 	return (
 		<Box
 			Icon={Repeat}
-			title="REJOUER ×5"
+			title="REPLAY ×5"
 			aside={
 				<>
 					<span className="font-mono text-[11px] text-mute-2 tracking-normal">
-						test de régression de la politique
+						policy regression test
 					</span>
 					<Tip
-						tip="Cinq variantes scriptées de l'attaque, rejouées sur la politique corrigée. Elles testent la politique, pas un vrai agent. Un rejeu n'attend jamais d'humain : un appel qui aurait été retenu fait échouer le rejeu."
+						tip="Five scripted variants of the attack, replayed against the fixed policy. They test the policy, not a real agent. A replay never waits for a human: a call that would have been held fails the replay."
 						className="ml-auto inline-flex cursor-help"
 					>
 						<Info size={14} />
@@ -160,16 +156,16 @@ function ReplayBox({
 					className="btn btn-dark h-[38px] self-start px-4"
 				>
 					<Repeat size={15} />
-					{running ? "Rejeu en cours…" : "Rejouer ×5"}
+					{running ? "Replaying…" : "Replay ×5"}
 				</button>
 				{running && (
 					<Pending>
-						Chaque session rejoue sur un Cressey neuf : jusqu'à une minute.
+						Each session replays on a fresh Cressey: up to a minute.
 					</Pending>
 				)}
 				{state === "failed" && (
 					<p className="font-mono text-[11px] text-held-fg">
-						Rejeu interrompu : pas de réponse du serveur.
+						Replay interrupted: no answer from the server.
 					</p>
 				)}
 				{r && (
@@ -186,22 +182,22 @@ function ReplayBox({
 								className={`inline-flex h-7 items-center gap-1.5 border-[1.2px] px-2.5 ${TONE[r.passed ? "ok" : "held"]}`}
 							>
 								{r.passed ? <Check size={13} /> : <X size={13} />}
-								{r.passed ? "validé" : "échoué"}
+								{r.passed ? "passed" : "failed"}
 							</span>
 							<span className="text-mute">
 								{r.fixes.length
-									? `correctifs : ${r.fixes.map((k) => LEG[k].name).join(", ")}`
-									: "aucun correctif"}{" "}
+									? `fixes: ${r.fixes.map((k) => LEG[k].name).join(", ")}`
+									: "no fixes"}{" "}
 								· {time(r.date)}
 							</span>
 						</div>
 						{normal.length > 0 && (
 							<Tip
-								tip="Les tâches normales, rejouées sur la politique corrigée"
+								tip="The normal tasks, replayed against the fixed policy"
 								className="self-start font-mono text-mute text-xs"
 							>
-								tâches normales : {normal.filter((x) => x.ok).length} /{" "}
-								{normal.length} terminées sans retenue
+								normal tasks: {normal.filter((x) => x.ok).length} /{" "}
+								{normal.length} completed with no hold
 							</Tip>
 						)}
 					</div>
@@ -219,11 +215,11 @@ function Result({ result: r }: { result: ReplayResult }) {
 			{r.ok ? (
 				<Check
 					size={14}
-					aria-label="réussi"
+					aria-label="passed"
 					className="flex-none text-ok-strong"
 				/>
 			) : (
-				<X size={14} aria-label="échoué" className="flex-none text-held-fg" />
+				<X size={14} aria-label="failed" className="flex-none text-held-fg" />
 			)}
 			<span className="flex min-w-0 flex-col">
 				<span className="font-medium text-[13px]">{r.session}</span>
@@ -233,7 +229,7 @@ function Result({ result: r }: { result: ReplayResult }) {
 			</span>
 			<span className="ml-auto whitespace-nowrap font-mono text-[11.5px]">
 				{OUTCOME[r.outcome]}
-				{r.step !== null && ` à l'étape ${r.step}`}
+				{r.step !== null && ` at step ${r.step}`}
 			</span>
 		</div>
 	);
