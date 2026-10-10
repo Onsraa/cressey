@@ -60,7 +60,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 ## Sunday
 | Time | A | B |
 |---|---|---|
-| **06:00** | **Freeze** the detector and the prompts. Record the demo cache (Task 8). Run the held-out sets **once** | Write the measured numbers down honestly, misses included |
+| **06:00** | **Freeze** the detector and the prompts. Record the demo cache: `cd backend && CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record --fresh` (about 10 min; it ends with an offline replay that must print « identical »). Run the held-out sets **once** | Write the measured numbers down honestly, misses included |
 | 06:00–09:30 | 2–3 minute demo video; check that the README matches the code (decision model, commands) | Fiche défense; fill the **[mesure]** numbers into the deck |
 | 09:30 | Pitch coaching workshop | Same |
 | 10:30–12:00 | Test with the **Wi-Fi off** (`CRESSEY_MODEL_MODE=fallback`); last commit | `ggshield secret scan repo .`; rehearse 5 minutes and 3 minutes |
