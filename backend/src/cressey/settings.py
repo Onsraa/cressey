@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,3 +13,8 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     typesafe_api_key: SecretStr | None = None
     web_dir: Path = Field(Path("web"), validation_alias="CRESSEY_WEB_DIR")
+
+    @field_validator("openai_api_key", "typesafe_api_key", mode="before")
+    @classmethod
+    def _blank_is_missing(cls, v: object) -> object:
+        return None if isinstance(v, str) and not v.strip() else v

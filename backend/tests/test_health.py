@@ -24,3 +24,11 @@ def test_unknown_api_route_is_404():
         TestClient(create_app(Settings(_env_file=None))).get("/api/nope").status_code
         == 404
     )
+
+
+def test_empty_keys_count_as_missing(monkeypatch):
+    # `cp .env.example .env` leaves both keys empty.
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("TYPESAFE_API_KEY", "")
+    r = TestClient(create_app(Settings(_env_file=None))).get("/api/health")
+    assert r.json()["models"] == "missing-keys"

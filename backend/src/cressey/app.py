@@ -16,8 +16,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "models": "configured" if ok else "missing-keys"}
 
     # Must stay the last /api route: keeps API typos from falling through to the SPA.
+    @api.get("", include_in_schema=False)
     @api.get("/{rest:path}", include_in_schema=False)
-    def api_not_found(rest: str) -> None:
+    def api_not_found(rest: str = "") -> None:
         raise HTTPException(404)
 
     app.include_router(api)

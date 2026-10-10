@@ -35,3 +35,7 @@ def test_fallback_never_serves_files_outside_web_dir(tmp_path):
 
 def test_unknown_api_route_stays_404_with_web(tmp_path):
     assert _web(tmp_path).get("/api/nope").status_code == 404
+
+
+def test_bare_api_path_is_404_not_index(tmp_path):
+    assert _web(tmp_path).get("/api").status_code == 404
