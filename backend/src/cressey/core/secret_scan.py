@@ -8,6 +8,7 @@ fingerprint of its value, so the value itself is never stored.
 import hashlib
 import re
 import threading
+from collections.abc import Mapping
 
 from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
@@ -86,15 +87,23 @@ def _hits(text: str) -> list[tuple[str, Secret]]:
     return hits
 
 
+def scan(text: str) -> list[tuple[str, Secret]]:
+    """Each secret in `text` with its value, to hide that value elsewhere later.
+    Callers keep the values in memory only."""
+    return _hits(_encodable(text))
+
+
 def find_secrets(text: str) -> list[Secret]:
     """The secrets in `text`, once per distinct value on a line. Values are not kept."""
-    return [secret for _, secret in _hits(_encodable(text))]
+    return [secret for _, secret in scan(text)]
 
 
-def redact(text: str) -> str:
-    """`text` with each found value, wherever it appears, replaced by its marker."""
+def redact(text: str, known: Mapping[str, str] | None = None) -> str:
+    """`text` with each value found in it, and each `known` value (value -> fingerprint),
+    wherever it appears, replaced by its marker."""
     text = _encodable(text)
-    markers = {value: f"[secret:{s.fingerprint}]" for value, s in _hits(text)}
+    markers = {value: f"[secret:{fp}]" for value, fp in (known or {}).items()}
+    markers |= {value: f"[secret:{s.fingerprint}]" for value, s in _hits(text)}
     if not markers:
         return text
     # One pass, longest value first: a marker is never rescanned, and a value never

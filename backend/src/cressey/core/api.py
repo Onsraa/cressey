@@ -3,9 +3,19 @@ holds."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from cressey.core.models import Hold, Run, RunCreated, RunIn
+from cressey.core.eventlog import verify
+from cressey.core.models import (
+    Hold,
+    LogHead,
+    ReportIn,
+    Run,
+    RunCreated,
+    RunIn,
+    Status,
+)
+from cressey.core.proxy import MCP_PATH
 from cressey.core.runs import Runs
 
 router = APIRouter()
@@ -34,6 +44,31 @@ async def get_run(run_id: str, runs: RunsDep) -> Run:
     if run is None:
         raise HTTPException(404)
     return run
+
+
+@router.post("/runs/{run_id}/report", status_code=204)
+async def report(
+    run_id: str,
+    body: ReportIn,
+    runs: RunsDep,
+    authorization: Annotated[str, Header()] = "",
+) -> None:
+    """The agent's final report. It ends the run; only the run's own key may send it."""
+    run = runs.by_key(authorization.removeprefix("Bearer ").strip())
+    if run is None or run.id != run_id:
+        raise HTTPException(403)
+    runs.end(run, body.text)
+
+
+@router.get("/status")
+async def status(request: Request, runs: RunsDep) -> Status:
+    head, count = runs.log.head()
+    return Status(
+        mode="guard",
+        model_mode=request.app.state.settings.model_mode,
+        mcp_path=MCP_PATH,
+        log=LogHead(hash=head, count=count, intact=verify(runs.log.events) is None),
+    )
 
 
 @router.get("/holds")

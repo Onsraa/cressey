@@ -51,12 +51,14 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/guides` | `GuideIncident` | 201 `Guide`, including when status is `unavailable` |
 | GET | `/api/guides/{id}` | — | 200 `Guide`, or 404 |
 | POST | `/api/guides/{id}/why` | `{"question": str}`, 3–500 characters | 200 `WhyAnswer`, 404 or 422 |
-| POST | `/api/runs` | `{"task": str, "mandate": {"may_destroy": [tables], "may_send_to": [addresses or "@domain"]}}` | 201 `{"id", "key"}`. The key is shown once; Cressey keeps only its hash |
+| POST | `/api/runs` | `{"task": str, "mandate": {"may_destroy": [tables], "may_send_to": [addresses or "@domain"]}, "visibility": "tools"\|"messages"\|"reasoning", "kind": "live"\|"replay"\|"control"}` | 201 `{"id", "key"}`. The key is shown once; Cressey keeps only its hash |
 | GET | `/api/runs` | — | 200 runs with their steps |
 | GET | `/api/runs/{id}` | — | 200 `Run`, or 404 |
 | GET | `/api/holds` | — | 200 calls waiting for a human |
 | POST | `/api/runs/{id}/steps/{n}/approve` | — | 204, or 404 when that step isn't held |
 | POST | `/api/runs/{id}/steps/{n}/reject` | — | 204, or 404 |
+| POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends. 403 with another key |
+| GET | `/api/status` | — | 200 `{"mode": "guard", "model_mode", "mcp_path", "log": {"hash", "count", "intact"}}` |
 | any | `/mcp` | MCP over streamable HTTP, `Authorization: Bearer <run key>` | the proxied tools |
 
 Types are in `backend/src/cressey/guide/models.py`. The web app uses the generated `web/src/api/schema.d.ts`.
@@ -70,8 +72,12 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 - **While a call is held,** the run's key is revoked: its other calls are denied.
   - Approval runs the call once and reinstates the key.
   - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.
-- **Records:** every call becomes a step with its risk class and status. What the agent read is kept in memory for tracing and is never served by the API.
-- **State:** runs and holds live in memory for the life of the process.
+- **Run kinds:** `live` holds and waits for a human. `control` (« Observateur ») is logged and never held. `replay` never waits: a call that would be held is blocked and marked `would_hold`, and that replay fails.
+- **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`.
+  - What the agent read, and the raw arguments, are kept in memory for tracing and never served.
+  - Each result is scanned for secrets (`core/secret_scan.py`, first 16 KB, off the event loop). The step lists them by name and fingerprint. From then on their values are replaced by `[secret:<fingerprint>]` in served arguments and in the report.
+- **Event log:** every run, call, status change, result and report is appended to the hash-chained log (`core/eventlog.py`). `GET /api/status` serves its head and whether the chain verifies.
+- **State:** runs, holds and the log live in memory for the life of the process.
 
 ## Web
 - **Stack:** Vite 8, React 19, TypeScript 6, Tailwind v4, shadcn (radix, preset nova), Biome.

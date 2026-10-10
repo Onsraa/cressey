@@ -3,21 +3,30 @@ waiting for a human."""
 
 import asyncio
 import hashlib
+import json
 import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 from pydantic import JsonValue
 
+from cressey.core.eventlog import EventLog
 from cressey.core.models import Hold, Risk, Run, RunCreated, RunIn, Step
+from cressey.core.secret_scan import Secret, redact
 
 
 def _digest(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
 class Runs:
-    def __init__(self) -> None:
+    def __init__(self, log: EventLog) -> None:
+        self.log = log
         self._runs: dict[str, Run] = {}
         self._keys: dict[str, str] = {}  # sha256 of the key -> run id
         self._waiting: dict[tuple[str, int], asyncio.Future[bool]] = {}
@@ -27,11 +36,14 @@ class Runs:
             id=uuid.uuid4().hex[:12],
             task=spec.task,
             mandate=spec.mandate,
-            started_at=datetime.now(UTC).isoformat(),
+            visibility=spec.visibility,
+            kind=spec.kind,
+            started_at=_now().isoformat(),
         )
         key = "csy_" + secrets.token_urlsafe(24)
         self._runs[run.id] = run
         self._keys[_digest(key)] = run.id
+        self.log.append("run", {"run": run.id, "task": run.task})
         return RunCreated(id=run.id, key=key)
 
     def get(self, run_id: str) -> Run | None:
@@ -45,11 +57,52 @@ class Runs:
         return list(self._runs.values())
 
     def add_step(
-        self, run: Run, tool: str, args: dict[str, JsonValue], risk: Risk
+        self,
+        run: Run,
+        tool: str,
+        raw_args: dict[str, JsonValue],
+        risk: Risk,
+        reason: str | None,
     ) -> Step:
-        step = Step(n=len(run.steps) + 1, tool=tool, args=args, risk=risk)
+        shown = redact(json.dumps(raw_args, ensure_ascii=False), run.known)
+        step = Step(
+            n=len(run.steps) + 1,
+            tool=tool,
+            args=shown,
+            risk=risk,
+            reason=reason,
+            raw_args=raw_args,
+        )
         run.steps.append(step)
+        self._log(run, step, "call", tool=tool, args=shown, risk=risk, reason=reason)
         return step
+
+    def mark(
+        self, run: Run, step: Step, status: Literal["denied", "would_hold"]
+    ) -> None:
+        step.status = status
+        self._log(run, step, "status", status=status)
+
+    def end(self, run: Run, report: str) -> None:
+        run.report, run.ended_at = redact(report, run.known), _now().isoformat()
+        self.log.append("report", {"run": run.id, "report": run.report})
+
+    def record(
+        self,
+        run: Run,
+        step: Step,
+        is_error: bool,
+        text: str,
+        found: list[tuple[str, Secret]],
+    ) -> None:
+        step.is_error, step.result = is_error, text
+        step.secrets = [s for _, s in found]
+        run.known |= {value: s.fingerprint for value, s in found}
+        fingerprints: list[JsonValue] = [s.fingerprint for s in step.secrets]
+        self._log(run, step, "result", is_error=is_error, secrets=fingerprints)
+
+    def _log(self, run: Run, step: Step, kind: str, **data: JsonValue) -> None:
+        self.log.append(kind, {"run": run.id, "n": step.n, **data})
 
     def holds(self) -> list[Hold]:
         return [
@@ -61,6 +114,8 @@ class Runs:
         """Wait for a human decision. The run's key stays revoked unless it's approved."""
         run.revoked = True
         step.status = "held"
+        step.held_until = (_now() + timedelta(seconds=timeout)).isoformat()
+        self._log(run, step, "status", status="held")
         key = (run.id, step.n)
         self._waiting[key] = decision = asyncio.get_running_loop().create_future()
         try:
@@ -73,6 +128,8 @@ class Runs:
                 step.status = "expired"
             else:
                 step.status = "approved" if decision.result() else "rejected"
+            step.decided_at = _now().isoformat()
+            self._log(run, step, "status", status=step.status)
         run.revoked = step.status != "approved"
         return not run.revoked
 

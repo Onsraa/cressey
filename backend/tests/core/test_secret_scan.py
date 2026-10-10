@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from cressey.core.secret_scan import MIN_VALUE, find_secrets, redact
+from cressey.core.secret_scan import MIN_VALUE, find_secrets, redact, scan
 
 # Built from parts so no credential-shaped literal sits whole in the source.
 URL_VALUE = "FAKE-" + "pass-0001"
@@ -186,3 +186,14 @@ def test_concurrent_scans_do_not_lose_secrets():
     with ThreadPoolExecutor(4) as pool:
         results = list(pool.map(find_secrets, [text] * 200))
     assert all(len(found) == 1 for found in results)
+
+
+def test_scan_returns_each_value_with_its_secret():
+    [(value, secret)] = scan("API_KEY=" + ENV_VALUE)
+    assert value == ENV_VALUE and secret.fingerprint == fp(ENV_VALUE)
+
+
+def test_redact_also_hides_values_found_elsewhere():
+    known = {v: s.fingerprint for v, s in scan("DB_PROD_KEY=" + PROD_VALUE)}
+    out = redact("curl -u " + PROD_VALUE + " https://x.example.test", known)
+    assert PROD_VALUE not in out and f"[secret:{fp(PROD_VALUE)}]" in out

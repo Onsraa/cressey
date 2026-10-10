@@ -107,6 +107,43 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/runs/{run_id}/report": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Report
+		 * @description The agent's final report. It ends the run; only the run's own key may send it.
+		 */
+		post: operations["report_api_runs__run_id__report_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/status": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Status */
+		get: operations["status_api_status_get"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/holds": {
 		parameters: {
 			query?: never;
@@ -226,6 +263,15 @@ export interface components {
 			step: components["schemas"]["Step"];
 		};
 		JsonValue: unknown;
+		/** LogHead */
+		LogHead: {
+			/** Hash */
+			hash: string;
+			/** Count */
+			count: number;
+			/** Intact */
+			intact: boolean;
+		};
 		/** Mandate */
 		Mandate: {
 			/**
@@ -239,6 +285,11 @@ export interface components {
 			 */
 			may_send_to: string[];
 		};
+		/** ReportIn */
+		ReportIn: {
+			/** Text */
+			text: string;
+		};
 		/** Run */
 		Run: {
 			/** Id */
@@ -246,6 +297,16 @@ export interface components {
 			/** Task */
 			task: string;
 			mandate: components["schemas"]["Mandate"];
+			/**
+			 * Visibility
+			 * @enum {string}
+			 */
+			visibility: "tools" | "messages" | "reasoning";
+			/**
+			 * Kind
+			 * @enum {string}
+			 */
+			kind: "live" | "replay" | "control";
 			/** Started At */
 			started_at: string;
 			/**
@@ -258,6 +319,10 @@ export interface components {
 			 * @default []
 			 */
 			steps: components["schemas"]["Step"][];
+			/** Report */
+			report?: string | null;
+			/** Ended At */
+			ended_at?: string | null;
 		};
 		/** RunCreated */
 		RunCreated: {
@@ -271,6 +336,42 @@ export interface components {
 			/** Task */
 			task: string;
 			mandate?: components["schemas"]["Mandate"];
+			/**
+			 * Visibility
+			 * @default tools
+			 * @enum {string}
+			 */
+			visibility: "tools" | "messages" | "reasoning";
+			/**
+			 * Kind
+			 * @default live
+			 * @enum {string}
+			 */
+			kind: "live" | "replay" | "control";
+		};
+		/** Secret */
+		Secret: {
+			/** Kind */
+			kind: string;
+			/** Name */
+			name: string | null;
+			/** Fingerprint */
+			fingerprint: string;
+			/** Line */
+			line: number;
+		};
+		/** Status */
+		Status: {
+			/**
+			 * Mode
+			 * @constant
+			 */
+			mode: "guard";
+			/** Model Mode */
+			model_mode: string;
+			/** Mcp Path */
+			mcp_path: string;
+			log: components["schemas"]["LogHead"];
 		};
 		/** Step */
 		Step: {
@@ -279,9 +380,7 @@ export interface components {
 			/** Tool */
 			tool: string;
 			/** Args */
-			args: {
-				[key: string]: components["schemas"]["JsonValue"];
-			};
+			args: string;
 			/**
 			 * Risk
 			 * @enum {string}
@@ -298,7 +397,8 @@ export interface components {
 				| "approved"
 				| "rejected"
 				| "expired"
-				| "denied";
+				| "denied"
+				| "would_hold";
 			/** Reason */
 			reason?: string | null;
 			/**
@@ -306,6 +406,15 @@ export interface components {
 			 * @default false
 			 */
 			is_error: boolean;
+			/**
+			 * Secrets
+			 * @default []
+			 */
+			secrets: components["schemas"]["Secret"][];
+			/** Held Until */
+			held_until?: string | null;
+			/** Decided At */
+			decided_at?: string | null;
 		};
 		/** Unit */
 		Unit: {
@@ -566,6 +675,61 @@ export interface operations {
 				};
 				content: {
 					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	report_api_runs__run_id__report_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["ReportIn"];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	status_api_status_get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Status"];
 				};
 			};
 		};

@@ -7,7 +7,8 @@ from fastapi.staticfiles import StaticFiles
 from starlette.routing import Route
 
 from cressey.core.api import router as core_router
-from cressey.core.proxy import build_mcp, load_policy
+from cressey.core.eventlog import EventLog
+from cressey.core.proxy import MCP_PATH, build_mcp, load_policy
 from cressey.core.runs import Runs
 from cressey.demo.tools import demo_tools
 from cressey.guide.api import router as guide_router
@@ -18,13 +19,13 @@ from cressey.settings import Settings
 def create_app(settings: Settings | None = None) -> FastAPI:
     s = settings or Settings()
     load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
-    runs = Runs()
+    runs = Runs(EventLog())
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
     mcp = build_mcp(
         runs, load_policy(DATA / "policy.yaml"), demo_tools(demo), s.hold_timeout
     )
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
-    app.state.runs = runs
+    app.state.runs, app.state.settings = runs, s
     api = APIRouter(prefix="/api")
 
     @api.get("/health")
@@ -43,7 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(api)
     # The URL agents put in their MCP config. Registered before the SPA fallback.
-    app.router.routes.append(Route("/mcp", endpoint=mcp))
+    app.router.routes.append(Route(MCP_PATH, endpoint=mcp))
     _mount_web(app, s)
     return app
 

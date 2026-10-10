@@ -1,12 +1,14 @@
 """The proxy over real HTTP: a uvicorn server in a thread, fastmcp's client as the agent."""
 
 import asyncio
+import json
 import socket
 import sqlite3
 import threading
 import time
 from collections.abc import Generator
 from contextlib import closing, contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx2
@@ -75,10 +77,9 @@ async def api(base: str, method: str, path: str, **kw) -> httpx2.Response:
         return await h.request(method, path, **kw)
 
 
-async def new_run(base: str, mandate: dict | None = None) -> dict:
-    r = await api(
-        base, "POST", "/api/runs", json={"task": TASK, "mandate": mandate or {}}
-    )
+async def new_run(base: str, mandate: dict | None = None, **extra: str) -> dict:
+    body = {"task": TASK, "mandate": mandate or {}, **extra}
+    r = await api(base, "POST", "/api/runs", json=body)
     assert r.status_code == 201
     return r.json()
 
@@ -190,3 +191,97 @@ async def test_deciding_a_step_that_is_not_held_is_404(served):
     r = await api(served, "POST", f"/api/runs/{run['id']}/steps/1/approve")
     assert r.status_code == 404
     assert (await api(served, "GET", "/api/runs/nope")).status_code == 404
+
+
+async def test_secret_values_never_leave_through_the_api(served):
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": ".env.prod"})
+        call = asyncio.create_task(a.call_tool("run_sql", DELETE, raise_on_error=False))
+        hold = await next_hold(served)
+        n = hold["step"]["n"]
+        await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+        await call
+    pages = [
+        (await api(served, "GET", path)).text
+        for path in (f"/api/runs/{run['id']}", "/api/runs", "/api/status")
+    ]
+    assert all(PROD_KEY not in text for text in [json.dumps(hold), *pages])
+    read, sql = await steps(served, run)
+    assert read["secrets"][0]["name"] == "DB_PROD_KEY" and "[secret:" in sql["args"]
+
+
+async def test_a_hold_shows_its_deadline_and_the_decision_its_time(served):
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        call = asyncio.create_task(a.call_tool("run_sql", DELETE, raise_on_error=False))
+        hold = await next_hold(served)
+        n = hold["step"]["n"]
+        await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+        await call
+    left = datetime.fromisoformat(hold["step"]["held_until"]) - datetime.now(UTC)
+    [step] = await steps(served, run)
+    assert timedelta(seconds=5) < left <= timedelta(seconds=10) and step["decided_at"]
+
+
+async def test_a_run_declares_what_cressey_sees(served):
+    body = {"task": TASK, "visibility": "messages"}
+    created = (await api(served, "POST", "/api/runs", json=body)).json()
+    run = (await api(served, "GET", f"/api/runs/{created['id']}")).json()
+    assert run["visibility"] == "messages"
+
+
+async def test_status_shows_the_modes_and_an_intact_log_head(served):
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": "README.md"})
+    s = (await api(served, "GET", "/api/status")).json()
+    assert (s["mode"], s["model_mode"], s["mcp_path"]) == ("guard", "live", "/mcp")
+    assert s["log"]["intact"] and s["log"]["count"] >= 1 and len(s["log"]["hash"]) == 64
+
+
+async def test_a_control_run_is_logged_but_never_held(served, tmp_path):
+    run = await new_run(served, kind="control")
+    async with agent(served, run["key"]) as a:
+        r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
+    assert not r.is_error and users(tmp_path) == 0
+    [step] = await steps(served, run)
+    assert (step["status"], step["reason"]) == (
+        "would_hold",
+        "SQL destructeur hors mandat : users",
+    )
+
+
+async def test_a_replay_never_waits_and_blocks_what_would_be_held(served, tmp_path):
+    run = await new_run(served, kind="replay")
+    async with agent(served, run["key"]) as a:
+        r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
+    assert r.is_error and users(tmp_path) == 5
+    assert [s["status"] for s in await steps(served, run)] == ["would_hold"]
+    assert (await api(served, "GET", "/api/holds")).json() == []
+
+
+async def test_the_agent_report_ends_the_run(served):
+    run = await new_run(served)
+    r = await api(
+        served,
+        "POST",
+        f"/api/runs/{run['id']}/report",
+        json={"text": "Tous les tests passent."},
+        headers={"Authorization": f"Bearer {run['key']}"},
+    )
+    page = (await api(served, "GET", f"/api/runs/{run['id']}")).json()
+    assert r.status_code == 204 and page["report"] == "Tous les tests passent."
+    assert page["ended_at"]
+
+
+async def test_only_the_run_key_can_post_its_report(served):
+    run, other = await new_run(served), await new_run(served)
+    r = await api(
+        served,
+        "POST",
+        f"/api/runs/{run['id']}/report",
+        json={"text": "x"},
+        headers={"Authorization": f"Bearer {other['key']}"},
+    )
+    assert r.status_code == 403

@@ -85,14 +85,14 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Runs and steps | `GET /api/runs`, `GET /api/runs/{id}` | exists |
 | Holds and decisions | `GET /api/holds`, `POST /api/runs/{id}/steps/{n}/approve` and `/reject` | exists |
 | Guides and « Pourquoi ? » | `GET /api/guides/{id}`, `POST /api/guides/{id}/why`. The backend creates the guides when an incident fires; the dashboard never calls `POST /api/guides` | exists |
-| Secret redaction | the secrets `core/secret_scan.py` finds in what the agent read, replaced in steps, holds and traces before they are served | the scanner exists; wiring it into the API is still to add, before the demo |
-| Hold countdown and decision time | a deadline and a decision time on `Hold` | to add |
+| Secret redaction | the secrets `core/secret_scan.py` finds in what the agent read, replaced in steps, holds and traces before they are served | exists: served `args` and the report carry `[secret:<fingerprint>]`; each step's `secrets` gives name, kind, fingerprint and line |
+| Hold countdown and decision time | a deadline and a decision time on `Hold` | exists: `held_until` and `decided_at` on the step |
 | Gauges and leg chart | each step's leg scores, confirmation and facts | to add, with triangle scoring |
-| Run kind, mode, end, what Cressey sees | per run | to add |
-| Agent report | the scripted agent posts its final report, which also ends the run | to add |
+| Run kind, mode, end, what Cressey sees | per run | exists: `kind` (`control` is the Observateur mode), `ended_at`, `visibility` |
+| Agent report | the scripted agent posts its final report, which also ends the run | exists: `POST /api/runs/{id}/report` with the run key |
 | Incidents, fixes, replay, control run | incident endpoints, with a guide status and id per owner | to add |
-| Integrity strip | the log head: hash and count | to add |
-| Header and waiting state | status: protection mode, model mode, MCP URL | to add |
+| Integrity strip | the log head: hash and count | exists: `GET /api/status` → `log` (`hash`, `count`, `intact`) |
+| Header and waiting state | status: protection mode, model mode, MCP URL | exists: `GET /api/status` (`mode`, `model_mode`, `mcp_path`) |
 | Évaluation | the eval reports, with their date and their misses (`backend/data/eval/report-dev.json` exists) | to add |
 
 The interface polls the runs and holds about once a second. It moves to SSE only if polling lags.
