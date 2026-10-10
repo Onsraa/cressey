@@ -60,7 +60,7 @@ modèle de décision : Jev (étiquettes du triangle, reclassement des guides)
 
 ```bash
 cp .env.example .env          # identifiants AWS (Bedrock), TYPESAFE_API_KEY (Jev)
-./dev.sh                      # backend :8000 + web :5173 (proxy /api)
+./dev.sh                      # backend :8000 + web :5173 (proxy /api, /mcp)
 docker compose up --build     # image unique : web + API sur :8000
 ```
 

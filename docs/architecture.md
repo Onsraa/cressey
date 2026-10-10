@@ -16,7 +16,7 @@
 | Trap keys: decoy keys in the workspace; any use is held at once and traced to where it was read | `core/floor.py` (`trap`), `decoys` in `backend/data/policy.yaml`, `demo/tools.py` (`.env.admin`) | built 10-10 |
 | Demo tools (synthetic): a workspace holding a fake production key and a trap key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
 | Demo agent: a scripted replay of synthetic sessions, played through Cressey | `backend/src/cressey/demo/agent.py`, `backend/data/sessions/` (format in `sessions.md`) | built |
-| Dashboard | `web/src/` | skeleton only |
+| Dashboard | `web/src/` | built: Run en direct, Incidents, Évaluation, Réglages (`dashboard.md`), after Claude Design v3 |
 | Second way in: Claude Code hook. `POST /hook/claude` runs the same decision as `on_call_tool`; `http` hooks in the demo workspace's `.claude/settings.json` | `core/api.py`, `core/proxy.py` | decided 10-10, to build after the 21:30 go/no-go |
 
 ## Request flow (target)
@@ -152,7 +152,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 ## Run
 | Command | What it does |
 |---|---|
-| `./dev.sh` | Backend on :8000 and Vite on :5173, which proxies `/api` |
+| `./dev.sh` | Backend on :8000 and Vite on :5173, which proxies `/api` and `/mcp` |
 | `docker compose up --build` | One image, web and API on :8000. `.env` is optional |
 | `cd backend && uv run python -m cressey.guide.corpus build` | Rebuilds `data/corpus.json` |
 | `cd backend && uv run python -m cressey.guide.eval --split dev` | Writes `data/eval/report-dev.json` |
