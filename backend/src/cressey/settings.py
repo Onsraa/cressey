@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     # The guides' rewriter, writer and embedder: OpenAI direct, or Amazon Bedrock (GPT through
     # the Responses API, Cohere Embed). The re-ranker is `reranker`.
     models: Literal["openai", "bedrock"] = Field(
-        "openai", validation_alias="CRESSEY_MODELS"
+        "bedrock", validation_alias="CRESSEY_MODELS"
     )
     model_mode: Literal["live", "record", "replay", "fallback"] = Field(
         "live", validation_alias="CRESSEY_MODEL_MODE"

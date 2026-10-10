@@ -74,7 +74,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 - **Solution :** Les passerelles du marché jugent l'action ; Cressey traite les conditions qui la produisent, avec le triangle de la fraude (pression, opportunité, rationalisation). Branché en une ligne comme proxy MCP, il retient les actions irréversibles hors mandat. Sous pression, il offre une porte de sortie à l'agent et réduit ses droits. Il remonte à la source et envoie à chaque propriétaire, y compris l'auteur de la tâche, un guide de correction sourcé (ANSSI, MITRE ATLAS, OWASP).
 - **Stack :**
   - Python : FastAPI et Pydantic, proxy fastmcp ;
-  - modèles : Jev (décisions typées avec confiance), gpt-5.5 et gpt-5.4-mini, recherche hybride BM25 et text-embedding-3-small ; Strands Decider 2B et Cohere Rerank 3.5 (Bedrock) mesurés, moins bons ;
+  - modèles : Jev (décisions typées avec confiance) ; sur Amazon Bedrock, GPT-5.5 rédige, GPT-5.6 Sol réécrit et Cohere Embed Multilingual alimente la recherche hybride avec BM25 ; Strands Decider 2B et Cohere Rerank 3.5 mesurés, moins bons ;
   - web : React, Vite, Tailwind et shadcn ;
   - livraison : Docker, CI avec ggshield.
 
@@ -82,6 +82,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | Problem | Fix |
 |---|---|
 | The venue Wi-Fi goes down | Switch to the 4G hotspot. If the models don't answer, `CRESSEY_MODEL_MODE=fallback` serves the recorded guides |
+| Bedrock is unreachable, or the AWS credentials expired | Fallback mode serves the recorded guides. For new incidents, set `CRESSEY_MODELS=openai` and restart, or paste fresh credentials from Workshop Studio |
 | A model API is down | Same: fallback mode. A guide comes back `unavailable` with its sources, never a crash |
 | The live demo crashes | Play the 2–3 minute video. Prepare it before 09:30 |
 | Claude Code can't reach its model on stage | Play the recorded hook beat. The main demo is the scripted replay and doesn't need it |

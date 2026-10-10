@@ -46,8 +46,8 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ outils 
         détection : plancher + triangle (le code décide ; le modèle de décision ne fait qu'étiqueter)
                  │ incident
                  ▼
-        guide : réécriture (gpt-5.4-mini) → BM25 + embeddings (fusion RRF)
-                → reclassement (seuil 0,4) → rédaction (gpt-5.5) → citations vérifiées par le code
+        guide : réécriture (GPT-5.6 Sol, Bedrock) → BM25 + embeddings Cohere (fusion RRF)
+                → reclassement Jev (seuil 0,4) → rédaction (GPT-5.5, Bedrock) → citations vérifiées par le code
 
 modèle de décision : Jev (étiquettes du triangle, reclassement des guides)
                  │
@@ -59,12 +59,12 @@ modèle de décision : Jev (étiquettes du triangle, reclassement des guides)
 **Prérequis :** uv 0.12, Bun 1.4, Docker.
 
 ```bash
-cp .env.example .env          # OPENAI_API_KEY, TYPESAFE_API_KEY (Jev)
+cp .env.example .env          # identifiants AWS (Bedrock), TYPESAFE_API_KEY (Jev)
 ./dev.sh                      # backend :8000 + web :5173 (proxy /api)
 docker compose up --build     # image unique : web + API sur :8000
 ```
 
-**Modèles sur Bedrock :** `CRESSEY_MODELS=bedrock`, avec les identifiants AWS dans `.env` : GPT-5.6 Sol réécrit, GPT-5.5 rédige et Cohere Embed Multilingual v3 vectorise. Le défaut reste OpenAI.
+**Modèles sur Bedrock (par défaut) :** avec les identifiants AWS dans `.env`, GPT-5.6 Sol réécrit, GPT-5.5 rédige et Cohere Embed Multilingual v3 vectorise. `CRESSEY_MODELS=openai` repasse sur OpenAI.
 
 **Hors ligne (démo) :** `CRESSEY_MODEL_MODE=fallback` sert les réponses enregistrées si un modèle ne répond pas.
 

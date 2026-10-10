@@ -41,7 +41,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | Field | Env var | Default |
 |---|---|---|
 | `openai_api_key` | `OPENAI_API_KEY` | none. An empty value counts as missing. Not needed with `CRESSEY_MODELS=bedrock` |
-| `models` | `CRESSEY_MODELS` | `openai`. `bedrock` moves the guides' rewriter, writer and embedder to Amazon Bedrock (« Deployment ») |
+| `models` | `CRESSEY_MODELS` | `bedrock` (decided 10-10): the guides' rewriter, writer and embedder run on Amazon Bedrock (« Deployment »). `openai` uses OpenAI directly |
 | `typesafe_api_key` | `TYPESAFE_API_KEY` | none. An empty value counts as missing. Jev is the triangle's decision model |
 | `decider_url` | `CRESSEY_DECIDER_URL` | none: Jev's API. A URL, such as the local `strands-decider serve` on port 8100, switches the triangle's decision model to that server |
 | `web_dir` | `CRESSEY_WEB_DIR` | `web` |
@@ -151,7 +151,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 ## Deployment
 - **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The API has no authentication.
 - **After the event: AWS** (the Bedrock partnership covers hosting and models).
-- **Built, off by default:** Bedrock for the re-ranker (`CRESSEY_RERANKER=bedrock`, Rerank 3.5) and for the rewriter, writer and embedder (`CRESSEY_MODELS=bedrock`). **Not built yet:** the container deploy.
+- **Built:** Bedrock runs the guides' rewriter, writer and embedder by default (`CRESSEY_MODELS=bedrock`). Bedrock for the re-ranker (`CRESSEY_RERANKER=bedrock`, Rerank 3.5) is off by default. **Not built yet:** the container deploy.
 - **`CRESSEY_MODELS=bedrock`** (adapters in `clients.py`; measured in `evaluation.md`, « Bedrock models »):
   - **Rewriter and writer:** the same `responses.parse(text_format=…, store=False)` calls, on the Responses API of `bedrock-runtime` (`https://bedrock-runtime.<region>.amazonaws.com/openai/v1`). Their models are inference profiles: `us.openai.gpt-5.6-sol` rewrites, `us.openai.gpt-5.5` writes.
   - **Auth:** the openai SDK's Bedrock provider (`openai.providers.bedrock`, endpoint `runtime`, in openai 3.28) signs each request with SigV4 from the AWS credentials. No Bedrock API key is minted, so none expires before the credentials do.

@@ -53,7 +53,7 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 - **Corpus vectors** (`embeddings.npy`, local only): rebuilt when the corpus, the embedding model or the row count changes. Switching `CRESSEY_MODELS` re-embeds the corpus once and overwrites the file.
 
 ## Model calls
-- **Providers** (`CRESSEY_MODELS`): `openai` by default. `bedrock` sends the rewrite and the writing to the Responses API of `bedrock-runtime`, each request signed with SigV4 from the AWS credentials, and the embeddings to Cohere Embed through boto3. Same prompts, same structured output (`evaluation.md`, « Bedrock models »).
+- **Providers** (`CRESSEY_MODELS`): `bedrock` by default (10-10). It sends the rewrite and the writing to the Responses API of `bedrock-runtime`, each request signed with SigV4 from the AWS credentials, and the embeddings to Cohere Embed through boto3. Same prompts, same structured output (`evaluation.md`, « Bedrock models »).
 - `store=False` on every Responses call, OpenAI or Bedrock: the provider keeps nothing (both keep responses 30 days by default).
 - Fail fast, so `fallback` reaches the cache quickly: OpenAI and Bedrock 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry.
 - A refusal or a cut-off structured answer counts as unavailable.

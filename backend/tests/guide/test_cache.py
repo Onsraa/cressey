@@ -119,4 +119,4 @@ def test_the_bedrock_models_get_their_own_cache_keys(tmp_path):
         s.rewrite_model,
         s.writer_model,
     )
-    assert wri.model != Settings(_env_file=None).writer_model
+    assert wri.model != Settings(_env_file=None, models="openai").writer_model

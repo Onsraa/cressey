@@ -92,7 +92,7 @@ def test_sdk_errors_become_model_unavailable():
 def test_missing_key_raises_model_unavailable_at_first_call():
     from cressey.settings import Settings
 
-    w = OpenAIWriter.from_settings(Settings(_env_file=None))
+    w = OpenAIWriter.from_settings(Settings(_env_file=None, models="openai"))
     with pytest.raises(ModelUnavailable, match="missing key"):
         w.write(INC, UNITS)
 
@@ -157,21 +157,14 @@ def test_openai_client_fails_fast(monkeypatch):
     )
 
 
-def test_the_guide_models_are_openai_by_default_and_bedrock_an_option():
+def test_openai_direct_is_one_setting_away():
     from cressey.settings import Settings
 
-    default = Settings(_env_file=None)
-    bedrock = Settings(_env_file=None, models="bedrock")
-    assert (
-        default.models,
-        default.rewrite_model,
-        default.writer_model,
-        default.embedding_model,
-    ) == ("openai", "gpt-5.4-mini", "gpt-5.5", "text-embedding-3-small")
-    assert (bedrock.rewrite_model, bedrock.writer_model, bedrock.embedding_model) == (
-        "us.openai.gpt-5.6-sol",
-        "us.openai.gpt-5.5",
-        "cohere.embed-multilingual-v3",
+    s = Settings(_env_file=None, models="openai")
+    assert (s.rewrite_model, s.writer_model, s.embedding_model) == (
+        "gpt-5.4-mini",
+        "gpt-5.5",
+        "text-embedding-3-small",
     )
 
 
@@ -382,3 +375,16 @@ def test_live_bedrock_rewrites_and_embeds():
     assert fr.strip() and en.strip()
     v = BedrockEmbedder.from_settings(s).embed([fr], query=True)
     assert v.shape[0] == 1 and np.isclose(np.linalg.norm(v), 1.0)
+
+
+def test_the_guides_run_on_bedrock_by_default_for_the_event():
+    """10-10, the user's call after the dev eval: Bedrock as good or better, and faster."""
+    from cressey.settings import Settings
+
+    s = Settings(_env_file=None)
+    assert (s.models, s.rewrite_model, s.writer_model, s.embedding_model) == (
+        "bedrock",
+        "us.openai.gpt-5.6-sol",
+        "us.openai.gpt-5.5",
+        "cohere.embed-multilingual-v3",
+    )
