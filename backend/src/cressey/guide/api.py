@@ -4,12 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from cressey.guide.clients import (
-    JevReranker,
-    OpenAIEmbedder,
-    OpenAIRewriter,
-    OpenAIWriter,
-)
+from cressey.guide.cache import wrap_all
 from cressey.guide.corpus import DATA, load_corpus
 from cressey.guide.models import Guide, GuideIncident, WhyAnswer
 from cressey.guide.pipeline import GuidePipeline
@@ -23,18 +18,11 @@ router = APIRouter(prefix="/guides", tags=["guides"])
 @cache
 def get_pipeline() -> GuidePipeline:
     s = Settings()
+    embedder, rewriter, reranker, writer = wrap_all(s)
     retriever = Retriever(
-        load_corpus(DATA / "corpus.json"),
-        OpenAIEmbedder.from_settings(s),
-        DATA / "embeddings.npy",
+        load_corpus(DATA / "corpus.json"), embedder, DATA / "embeddings.npy"
     )
-    return GuidePipeline(
-        retriever,
-        OpenAIRewriter.from_settings(s),
-        JevReranker.from_settings(s),
-        OpenAIWriter.from_settings(s),
-        s.relevance_min,
-    )
+    return GuidePipeline(retriever, rewriter, reranker, writer, s.relevance_min)
 
 
 @cache

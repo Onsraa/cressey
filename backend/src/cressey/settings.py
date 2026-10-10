@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -16,6 +17,10 @@ class Settings(BaseSettings):
     rewrite_model: str = "gpt-5.4-mini"
     writer_model: str = "gpt-5.5"  # S6: 23/23 verified quotes vs 19/21 for gpt-5.4-mini
     embedding_model: str = "text-embedding-3-small"
+    model_mode: Literal["live", "record", "replay", "fallback"] = Field(
+        "live", validation_alias="CRESSEY_MODEL_MODE"
+    )
+    cache_dir: Path = Field(Path("data/cache"), validation_alias="CRESSEY_CACHE_DIR")
     relevance_min: float = (
         0.4  # S6 calibration: keeps 51/55 expected passages, 16/185 others
     )
