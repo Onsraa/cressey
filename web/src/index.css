@@ -2,12 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource/vt323";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
 	--font-heading: var(--font-sans);
 	--font-sans: "Geist Variable", sans-serif;
+	--font-mono: "Geist Mono Variable", ui-monospace, monospace;
+	--font-pixel: "VT323", monospace;
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,8 +53,8 @@
 }
 
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
+	--background: #f3f3f1;
+	--foreground: #1e1e1e;
 	--card: oklch(1 0 0);
 	--card-foreground: oklch(0.145 0 0);
 	--popover: oklch(1 0 0);
@@ -64,7 +68,7 @@
 	--accent: oklch(0.97 0 0);
 	--accent-foreground: oklch(0.205 0 0);
 	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.922 0 0);
+	--border: #e4e4e2;
 	--input: oklch(0.922 0 0);
 	--ring: oklch(0.708 0 0);
 	--chart-1: oklch(0.87 0 0);
@@ -126,5 +130,195 @@
 	}
 	html {
 		@apply font-sans;
+	}
+}
+
+/* Cressey: the Claude Design v3 palette. Square corners, 1.2px ink borders. */
+@theme {
+	--color-paper: #f3f3f1;
+	--color-surface: #fefefe;
+	--color-ink: #1e1e1e;
+	--color-line: #e4e4e2;
+	--color-line-2: #c4c4c4;
+	--color-mute: #4a4a4a;
+	--color-mute-2: #6b6b6b;
+	--color-mute-3: #a3a3a0;
+	--color-p: #3d64d8;
+	--color-o: #0e8f86;
+	--color-r: #8a55d1;
+	--color-held: #ffd6ce;
+	--color-held-bd: #e27865;
+	--color-held-fg: #9f2a16;
+	--color-held-strong: #b8331c;
+	--color-ok: #dcf2e3;
+	--color-ok-bd: #5db583;
+	--color-ok-fg: #17653a;
+	--color-ok-strong: #1f8a4c;
+	--color-warn: #fbefcf;
+	--color-warn-bd: #d9a640;
+	--color-warn-fg: #7a4e00;
+	--color-info: #e3eafb;
+	--color-info-bd: #7f9ce4;
+	--color-info-fg: #244ba6;
+	--color-grey: #ededeb;
+	--color-grey-bd: #b9b9b6;
+}
+
+@layer base {
+	html,
+	body,
+	#root {
+		height: 100%;
+		margin: 0;
+	}
+	body {
+		background: var(--color-paper);
+		color: var(--color-ink);
+		font-size: 14px;
+		line-height: 1.45;
+		overflow: hidden;
+	}
+	::selection {
+		background: var(--color-held);
+		color: var(--color-ink);
+	}
+	:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 2px;
+	}
+	summary {
+		list-style: none;
+		cursor: pointer;
+	}
+	summary::-webkit-details-marker {
+		display: none;
+	}
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+	::-webkit-scrollbar-thumb {
+		background: var(--color-line-2);
+		border: 2px solid var(--color-paper);
+	}
+}
+
+@layer components {
+	.panel {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		border: 1.2px solid var(--color-ink);
+		background: var(--color-surface);
+		box-shadow:
+			0 1px 2px rgba(30, 30, 30, 0.04),
+			0 12px 28px -18px rgba(30, 30, 30, 0.22);
+	}
+	.panel-head {
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		height: 34px;
+		padding: 0 14px;
+		background: var(--color-ink);
+		color: var(--color-surface);
+		font-family: var(--font-pixel);
+		font-size: 19px;
+		line-height: 1;
+		letter-spacing: 0.04em;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 34px;
+		padding: 0 14px;
+		border: 1.2px solid var(--color-ink);
+		background: var(--color-surface);
+		color: var(--color-ink);
+		font-size: 14px;
+		font-weight: 500;
+		white-space: nowrap;
+		cursor: pointer;
+		transition:
+			background-color 0.15s ease,
+			box-shadow 0.15s ease,
+			transform 0.1s ease;
+	}
+	.btn:hover:not(:disabled) {
+		box-shadow: inset 0 0 0 999px rgba(30, 30, 30, 0.07);
+	}
+	.btn:active:not(:disabled) {
+		transform: translateY(1px) scale(0.985);
+	}
+	.btn:disabled {
+		opacity: 0.45;
+		cursor: not-allowed;
+	}
+	.btn-dark {
+		background: var(--color-ink);
+		color: var(--color-surface);
+	}
+	.btn-dark:hover:not(:disabled) {
+		box-shadow: none;
+		background: #3a3a38;
+	}
+	.chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		height: 22px;
+		padding: 0 7px;
+		border: 1px solid var(--color-line-2);
+		font-family: var(--font-mono);
+		font-size: 12px;
+		white-space: nowrap;
+	}
+	.label {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		color: var(--color-mute-2);
+	}
+	.tip {
+		position: fixed;
+		z-index: 9999;
+		left: 0;
+		top: 0;
+		max-width: 300px;
+		padding: 6px 9px;
+		background: var(--color-ink);
+		color: var(--color-surface);
+		font: 400 11.5px / 1.5 var(--font-mono);
+		white-space: pre-line;
+		pointer-events: none;
+		box-shadow: 0 10px 24px -10px rgba(30, 30, 30, 0.45);
+		opacity: 0;
+		transition: opacity 0.12s ease;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.blink {
+			animation: blink 1.1s steps(1) infinite;
+		}
+		.rise {
+			animation: rise 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+		}
+	}
+}
+
+@keyframes blink {
+	50% {
+		opacity: 0.15;
+	}
+}
+
+@keyframes rise {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
 	}
 }

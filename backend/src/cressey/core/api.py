@@ -160,9 +160,10 @@ async def replay_incident(incident_id: str, incidents: IncidentsDep) -> Replay:
     return replay
 
 
-SESSION_REPORTS: dict[str, Literal["detection", "ablation"]] = {
+SESSION_REPORTS: dict[str, Literal["detection", "ablation", "decision"]] = {
     "report-detection": "detection",
     "report-ablation": "ablation",
+    "decision-model": "decision",
 }
 
 
@@ -170,7 +171,8 @@ SESSION_REPORTS: dict[str, Literal["detection", "ablation"]] = {
 async def eval_reports() -> list[EvalFile]:
     """The eval reports in data/eval, for the Évaluation view."""
     files = []
-    for path in sorted((DATA / "eval").glob("report-*.json")):
+    reports = sorted((DATA / "eval").glob("report-*.json"))
+    for path in [*reports, DATA / "eval" / "decision-model.json"]:
         report = json.loads(path.read_text())
         kind = SESSION_REPORTS.get(path.stem, "guides")
         # The guide reports have no date field: their file's write time stands in.

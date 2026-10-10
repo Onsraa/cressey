@@ -274,7 +274,7 @@ class Incident(BaseModel):
 class EvalFile(BaseModel):
     """A measured report, served as written, with where and when it was measured."""
 
-    kind: Literal["guides", "detection", "ablation"]
+    kind: Literal["guides", "detection", "ablation", "decision"]
     split: str  # dev, or held-out
     file: str
     date: str

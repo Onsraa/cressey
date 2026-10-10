@@ -16,4 +16,7 @@ def test_the_eval_reports_are_served_with_their_file_and_date():
     assert detection["file"] == "data/eval/report-detection.json"
     assert detection["report"]["misses"] == []
     assert reports["ablation"]["report"]["only_triangle"] == []
+    decision = reports["decision"]
+    assert decision["file"] == "data/eval/decision-model.json"
+    assert "calibration" in decision["report"]["write_judgment"]
     assert all(datetime.fromisoformat(r["date"]) for r in reports.values())

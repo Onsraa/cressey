@@ -23,3 +23,10 @@ export const apiPost = <T>(path: string, body: unknown) =>
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(body),
 	});
+
+export const apiPut = <T>(path: string, body: unknown) =>
+	request<T>(path, {
+		method: "PUT",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(body),
+	});

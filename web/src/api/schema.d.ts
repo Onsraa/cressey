@@ -370,7 +370,7 @@ export interface components {
 			 * Kind
 			 * @enum {string}
 			 */
-			kind: "guides" | "detection" | "ablation";
+			kind: "guides" | "detection" | "ablation" | "decision";
 			/** Split */
 			split: string;
 			/** File */

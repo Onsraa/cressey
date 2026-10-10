@@ -1,19 +1,335 @@
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+	Activity,
+	BellRing,
+	ChartColumn,
+	Cpu,
+	Hash,
+	Inbox,
+	Keyboard,
+	type LucideIcon,
+	PanelLeftClose,
+	PanelLeftOpen,
+	Pause,
+	Radar,
+	ShieldCheck,
+	SlidersHorizontal,
+	Triangle,
+	Unplug,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { LiveProvider, useLive, type View } from "@/api/live";
+import { useTooltips } from "@/components/tooltips";
+import { stage } from "@/lib/incident";
+import { CHECK, onAlert, time } from "@/lib/labels";
+import { EvalView } from "@/views/eval/EvalView";
+import { IncidentsView } from "@/views/incidents/IncidentsView";
+import { LiveView } from "@/views/live/LiveView";
+import { SettingsView } from "@/views/settings/SettingsView";
+
+const NAV: { k: View; label: string; Icon: LucideIcon }[] = [
+	{ k: "live", label: "Run en direct", Icon: Activity },
+	{ k: "inc", label: "Incidents", Icon: Inbox },
+	{ k: "eval", label: "Évaluation", Icon: ChartColumn },
+	{ k: "connect", label: "Réglages", Icon: SlidersHorizontal },
+];
+
+const SHORTCUTS =
+	"Raccourcis\n1–4 : changer de vue\nR : rejeter l'appel retenu\nA : approuver (deux fois)\nT : triangle ou courbes";
 
 export default function App() {
 	return (
-		<main className="mx-auto max-w-3xl p-8">
-			<Card>
-				<CardHeader>
-					<CardTitle>Cressey</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<Badge variant="secondary">
-						Le triangle de la fraude, appliqué aux agents IA
-					</Badge>
-				</CardContent>
-			</Card>
-		</main>
+		<LiveProvider>
+			<Shell />
+		</LiveProvider>
+	);
+}
+
+function Shell() {
+	useTooltips();
+	const { view, go, holds } = useLive();
+	const [collapsed, setCollapsed] = useState(() => window.innerWidth < 1180);
+	const hold = holds[0];
+
+	useEffect(() => {
+		const key = (e: KeyboardEvent) => {
+			const t = e.target;
+			const typing =
+				t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement;
+			if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+			const to = NAV[Number(e.key) - 1];
+			if (!to) return;
+			e.preventDefault();
+			go(to.k);
+		};
+		window.addEventListener("keydown", key);
+		return () => window.removeEventListener("keydown", key);
+	}, [go]);
+
+	useEffect(() => {
+		document.title = hold ? `Retenu · ${hold.step.tool} · Cressey` : "Cressey";
+	}, [hold]);
+
+	return (
+		<div className="flex h-screen overflow-hidden bg-paper font-sans text-ink">
+			<Sidebar collapsed={collapsed} toggle={() => setCollapsed((c) => !c)} />
+			<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+				<HoldBanner />
+				<AlertBanner />
+				<FleetBanner />
+				<main className="flex min-h-0 flex-1 flex-col overflow-auto">
+					{view === "live" && <LiveView />}
+					{view === "inc" && <IncidentsView />}
+					{view === "eval" && <EvalView />}
+					{view === "connect" && <SettingsView />}
+				</main>
+			</div>
+		</div>
+	);
+}
+
+function Sidebar({
+	collapsed,
+	toggle,
+}: {
+	collapsed: boolean;
+	toggle: () => void;
+}) {
+	const { view, go, holds, incidents, status, responses, offline } = useLive();
+	const open = !collapsed;
+	const pending = incidents.filter((i) => stage(i) < 3).length;
+	const alerting = onAlert(responses);
+	const mode = status?.model_mode;
+	const items = [
+		{
+			Icon: ShieldCheck,
+			label: "Garde",
+			value: alerting.length ? "alerte" : "active",
+			dot: alerting.length ? "var(--color-warn-bd)" : "var(--color-ok-strong)",
+			tip: alerting.length
+				? `Mode de protection : Garde\nEn alerte : ${alerting.map((k) => CHECK[k]).join(", ")}`
+				: "Mode de protection : Garde\nLes appels à risque attendent une décision humaine.",
+		},
+		{
+			Icon: Cpu,
+			label: "Modèle",
+			value:
+				mode === "live"
+					? "live"
+					: mode === "record"
+						? "enregistrement"
+						: "réponses enregistrées",
+			dot: mode === "live" ? "var(--color-ok-strong)" : "var(--color-warn-bd)",
+			tip: `Mode des modèles : ${mode ?? "?"}`,
+		},
+		{
+			Icon: Hash,
+			label: "Journal",
+			value: status
+				? `${status.log.hash.slice(0, 12)} · ${status.log.count}`
+				: "…",
+			dot: status?.log.intact
+				? "var(--color-ok-strong)"
+				: "var(--color-held-strong)",
+			tip: status
+				? `Journal des événements\ndernier hash ${status.log.hash.slice(0, 12)}\n${status.log.count} enregistrements · chaîne ${status.log.intact ? "intacte" : "rompue"}`
+				: "",
+		},
+	];
+	return (
+		<aside
+			aria-label="Navigation"
+			className="flex flex-none flex-col overflow-hidden border-ink border-r-[1.2px] bg-surface transition-[width] duration-200"
+			style={{ width: open ? 224 : 60 }}
+		>
+			<div className="flex h-16 flex-none items-center gap-2.5 overflow-hidden whitespace-nowrap border-line border-b px-[19px]">
+				<Triangle size={22} strokeWidth={2.25} />
+				{open && (
+					<span className="font-semibold text-[19px] leading-none tracking-[-0.03em]">
+						Cressey
+					</span>
+				)}
+			</div>
+			<nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-auto px-2.5 py-3.5">
+				{NAV.map(({ k, label, Icon }) => {
+					const on = view === k;
+					const badge =
+						k === "inc" && pending
+							? String(pending)
+							: k === "live" && holds.length
+								? "retenu"
+								: "";
+					const red = k === "live" || (k === "inc" && holds.length > 0);
+					return (
+						<button
+							key={k}
+							type="button"
+							onClick={() => go(k)}
+							aria-current={on ? "page" : undefined}
+							aria-label={label}
+							data-tip={open ? "" : label + (badge ? ` · ${badge}` : "")}
+							className={`flex h-10 flex-none items-center gap-2.5 overflow-hidden whitespace-nowrap px-3 text-left font-medium text-sm transition-colors ${on ? "bg-ink text-surface" : "bg-surface hover:bg-paper"}`}
+						>
+							<Icon size={17} />
+							{open && <span className="min-w-0 flex-1 truncate">{label}</span>}
+							{open && badge && (
+								<span
+									className={`inline-flex h-5 min-w-5 items-center justify-center border px-[5px] font-pixel text-[17px] leading-none ${red ? "border-held-bd bg-held text-held-fg" : "border-warn-bd bg-warn text-warn-fg"}`}
+								>
+									{badge}
+								</span>
+							)}
+						</button>
+					);
+				})}
+			</nav>
+			<div className="flex flex-none flex-col gap-1 border-line border-t px-2.5 pt-3 pb-3.5">
+				{offline && (
+					<div
+						data-tip="Le backend ne répond pas : l'écran montre la dernière réponse."
+						className="flex h-8 items-center gap-2.5 overflow-hidden whitespace-nowrap px-3 font-medium text-held-fg text-xs"
+					>
+						<Unplug size={15} />
+						{open && "API injoignable"}
+					</div>
+				)}
+				{items.map(({ Icon, label, value, dot, tip }) => (
+					<div
+						key={label}
+						data-tip={tip}
+						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+						tabIndex={0}
+						className="flex h-8 items-center gap-2.5 overflow-hidden whitespace-nowrap px-3"
+					>
+						<Icon size={15} />
+						{open && (
+							<>
+								<span className="text-[12.5px] text-mute">{label}</span>
+								<span className="ml-auto inline-flex items-center gap-1.5 font-medium font-mono text-[11.5px]">
+									<span className="size-[7px]" style={{ background: dot }} />
+									{value}
+								</span>
+							</>
+						)}
+					</div>
+				))}
+				<div className={`flex gap-1 pt-1.5 ${open ? "flex-row" : "flex-col"}`}>
+					<button
+						type="button"
+						aria-label="Raccourcis clavier"
+						data-tip={SHORTCUTS}
+						className="btn h-8 min-w-8 flex-auto cursor-help px-1.5 text-[12.5px]"
+					>
+						<Keyboard size={15} />
+						{open && "Raccourcis"}
+					</button>
+					<button
+						type="button"
+						aria-label={open ? "Replier le menu" : "Déplier le menu"}
+						data-tip={open ? "Replier le menu" : "Déplier le menu"}
+						onClick={toggle}
+						className="btn h-8 w-8 flex-none p-0"
+					>
+						{open ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+					</button>
+				</div>
+			</div>
+		</aside>
+	);
+}
+
+// m:ss to the safe cancel.
+const clock = (until: string | null | undefined, now: number) => {
+	const s = until
+		? Math.max(0, Math.round((Date.parse(until) - now) / 1000))
+		: 0;
+	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+};
+
+function HoldBanner() {
+	const { holds, now, go } = useLive();
+	const hold = holds[0];
+	if (!hold) return null;
+	return (
+		<div
+			role="alert"
+			className="flex min-h-[54px] flex-none flex-wrap items-center gap-[18px] border-held-bd border-b bg-held px-7 py-2"
+		>
+			<span className="inline-flex size-7 items-center justify-center bg-held-strong text-surface">
+				<Pause size={16} strokeWidth={2.5} />
+			</span>
+			<strong className="font-semibold text-[15px]">Appel retenu</strong>
+			<span className="font-mono text-[13px]">
+				{hold.run_id} · #{hold.step.n} {hold.step.tool}
+				{holds.length > 1 && ` · et ${holds.length - 1} autre(s)`}
+			</span>
+			<span
+				data-tip="Sans décision, l'appel est annulé sans risque à la fin du compte à rebours."
+				className="inline-flex items-baseline gap-2"
+			>
+				<span className="font-mono text-xs">annulation sûre dans</span>
+				<span className="font-pixel text-[30px] leading-none">
+					{clock(hold.step.held_until, now)}
+				</span>
+			</span>
+			<div className="flex-1" />
+			<button
+				type="button"
+				onClick={() => go("live", { run: hold.run_id, step: hold.step.n })}
+				className="btn btn-dark"
+			>
+				Voir la retenue
+			</button>
+		</div>
+	);
+}
+
+function AlertBanner() {
+	const { responses, go } = useLive();
+	const alerting = onAlert(responses);
+	if (!alerting.length) return null;
+	return (
+		<div
+			role="status"
+			className="flex min-h-[46px] flex-none flex-wrap items-center gap-3.5 border-warn-bd border-b bg-warn px-7 py-2 text-warn-fg"
+		>
+			<BellRing size={17} />
+			<strong className="font-semibold">
+				Mode alerte : Cressey ne bloque pas
+			</strong>
+			<span className="font-mono text-[13px]">
+				{alerting.map((k) => CHECK[k]).join(" · ")}
+			</span>
+			<div className="flex-1" />
+			<button type="button" onClick={() => go("connect")} className="btn">
+				Que fait Cressey quand… ?
+			</button>
+		</div>
+	);
+}
+
+function FleetBanner() {
+	const { fleet, responses } = useLive();
+	if (!fleet.length) return null;
+	return (
+		<div
+			role="status"
+			className="flex flex-none flex-col gap-1 border-info-bd border-b bg-info px-7 py-2 text-info-fg"
+		>
+			{fleet.map((f) => (
+				<div key={f.target} className="flex flex-wrap items-center gap-3">
+					<Radar size={17} />
+					<strong className="font-semibold">Signal entre runs</strong>
+					<span className="font-mono text-[13px]">
+						{f.runs.length} runs visent {f.target} hors mandat, de{" "}
+						{time(f.first_at)} à {time(f.last_at)}
+					</span>
+					{responses?.fleet === "stop" && (
+						<span className="chip border-info-bd">
+							leurs appels sont refusés
+						</span>
+					)}
+				</div>
+			))}
+		</div>
 	);
 }
