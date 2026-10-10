@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 from pathlib import Path
 
 import bm25s
@@ -7,6 +8,8 @@ import numpy as np
 
 from cressey.guide.clients import Embedder, ModelUnavailable
 from cressey.guide.models import Unit
+
+log = logging.getLogger(__name__)
 
 
 def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[str]:
@@ -37,22 +40,22 @@ class Retriever:
         digest = hashlib.sha256(
             "".join(u.id + u.text for u in self.units).encode()
         ).hexdigest()
+        meta = {"corpus_sha256": digest, "model": self.embedder.model}
         meta_path = cache.with_suffix(".meta.json")
-        if (
-            cache.exists()
-            and meta_path.exists()
-            and json.loads(meta_path.read_text()).get("corpus_sha256") == digest
-        ):
-            return np.load(cache)
+        if cache.exists() and meta_path.exists():
+            stored = json.loads(meta_path.read_text())
+            vectors = np.load(cache)
+            if all(stored.get(k) == v for k, v in meta.items()) and len(vectors) == len(
+                self.units
+            ):
+                return vectors
         try:
             vectors = self.embedder.embed([u.text[:6000] for u in self.units])
         except ModelUnavailable:
             self.bm25_only = True
             return None
         np.save(cache, vectors)
-        meta_path.write_text(
-            json.dumps({"corpus_sha256": digest, "dim": int(vectors.shape[1])})
-        )
+        meta_path.write_text(json.dumps({**meta, "dim": int(vectors.shape[1])}))
         return vectors
 
     def bm25_top(self, q: str, k: int) -> list[str]:
@@ -69,11 +72,16 @@ class Retriever:
     def search(self, queries: list[str], k: int = 8, top: int = 8) -> list[Unit]:
         queries = [q for q in queries if q.strip()]
         lists: list[list[str]] = []
+        use_embeddings = not self.bm25_only
         for q in queries:
             lists.append(self.bm25_top(q, k))
-            if not self.bm25_only:
+            if use_embeddings:
                 try:
                     lists.append(self._emb_top(q, k))
-                except ModelUnavailable:
-                    self.bm25_only = True
+                except ModelUnavailable as e:
+                    # BM25 only for the rest of this search; the next search tries again.
+                    use_embeddings = False
+                    log.warning(
+                        "query embedding failed (%s): BM25 only", type(e).__name__
+                    )
         return [self.by_id[uid] for uid in rrf_fuse(lists)[:top]]

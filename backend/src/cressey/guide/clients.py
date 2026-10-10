@@ -1,5 +1,6 @@
 """Model adapters behind Protocols. Models only read and label; code decides."""
 
+import html
 import json
 import logging
 from typing import Any, Protocol, Self
@@ -7,8 +8,8 @@ from typing import Any, Protocol, Self
 import numpy as np
 import openai
 import typesafe_sdk
-from pydantic import BaseModel
-from typesafe_sdk import Noul, TypeSafeClient
+from pydantic import BaseModel, ValidationError
+from typesafe_sdk import Noul, RetryPolicy, TypeSafeClient
 
 from cressey.guide.models import GuideDraft, GuideIncident, Unit
 from cressey.settings import Settings
@@ -44,6 +45,8 @@ class ModelUnavailable(Exception):
 
 
 class Embedder(Protocol):
+    model: str
+
     def embed(self, texts: list[str]) -> np.ndarray:
         """Rows L2-normalized, shape (len(texts), dim)."""
         ...
@@ -72,6 +75,11 @@ def incident_text(incident: GuideIncident) -> str:
     return f"{incident.leg}: {incident.summary} (source: {incident.source})"
 
 
+def _data(text: str) -> str:
+    """Text placed between our tags, escaped so it can't close them."""
+    return html.escape(text, quote=False)
+
+
 def _passages(units: list[Unit], limit: int) -> str:
     return json.dumps({u.id: u.text[:limit] for u in units}, ensure_ascii=False)
 
@@ -85,7 +93,7 @@ class _Adapter:
             raise ModelUnavailable("missing key")
         return self.client
 
-    def _parse(self, system: str, user: str, fmt: type[BaseModel]) -> Any:
+    def _parse[T: BaseModel](self, system: str, user: str, fmt: type[T]) -> T:
         try:
             r = self._c().responses.parse(
                 model=self.model,
@@ -94,16 +102,31 @@ class _Adapter:
                     {"role": "user", "content": user},
                 ],
                 text_format=fmt,
-                timeout=30,
+                store=False,  # incident text must not be kept by the provider (30 days by default)
             )
-        except openai.OpenAIError as e:
+        except (
+            openai.OpenAIError,
+            ValidationError,
+        ) as e:  # ValidationError: truncated output
             raise ModelUnavailable(str(e)) from e
+        if r.output_parsed is None:
+            raise ModelUnavailable("no parsed output (refusal)")
         return r.output_parsed
 
 
 def _openai(settings: Settings) -> openai.OpenAI | None:
     key = settings.openai_api_key
-    return openai.OpenAI(api_key=key.get_secret_value(), timeout=30) if key else None
+    # Fail fast: in `fallback` mode the cache answers only after the live call gives up.
+    return (
+        openai.OpenAI(
+            api_key=key.get_secret_value(),
+            base_url=settings.openai_base_url,
+            timeout=openai.Timeout(20, connect=5),
+            max_retries=1,
+        )
+        if key
+        else None
+    )
 
 
 class OpenAIEmbedder(_Adapter):
@@ -143,13 +166,13 @@ class OpenAIWriter(_Adapter):
         return cls(_openai(s), s.writer_model)
 
     def write(self, incident: GuideIncident, units: list[Unit]) -> GuideDraft:
-        user = f"<incident>{incident.summary} (source : {incident.source})</incident>\nPassages : {_passages(units, 1500)}"
+        user = f"<incident>{_data(incident.summary)} (source : {_data(incident.source)})</incident>\nPassages : {_passages(units, 1500)}"
         return self._parse(
             PROMPT_GUIDE_V1.format(owner_role=incident.owner_role), user, GuideDraft
         )
 
     def answer(self, question: str, units: list[Unit]) -> GuideDraft:
-        user = f"<question>{question}</question>\nPassages : {_passages(units, 1500)}"
+        user = f"<question>{_data(question)}</question>\nPassages : {_passages(units, 1500)}"
         return self._parse(PROMPT_WHY_V1, user, GuideDraft)
 
 
@@ -159,7 +182,13 @@ class JevReranker(_Adapter):
         s = settings or Settings()
         key = s.typesafe_api_key
         return cls(
-            TypeSafeClient(api_key=key.get_secret_value(), timeout=10) if key else None
+            TypeSafeClient(
+                api_key=key.get_secret_value(),
+                timeout=5,
+                retry=RetryPolicy(max_retries=1),
+            )
+            if key
+            else None
         )
 
     def relevance(self, question: str, units: list[Unit]) -> dict[str, float]:
@@ -182,4 +211,4 @@ class JevReranker(_Adapter):
             raise ModelUnavailable(str(e)) from e
         if r.model != "jev-1.13.0":
             log.warning("Jev answered with model %s (expected jev-1.13.0)", r.model)
-        return {u.id: float(r.answers[u.id].noul) for u in units}
+        return {u.id: float(r.answers[u.id].noul) for u in units if u.id in r.answers}

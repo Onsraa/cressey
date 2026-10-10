@@ -12,9 +12,9 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 
 ## Steps
 1. **Rewrite** (gpt-5.4-mini, `PROMPT_REWRITE_INCIDENT_V1`): the incident becomes one French query and one English query. The prompt defines the triangle's three legs.
-2. **Search** (`retrieve.py`): three queries (French, English, raw text), each through BM25 and through embeddings, which makes 6 ranked lists. They're merged by reciprocal rank fusion (`k = 60`), keeping the top 8.
+2. **Search** (`retrieve.py`): three queries (French, English, raw text), each through BM25 and through embeddings, which makes 6 ranked lists. They're merged by reciprocal rank fusion (`k = 60`), keeping the top 8. If a query embedding fails, that search continues with BM25 only; the next search tries embeddings again.
 3. **Re-rank** (Jev `jev-1.13.0`): one yes/no question per passage (« The passage directly answers the question »). Passages scoring under **0.4** are discarded.
-4. **Write** (gpt-5.5, `PROMPT_GUIDE_V1`): at most 4 steps. Each cites one passage id and a verbatim quote of 8–20 words. The incident text sits between `<incident>` tags and is treated as data, never as instructions.
+4. **Write** (gpt-5.5, `PROMPT_GUIDE_V1`): at most 4 steps. Each cites one passage id and a verbatim quote of 8–20 words. The incident text sits between `<incident>` tags and is treated as data, never as instructions. `<`, `>` and `&` in it are escaped, so it can't close the tag.
 5. **Check, in code:** a step is kept only if its `source_id` is among the passages given to the writer and its quote appears in that passage. Matching ignores case, whitespace and typographic quotes, and quotes must be 8–30 words.
 
 ## When there is no guide
@@ -22,7 +22,7 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 |---|---|---|
 | No passage scores 0.4 or more | `unsure` | « Je ne sais pas : aucune source fiable ne couvre ce cas. Voir l'équipe sécurité. » The writer isn't called |
 | Every step was dropped | `unsure` | « Je ne sais pas : aucune étape n'a pu être sourcée. Voir l'équipe sécurité. » |
-| A model is unavailable (error, timeout, 429, missing key) | `unavailable` | « Guide indisponible : les modèles ne répondent pas. Sources trouvées ci-dessous. » The passages found are returned |
+| A model is unavailable (error, timeout, 429, refusal, cut-off answer, missing key) | `unavailable` | « Guide indisponible : les modèles ne répondent pas. Sources trouvées ci-dessous. » The passages found are returned |
 
 ## « Pourquoi ? »
 `POST /api/guides/{id}/why` re-ranks only the guide's own passages (using `PROMPT_REWRITE_QUESTION_V1`, which has no leg definitions), then answers with `PROMPT_WHY_V1`. It goes through the same quote check.
@@ -37,14 +37,20 @@ Turns an incident into a fix guide in French. Every step cites a passage from a 
 
 - **A changed file stops the build:** the build refuses any file whose hash doesn't match.
 - **The app refuses an edited corpus:** it won't start if `corpus.json` doesn't match `corpus.sha256`.
-- **OWASP must be pinned:** if `owasp_asi.json` is present, it must be listed in `SOURCES.json`.
+- **Every loaded file must be pinned:** `owasp_asi.json` when present, and each runbook. An unpinned file stops the build, naming the file.
 
 ## Model cache (`cache.py`)
 - **Coverage:** every model call goes through `Cached`.
-- **Key:** the sha256 of the adapter and method, the model, the prompt version (a hash of the prompt text) and the input.
+- **Key:** the sha256 of the adapter and method, the model, the prompt version (a hash of the prompt text) and the input. The incident id is left out: the model never sees it, so a new incident with the same text replays.
 - **Modes:**
   - `live`: call the model.
   - `record`: call and store.
   - `replay`: cache only, never the network.
   - `fallback`: call, and serve the stored answer if the model fails. This is the mode for the stage.
 - **Recorded answers:** they're committed in `backend/data/cache/`, so re-record after changing a prompt, a model or the corpus.
+- **Corpus vectors** (`embeddings.npy`, local only): rebuilt when the corpus, the embedding model or the row count changes.
+
+## Model calls
+- `store=False` on every OpenAI call: the provider keeps nothing (both OpenAI and Bedrock keep responses 30 days by default).
+- Fail fast, so `fallback` reaches the cache quickly: OpenAI 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry.
+- A refusal or a cut-off structured answer counts as unavailable.

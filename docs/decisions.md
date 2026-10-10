@@ -18,11 +18,13 @@
 | 10-10 | **The model cache is committed**, and `fallback` mode is used on stage | The demo survives a Wi-Fi or API outage |
 | 10-10 | **Progressive installation**: Observer, then report, then Guard, then options | The user adds one thing at a time, with no upfront configuration |
 | 10-10 | **Check on each call, judge on the whole run**: Jev gets a run summary, and an LLM reads the whole run while a call is held | Fraud builds over several steps. One step judged alone misses rationalization spread over steps and attacks split into harmless steps |
+| 10-10 | **Model calls are not stored and fail fast**: `store=False`; OpenAI 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry | Incident text must not stay at the provider (30 days by default on OpenAI and Bedrock). In `fallback` mode the cache answers only after the live call gives up |
+| 10-10 | **Bedrock through the OpenAI SDK** (base URL and a Bedrock API key) | Bedrock serves the Responses API, so the adapters stay. The models change (GPT-5.6) and the embeddings move to a Bedrock model |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
 - `owasp_asi.json`: needs the OWASP PDF, downloaded by hand.
 - Held-out evaluation set: needs someone outside the team.
 - `GITGUARDIAN_API_KEY` repo secret: needed for the secret scan in CI.
-- Bedrock adapters and the AWS deploy.
+- Bedrock switch: test `text_format` through Bedrock, choose the embedding model (Cohere Embed Multilingual v3 is the candidate), re-record the cache, re-run the eval. Then the AWS deploy.
 - Whether the run summary improves Jev's scores over the action alone: measure on the labelled set.

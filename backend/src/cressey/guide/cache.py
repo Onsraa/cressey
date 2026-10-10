@@ -38,6 +38,11 @@ def cache_key(
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
+def _seen(incident: GuideIncident) -> dict:
+    """The incident as the model sees it: the id never reaches it, so a new id still replays."""
+    return incident.model_dump(exclude={"id"})
+
+
 def _units(units: list[Unit]) -> list[list[str]]:
     return [[u.id, u.text] for u in units]
 
@@ -110,7 +115,7 @@ class Cached:
     def rewrite_incident(self, incident: GuideIncident) -> tuple[str, str]:
         return self._call(
             "rewrite_incident",
-            incident.model_dump(),
+            _seen(incident),
             lambda: self.inner.rewrite_incident(incident),
             list,
             tuple,
@@ -136,7 +141,7 @@ class Cached:
         )
 
     def write(self, incident: GuideIncident, units: list[Unit]) -> GuideDraft:
-        payload = {"incident": incident.model_dump(), "units": _units(units)}
+        payload = {"incident": _seen(incident), "units": _units(units)}
         return self._call(
             "write",
             payload,

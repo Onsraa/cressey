@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     )
 
     openai_api_key: SecretStr | None = None
+    openai_base_url: str | None = (
+        None  # Bedrock: https://bedrock-runtime.<region>.amazonaws.com/openai/v1
+    )
     typesafe_api_key: SecretStr | None = None
     web_dir: Path = Field(Path("web"), validation_alias="CRESSEY_WEB_DIR")
     rewrite_model: str = "gpt-5.4-mini"
@@ -25,7 +28,9 @@ class Settings(BaseSettings):
         0.4  # S6 calibration: keeps 51/55 expected passages, 16/185 others
     )
 
-    @field_validator("openai_api_key", "typesafe_api_key", mode="before")
+    @field_validator(
+        "openai_api_key", "openai_base_url", "typesafe_api_key", mode="before"
+    )
     @classmethod
     def _blank_is_missing(cls, v: object) -> object:
         return None if isinstance(v, str) and not v.strip() else v

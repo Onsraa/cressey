@@ -65,3 +65,24 @@ def test_edited_corpus_json_is_refused(tmp_path):
     out.write_text(out.read_text().replace("R9", "R8", 1))
     with pytest.raises(CorpusIntegrityError):
         load_corpus(out)
+
+
+def test_unpinned_runbook_is_refused(tmp_path):
+    ref = _copy_ref(tmp_path)
+    (ref / "runbooks" / "rotation-urgente.md").write_text("# Rotation urgente\nTexte.")
+    with pytest.raises(CorpusIntegrityError, match="rotation-urgente.md"):
+        check_sources(ref)
+
+
+def test_app_refuses_to_start_on_an_edited_corpus(tmp_path, monkeypatch):
+    import cressey.app
+    from cressey.settings import Settings
+
+    data = Path(__file__).parents[2] / "data"
+    for name in ("corpus.json", "corpus.sha256"):
+        shutil.copy(data / name, tmp_path / name)
+    edited = tmp_path / "corpus.json"
+    edited.write_text(edited.read_text().replace("R9", "R8", 1))
+    monkeypatch.setattr(cressey.app, "DATA", tmp_path, raising=False)
+    with pytest.raises(CorpusIntegrityError):
+        cressey.app.create_app(Settings(_env_file=None))

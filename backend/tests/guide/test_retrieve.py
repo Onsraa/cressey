@@ -33,6 +33,7 @@ UNITS = [
 class FakeEmbedder:
     """Puts 'validation humaine' next to R9 only, to prove embeddings rescue a lexical miss."""
 
+    model = "fake"
     calls = 0
 
     def embed(self, texts: list[str]) -> np.ndarray:
@@ -49,8 +50,22 @@ class FakeEmbedder:
 
 
 class FailingEmbedder:
+    model = "fake"
+
     def embed(self, texts: list[str]) -> np.ndarray:
         raise ModelUnavailable("down")
+
+
+class FlakyQueries(FakeEmbedder):
+    """Embeds the corpus, then fails on the next query only."""
+
+    fail_next = False
+
+    def embed(self, texts: list[str]) -> np.ndarray:
+        if self.fail_next:
+            self.fail_next = False
+            raise ModelUnavailable("blip")
+        return super().embed(texts)
 
 
 def test_rrf_prefers_items_ranked_high_in_several_lists():
@@ -83,3 +98,31 @@ def test_embedding_cache_is_reused_then_rebuilt_when_corpus_changes(tmp_path):
 @pytest.mark.parametrize("q", ["", "   "])
 def test_blank_query_returns_nothing(tmp_path, q):
     assert Retriever(UNITS, None, tmp_path / "e.npy").search([q]) == []
+
+
+def test_one_failed_query_embedding_keeps_hybrid_search(tmp_path):
+    e = FlakyQueries()
+    r = Retriever(UNITS, e, tmp_path / "emb.npy")
+    q = ["validation humaine avant une action critique"]
+    e.fail_next = True
+    r.search(q)
+    assert "anssi-fr:R9" in [u.id for u in r.search(q)[:3]]
+
+
+def test_embedding_cache_is_rebuilt_when_the_model_changes(tmp_path):
+    cache = tmp_path / "emb.npy"
+    FakeEmbedder.calls = 0
+    Retriever(UNITS, FakeEmbedder(), cache)
+    other = FakeEmbedder()
+    other.model = "other-model"
+    Retriever(UNITS, other, cache)
+    assert FakeEmbedder.calls == 2
+
+
+def test_embedding_cache_with_the_wrong_row_count_is_rebuilt(tmp_path):
+    cache = tmp_path / "emb.npy"
+    FakeEmbedder.calls = 0
+    Retriever(UNITS, FakeEmbedder(), cache)
+    np.save(cache, np.load(cache)[:-1])
+    Retriever(UNITS, FakeEmbedder(), cache)
+    assert FakeEmbedder.calls == 2

@@ -33,11 +33,13 @@ def check_sources(ref: Path) -> None:
             raise CorpusIntegrityError(f"missing pinned source: {name}")
         if _sha256(f) != digest:
             raise CorpusIntegrityError(f"hash mismatch: {name}")
-    owasp = ref / "owasp_asi.json"
-    if owasp.exists() and "owasp_asi.json" not in pinned:
-        raise CorpusIntegrityError(
-            "owasp_asi.json is present but not pinned in SOURCES.json"
-        )
+    loaded = [ref / "owasp_asi.json", *sorted((ref / "runbooks").glob("*.md"))]
+    for f in loaded:
+        name = f.relative_to(ref).as_posix()
+        if f.exists() and name not in pinned:
+            raise CorpusIntegrityError(
+                f"{name} is present but not pinned in SOURCES.json"
+            )
 
 
 def extract_anssi(pdf: Path, lang: Literal["fr", "en"]) -> list[Unit]:

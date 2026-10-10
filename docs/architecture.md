@@ -29,6 +29,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | Field | Env var | Default |
 |---|---|---|
 | `openai_api_key` | `OPENAI_API_KEY` | none. An empty value counts as missing |
+| `openai_base_url` | `OPENAI_BASE_URL` | none (OpenAI). For Bedrock: `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`, with a Bedrock API key in `OPENAI_API_KEY` |
 | `typesafe_api_key` | `TYPESAFE_API_KEY` | none. An empty value counts as missing |
 | `web_dir` | `CRESSEY_WEB_DIR` | `web` |
 | `model_mode` | `CRESSEY_MODEL_MODE` | `live` (`live`, `record`, `replay` or `fallback`) |
@@ -73,3 +74,8 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
   - Bedrock exposes an OpenAI-compatible endpoint at `https://bedrock-runtime.<region>.amazonaws.com/openai/v1`.
   - Claude models are reached through the Anthropic Messages API on that endpoint.
   - Whether Claude also answers through Chat Completions there is not verified.
+- **Checked on 2026-10-10 in the AWS docs:**
+  - `bedrock-runtime` serves the OpenAI Responses API. The OpenAI SDK works by setting `OPENAI_BASE_URL` and a Bedrock API key; the writer and rewriter code stays.
+  - OpenAI models on Bedrock: GPT-5.6 Sol, Terra and Luna (`global.openai.gpt-5.6-sol`, …). gpt-5.5 and gpt-5.4-mini were not found, so the models change and the eval is re-run.
+  - No OpenAI embedding model was found. Candidate: Cohere Embed Multilingual v3 (French), called through boto3.
+  - Not verified: structured output (`text_format`) through Bedrock. Needs one call with a Bedrock key.

@@ -3,11 +3,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from cressey.guide.api import router as guide_router
+from cressey.guide.corpus import DATA, load_corpus
 from cressey.settings import Settings
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     s = settings or Settings()
+    load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
     app = FastAPI(title="Cressey")
     api = APIRouter(prefix="/api")
 

@@ -77,3 +77,20 @@ def test_round_trips_every_output_type(tmp_path):
         )
         assert c_wri.write(INC, [R9]).steps[0].source_id == GOOD.source_id
         assert c_wri.answer("pourquoi ?", [R9]).steps
+
+
+def test_a_new_incident_id_still_replays_the_rewrite(tmp_path):
+    Cached(Rew(), "rewriter", "m", "v1", "record", tmp_path).rewrite_incident(INC)
+    again = INC.model_copy(update={"id": "i-new"})
+    assert Cached(
+        Rew(fail=True), "rewriter", "m", "v1", "replay", tmp_path
+    ).rewrite_incident(again) == ("fr", "en")
+
+
+def test_a_new_incident_id_still_replays_the_guide(tmp_path):
+    Cached(Wri(), "writer", "m", "v1", "record", tmp_path).write(INC, [R9])
+    again = INC.model_copy(update={"id": "i-new"})
+    draft = Cached(Wri(fail=True), "writer", "m", "v1", "replay", tmp_path).write(
+        again, [R9]
+    )
+    assert draft == GuideDraft(steps=[GOOD])
