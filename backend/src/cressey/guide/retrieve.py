@@ -51,7 +51,14 @@ class Retriever:
                 return vectors
         try:
             vectors = self.embedder.embed([u.text[:6000] for u in self.units])
-        except ModelUnavailable:
+        except ModelUnavailable as e:
+            # Said, not silent: offline with vectors of another model, every guide's passages
+            # change, so every recorded guide misses.
+            log.warning(
+                "corpus embeddings for %s unavailable (%s): retrieval falls back to BM25",
+                self.embedder.model,
+                e,
+            )
             self.bm25_only = True
             return None
         np.save(cache, vectors)

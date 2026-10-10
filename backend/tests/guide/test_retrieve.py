@@ -140,3 +140,10 @@ def test_the_corpus_is_embedded_as_documents_and_each_query_as_a_query(tmp_path)
     e = Recording()
     Retriever(UNITS, e, tmp_path / "emb.npy").search(["validation", "cloisonner"])
     assert e.kinds == [False, True, True]
+
+
+def test_falling_back_to_bm25_alone_is_said(tmp_path, caplog):
+    """Offline with vectors of another model, every guide changed silently (jev-5d, 10-10)."""
+    r = Retriever(UNITS, FailingEmbedder(), tmp_path / "emb.npy")
+    assert r.bm25_only
+    assert "BM25" in caplog.text and "fake" in caplog.text
