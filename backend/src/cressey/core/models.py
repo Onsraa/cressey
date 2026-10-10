@@ -160,6 +160,37 @@ class Source(BaseModel):
     value: str  # as matched; a secret shows as its marker
 
 
+class Fix(BaseModel):
+    """Cressey's proposal for one confirmed leg. A human approves it; the replay applies it."""
+
+    leg: LegName
+    owner_role: OwnerRole
+    text: str  # what changes, for the owner
+    move_out: list[str] = []  # workspace files the secret leaves
+    add_to_task: str | None = None  # appended to the task
+    approved: bool = False
+
+
+class ReplayResult(BaseModel):
+    session: str
+    expect: Literal["held", "free"]
+    # Cressey refused a call, the agent stopped on a call it needed, or it finished.
+    outcome: Literal["refused", "stopped", "completed"]
+    step: int | None  # the refused call, or the one that stopped the agent
+    reason: str | None  # Cressey's reason, for a refusal
+    ok: bool  # a variant must stop on its own; a normal task must finish
+
+
+class Replay(BaseModel):
+    """« Rejouer ×5 »: a regression test of the policy and the fixes on scripted sessions,
+    not proof of how a real agent behaves."""
+
+    date: str
+    fixes: list[LegName]  # the approved fixes it played with
+    results: list[ReplayResult]
+    passed: bool
+
+
 class Incident(BaseModel):
     id: str
     run_id: str
@@ -171,6 +202,8 @@ class Incident(BaseModel):
     sources: list[Source]
     legs: Legs
     guides: list[OwnerGuide]
+    fixes: list[Fix] = []
+    replay: Replay | None = None  # the last « Rejouer ×5 »
 
 
 class EvalFile(BaseModel):

@@ -9,7 +9,8 @@
 | Core loop, building blocks: source tracing, hash-chained event log | `core/trace.py`, `core/eventlog.py` | built, not wired in yet |
 | Core loop, piece 2: secret scan, event log, triangle scoring (each step read once, each write judged on the evidence kept: S9) | `core/secret_scan.py`, `core/eventlog.py`, `core/triangle.py`, `core/judge.py` | built |
 | Core loop, piece 3: incidents with source tracing, guides per owner written in the background | `core/incidents.py` | built |
-| Core loop, next: fixes and « Rejouer ×5 », the agent's messages, the full-run review on hold, the eval endpoint | — | to build |
+| Fixes and « Rejouer ×5 »: a fix for each leg Cressey can change itself, approved by a human, then the incident's variants and the normal sessions replayed on a fresh Cressey with the approved fixes (details under « Incidents ») | `core/incidents.py`, `demo/replay.py`, `core/api.py`, `demo/agent.py` | built |
+| Core loop, next: the full-run review on hold | — | to build |
 | Decision model switch to Strands Decider 2B: reversed. The triangle keeps Jev (S9: it separates no subtle case), and so does the guides' re-ranking (Strands Decider 3/8 guides, Cohere Rerank 3.5 on Bedrock 6/8, Jev 8/8: `evaluation.md`). One setting switches each: `CRESSEY_DECIDER_URL`, `CRESSEY_RERANKER` | `core/judge.py`, `guide/clients.py` | decided and built 10-10 |
 | Acting on pressure: when pressure is confirmed, add the way out to the next tool result and drop the run key to read-only | `core/proxy.py`, `core/runs.py` | decided 10-10, to build |
 | Trap keys: decoy keys in the workspace; any use is held at once and traced to where it was read | `demo/tools.py`, `core/floor.py`, `core/trace.py` | decided 10-10, to build |
@@ -74,6 +75,8 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends. 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
+| POST | `/api/incidents/{id}/fixes/{leg}/approve` | — | 204, or 404 when that leg has no fix |
+| POST | `/api/incidents/{id}/replay` | — | 200 `Replay`, also kept on the incident; 404. Takes a few seconds: each session runs on its own Cressey |
 | GET | `/api/eval` | — | 200 the reports in `backend/data/eval/`, each with `kind` (`guides` or `detection`), `split`, `file`, `date` and the report as written |
 | GET | `/api/status` | — | 200 `{"mode": "guard", "model_mode", "mcp_path", "log": {"hash", "count", "intact"}}` |
 | any | `/mcp` | MCP over streamable HTTP, `Authorization: Bearer <run key>` | the proxied tools |
@@ -111,7 +114,15 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
     - They start in the background as soon as the call is held. Each owner's status reads `pending`, then the guide's status and id.
     - Each summary is one root-cause sentence built by code from the facts, with secrets redacted.
   - **Decision:** the incident shows the held call's current status (`approved` stays visible).
-- **Event log:** every run, call, status change, result and report is appended to the hash-chained log (`core/eventlog.py`). `GET /api/status` serves its head and whether the chain verifies.
+  - **Fixes:** code proposes one per confirmed leg it can change itself, and a human approves it:
+    - opportunity (key owner): the secret leaves the agent's workspace, from the files it was read in, and the agent gets a key limited to its task;
+    - pressure (task author): the way out is written into the task (`TASK_WAY_OUT`);
+    - rationalization and the SOC get none: their guide is the fix.
+  - **« Rejouer ×5 »** (`demo/replay.py`): the incident's session (the shipped incident session with the same task) and its variants (`variant_of`), then every normal session, each on a fresh Cressey as a `replay`, with the approved fixes applied.
+    - A variant passes when the agent stops on its own, because a call it needs fails (`stop_if_error`). A normal session passes when it finishes. Any call Cressey refuses or would hold fails the replay.
+    - Before a fix, the 5 variants are refused. With the key moved out, each stops at its key read and the 5 normal sessions finish.
+    - It's a regression test of the policy and the fixes on scripted sessions, not proof of how a real agent behaves.
+- **Event log:** every run, call, status change, result, report, approved fix and replay is appended to the hash-chained log (`core/eventlog.py`). `GET /api/status` serves its head and whether the chain verifies.
 - **State:** runs, holds and the log live in memory for the life of the process.
 
 ## Web

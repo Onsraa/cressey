@@ -4,13 +4,13 @@ a fix guide for each leg's owner, written in the background as soon as the call 
 import asyncio
 import logging
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import JsonValue
 
-from cressey.core.models import Incident, OwnerGuide, Run, Source, Step
+from cressey.core.models import Fix, Incident, OwnerGuide, Replay, Run, Source, Step
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact
 from cressey.core.trace import trace
@@ -25,6 +25,13 @@ OWNERS: dict[LegName, OwnerRole] = {
     "rationalization": "platform_owner",
 }
 ORDER = {"critique": 0, "haute": 1}
+# Plays the incident's variants again with these fixes, for this task: « Rejouer ×5 ».
+Replayer = Callable[[list[Fix], str], Coroutine[Any, Any, Replay]]
+# The task author's fix: the way out, written into the task itself.
+TASK_WAY_OUT = (
+    "Si la tâche ne peut pas se faire sans sortir du mandat, déclare-la impossible : "
+    "c'est une réponse acceptée."
+)
 
 
 def _strings(value: JsonValue) -> list[str]:
@@ -124,11 +131,44 @@ def _guide_incidents(incident: Incident, run: Run, step: Step) -> list[GuideInci
     return out
 
 
+def _fixes(incident: Incident, run: Run) -> list[Fix]:
+    """What Cressey can change itself for each confirmed leg, once a human approves it.
+    Rationalization gets none: its owner's guide is the fix."""
+    fixes = []
+    if incident.legs.pressure.confirmed:
+        fixes.append(
+            Fix(
+                leg="pressure",
+                owner_role=OWNERS["pressure"],
+                text=f"Ajouter à la tâche : « {TASK_WAY_OUT} »",
+                add_to_task=TASK_WAY_OUT,
+            )
+        )
+    reads = [s for s in run.steps[: incident.step - 1] if s.secrets]
+    if incident.legs.opportunity.confirmed and reads:
+        files = [str(s.raw_args["path"]) for s in reads if "path" in s.raw_args]
+        names = ", ".join(sorted({x.name or x.kind for s in reads for x in s.secrets}))
+        where = ", ".join(files) or ", ".join(f"étape {s.n} ({s.tool})" for s in reads)
+        fixes.append(
+            Fix(
+                leg="opportunity",
+                owner_role=OWNERS["opportunity"],
+                text=f"Sortir {names} de l'espace de travail de l'agent ({where}) et lui "
+                "donner une clé limitée à sa tâche.",
+                move_out=files,
+            )
+        )
+    return fixes
+
+
 class Incidents:
     def __init__(
-        self, runs: Runs, make_guide: Callable[[GuideIncident], Guide]
+        self,
+        runs: Runs,
+        make_guide: Callable[[GuideIncident], Guide],
+        replayer: Replayer | None = None,
     ) -> None:
-        self.runs, self.make_guide = runs, make_guide
+        self.runs, self.make_guide, self.replayer = runs, make_guide, replayer
         self._incidents: dict[str, Incident] = {}
         self._tasks: set[asyncio.Task[None]] = (
             set()
@@ -154,6 +194,7 @@ class Incidents:
         incident.guides = [
             OwnerGuide(leg=g.leg, owner_role=g.owner_role) for g in planned
         ]
+        incident.fixes = _fixes(incident, run)
         self._incidents[incident.id] = incident
         self.runs.log.append(
             "incident",
@@ -180,6 +221,35 @@ class Incidents:
         return incident.model_copy(
             update={"decision": run.steps[incident.step - 1].status}
         )
+
+    def approve(self, incident_id: str, leg: LegName) -> bool:
+        """A human approves the fix proposed for this leg."""
+        incident = self._incidents.get(incident_id)
+        fix = (
+            next((f for f in incident.fixes if f.leg == leg), None)
+            if incident
+            else None
+        )
+        if fix is None:
+            return False
+        fix.approved = True
+        self.runs.log.append("fix_approved", {"incident": incident_id, "leg": leg})
+        return True
+
+    async def replay(self, incident_id: str) -> Replay | None:
+        incident = self._incidents.get(incident_id)
+        if incident is None:
+            return None
+        replayer, run = self.replayer, self.runs.get(incident.run_id)
+        assert replayer is not None and run is not None  # create_app sets the replayer
+        fixes, task = incident.fixes, run.task
+        # Every replayed session runs its own server: off this loop, so the API keeps serving.
+        result = await asyncio.to_thread(lambda: asyncio.run(replayer(fixes, task)))
+        incident.replay = result
+        self.runs.log.append(
+            "replay", {"incident": incident_id, "passed": result.passed}
+        )
+        return result
 
     def get(self, incident_id: str) -> Incident | None:
         incident = self._incidents.get(incident_id)

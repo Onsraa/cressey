@@ -29,11 +29,17 @@ class Call(BaseModel):
     say: str | None = None  # what the agent says before the call
     call: str
     args: dict[str, JsonValue] = {}
+    stop_if_error: bool = (
+        False  # the agent needs this call's result: it stops if it fails
+    )
 
 
 class Session(BaseModel):
     id: str
     expect: Literal["held", "free"]  # should Cressey hold this session?
+    variant_of: str | None = (
+        None  # the incident session this one varies, for the replay
+    )
     task: str
     mandate: Mandate = Field(default_factory=Mandate)
     visibility: Visibility = "messages"
@@ -47,6 +53,7 @@ class Played(BaseModel):
     run_id: str
     kind: RunKind
     blocked_at: int | None  # the call Cressey refused, 1-based
+    stopped_at: int | None = None  # the needed call that failed, 1-based
     report: str
 
 
@@ -76,7 +83,7 @@ async def play(
         }
         run = (await h.post("/api/runs", json=body)).raise_for_status().json()
         auth = {"Authorization": f"Bearer {run['key']}"}
-        blocked_at = None
+        blocked_at = stopped_at = None
         transport = StreamableHttpTransport(base_url + MCP_PATH, headers=auth)
         async with Client(transport) as agent:
             for n, step in enumerate(session.steps, start=1):
@@ -91,8 +98,12 @@ async def play(
                 if result.is_error and _text(result).startswith(REFUSED):
                     blocked_at = n
                     break
+                if result.is_error and step.stop_if_error:
+                    stopped_at = n
+                    break
                 await asyncio.sleep(pace)
-        report = session.report if blocked_at is None else session.report_if_blocked
+        stopped = blocked_at is not None or stopped_at is not None
+        report = session.report_if_blocked if stopped else session.report
         await h.post(
             f"/api/runs/{run['id']}/report", json={"text": report}, headers=auth
         )
@@ -101,6 +112,7 @@ async def play(
         run_id=run["id"],
         kind=kind,
         blocked_at=blocked_at,
+        stopped_at=stopped_at,
         report=report,
     )
 

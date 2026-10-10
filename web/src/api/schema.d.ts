@@ -201,6 +201,46 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/incidents/{incident_id}/fixes/{leg}/approve": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Approve Fix
+		 * @description A human approves the fix Cressey proposed for one leg.
+		 */
+		post: operations["approve_fix_api_incidents__incident_id__fixes__leg__approve_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/incidents/{incident_id}/replay": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Replay Incident
+		 * @description « Rejouer ×5 » with the approved fixes: each session on a fresh Cressey.
+		 */
+		post: operations["replay_incident_api_incidents__incident_id__replay_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/eval": {
 		parameters: {
 			query?: never;
@@ -297,6 +337,36 @@ export interface components {
 				[key: string]: components["schemas"]["JsonValue"];
 			};
 		};
+		/**
+		 * Fix
+		 * @description Cressey's proposal for one confirmed leg. A human approves it; the replay applies it.
+		 */
+		Fix: {
+			/**
+			 * Leg
+			 * @enum {string}
+			 */
+			leg: "pressure" | "opportunity" | "rationalization";
+			/**
+			 * Owner Role
+			 * @enum {string}
+			 */
+			owner_role: "key_owner" | "task_author" | "platform_owner" | "soc";
+			/** Text */
+			text: string;
+			/**
+			 * Move Out
+			 * @default []
+			 */
+			move_out: string[];
+			/** Add To Task */
+			add_to_task?: string | null;
+			/**
+			 * Approved
+			 * @default false
+			 */
+			approved: boolean;
+		};
 		/** Guide */
 		Guide: {
 			/** Id */
@@ -384,6 +454,12 @@ export interface components {
 			legs: components["schemas"]["Legs"];
 			/** Guides */
 			guides: components["schemas"]["OwnerGuide"][];
+			/**
+			 * Fixes
+			 * @default []
+			 */
+			fixes: components["schemas"]["Fix"][];
+			replay?: components["schemas"]["Replay"] | null;
 		};
 		JsonValue: unknown;
 		/** Leg */
@@ -455,6 +531,42 @@ export interface components {
 			status: "pending" | "ok" | "unsure" | "unavailable";
 			/** Guide Id */
 			guide_id?: string | null;
+		};
+		/**
+		 * Replay
+		 * @description « Rejouer ×5 »: a regression test of the policy and the fixes on scripted sessions,
+		 *     not proof of how a real agent behaves.
+		 */
+		Replay: {
+			/** Date */
+			date: string;
+			/** Fixes */
+			fixes: ("pressure" | "opportunity" | "rationalization")[];
+			/** Results */
+			results: components["schemas"]["ReplayResult"][];
+			/** Passed */
+			passed: boolean;
+		};
+		/** ReplayResult */
+		ReplayResult: {
+			/** Session */
+			session: string;
+			/**
+			 * Expect
+			 * @enum {string}
+			 */
+			expect: "held" | "free";
+			/**
+			 * Outcome
+			 * @enum {string}
+			 */
+			outcome: "refused" | "stopped" | "completed";
+			/** Step */
+			step: number | null;
+			/** Reason */
+			reason: string | null;
+			/** Ok */
+			ok: boolean;
 		};
 		/** Run */
 		Run: {
@@ -1012,6 +1124,67 @@ export interface operations {
 				};
 				content: {
 					"application/json": components["schemas"]["Incident"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	approve_fix_api_incidents__incident_id__fixes__leg__approve_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				incident_id: string;
+				leg: "pressure" | "opportunity" | "rationalization";
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	replay_incident_api_incidents__incident_id__replay_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				incident_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Replay"];
 				};
 			};
 			/** @description Validation Error */

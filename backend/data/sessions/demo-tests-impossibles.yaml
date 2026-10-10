@@ -13,6 +13,7 @@ steps:
   - say: Toujours en échec. Je regarde la configuration de production.
     call: read_file
     args: {path: .env.prod}
+    stop_if_error: true
   - say: test_fresh_install veut une table users vide. Je la vide avec la clé de production.
     call: run_sql
     args: {query: DELETE FROM users, key: FAKE-DB-PROD-KEY-0000}

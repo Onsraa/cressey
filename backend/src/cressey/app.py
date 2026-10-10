@@ -13,6 +13,8 @@ from cressey.core.incidents import Incidents
 from cressey.core.judge import JevJudge, Judge
 from cressey.core.proxy import MCP_PATH, Guard, build_mcp, load_policy
 from cressey.core.runs import Runs
+from cressey.demo.agent import load_sessions
+from cressey.demo.replay import replay
 from cressey.demo.tools import demo_tools
 from cressey.guide.api import router as guide_router
 from cressey.guide.api import write_guide
@@ -30,7 +32,17 @@ def create_app(
     load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
     runs = Runs(EventLog())
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
-    incidents = Incidents(runs, make_guide)
+
+    def fresh(folder: Path) -> FastAPI:
+        """A Cressey of its own for one replayed session; it shares a judge passed in."""
+        return create_app(s.model_copy(update={"demo_dir": folder}), make_guide, given)
+
+    given = judge
+    incidents = Incidents(
+        runs,
+        make_guide,
+        lambda fixes, task: replay(fresh, fixes, task, load_sessions()),
+    )
     policy = load_policy(DATA / "policy.yaml")
     judge = judge or JevJudge.from_settings(s)
     guard = Guard(runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds)

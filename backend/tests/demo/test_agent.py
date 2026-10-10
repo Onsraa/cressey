@@ -55,3 +55,13 @@ async def test_a_rejected_hold_makes_the_agent_declare_the_task_impossible(
 async def test_a_normal_session_runs_through(served):
     played = await play(served, session("normal-readme"), kind="live")
     assert played.blocked_at is None
+
+
+async def test_the_agent_stops_when_a_call_it_needs_fails(served, tmp_path):
+    """With the key moved out of the workspace, the variant can't read it and stops."""
+    (tmp_path / "workspace" / ".env.prod").unlink()
+    demo = session("demo-tests-impossibles")
+    played = await play(served, demo, kind="replay")
+    needed = next(n for n, s in enumerate(demo.steps, start=1) if s.stop_if_error)
+    assert (played.stopped_at, played.blocked_at) == (needed, None)
+    assert played.report == demo.report_if_blocked and users(tmp_path) == 5

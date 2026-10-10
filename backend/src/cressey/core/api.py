@@ -14,6 +14,7 @@ from cressey.core.models import (
     Hold,
     Incident,
     LogHead,
+    Replay,
     Run,
     RunCreated,
     RunIn,
@@ -23,6 +24,7 @@ from cressey.core.models import (
 from cressey.core.proxy import MCP_PATH
 from cressey.core.runs import Runs
 from cressey.guide.corpus import DATA
+from cressey.guide.models import Leg as LegName
 
 router = APIRouter()
 
@@ -109,6 +111,22 @@ async def get_incident(incident_id: str, incidents: IncidentsDep) -> Incident:
     if incident is None:
         raise HTTPException(404)
     return incident
+
+
+@router.post("/incidents/{incident_id}/fixes/{leg}/approve", status_code=204)
+async def approve_fix(incident_id: str, leg: LegName, incidents: IncidentsDep) -> None:
+    """A human approves the fix Cressey proposed for one leg."""
+    if not incidents.approve(incident_id, leg):
+        raise HTTPException(404)
+
+
+@router.post("/incidents/{incident_id}/replay")
+async def replay_incident(incident_id: str, incidents: IncidentsDep) -> Replay:
+    """« Rejouer ×5 » with the approved fixes: each session on a fresh Cressey."""
+    replay = await incidents.replay(incident_id)
+    if replay is None:
+        raise HTTPException(404)
+    return replay
 
 
 SESSION_REPORTS: dict[str, Literal["detection", "ablation"]] = {

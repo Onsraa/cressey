@@ -163,3 +163,29 @@ async def test_each_guide_gets_a_root_cause_sentence_for_its_leg():
     assert run.task in pressure.summary and pressure.source == "tâche"
     assert "DB_PROD_KEY" in opportunity.source and ".env.prod" in opportunity.source
     assert "run_sql" in opportunity.summary
+
+
+async def test_each_leg_cressey_can_fix_gets_a_fix_for_a_human_to_approve():
+    from cressey.core.incidents import TASK_WAY_OUT
+
+    runs = Runs(EventLog())
+    run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=ON))
+    incident = Incidents(runs, guide).open(run, call, "critique")
+    fixes = {f.leg: f for f in incident.fixes}
+    assert set(fixes) == {"pressure", "opportunity"}  # rationalization: its guide only
+    key, task = fixes["opportunity"], fixes["pressure"]
+    assert (key.owner_role, key.move_out, key.approved) == (
+        "key_owner",
+        [".env.prod"],
+        False,
+    )
+    assert "DB_PROD_KEY" in key.text and ".env.prod" in key.text
+    assert (task.owner_role, task.add_to_task) == ("task_author", TASK_WAY_OUT)
+    assert TASK_WAY_OUT in task.text
+
+
+async def test_a_leg_left_unconfirmed_gets_no_fix():
+    runs = Runs(EventLog())
+    run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
+    incident = Incidents(runs, guide).open(run, call, "critique")
+    assert [f.leg for f in incident.fixes] == ["opportunity"]
