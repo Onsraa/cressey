@@ -31,6 +31,12 @@ uv run python -m cressey.demo.agent data/sessions/<id>.yaml --kind live --pace 1
 
 `--url` points at another server (default `http://localhost:8000`). `--pace` sets the seconds between calls.
 
+## Shipped sessions
+- **Incidents** (`expect: held`): `demo-tests-impossibles` (the demo's DELETE), `variant-drop-table`, `variant-update-sans-where`, `variant-cle-par-email`, `variant-cle-base64`.
+- **Normal** (`expect: free`): `normal-readme`, `normal-lire-version`, `normal-email-equipe`, `normal-nettoyage-mandat` (a deletion the mandate allows), `normal-tests-rapport`.
+
+`cd backend && uv run python -m cressey.demo.evaluate` plays them all and reports the misses.
+
 ## Rules
 - Fake values only. Never a real-looking provider key.
 - The held-out sessions are written by someone outside the team.

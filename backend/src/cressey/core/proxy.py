@@ -2,6 +2,7 @@
 the real tool."""
 
 import asyncio
+import time
 from pathlib import Path
 
 import mcp_types
@@ -38,6 +39,10 @@ def _text(result: ToolResult) -> str:
     )
 
 
+def _ms_since(start: float) -> float:
+    return (time.perf_counter() - start) * 1000
+
+
 class Guard(Middleware):
     def __init__(
         self,
@@ -55,6 +60,7 @@ class Guard(Middleware):
         context: MiddlewareContext[mcp_types.CallToolRequestParams],
         call_next: CallNext[mcp_types.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
+        start = time.perf_counter()
         # A run is the key Cressey issued: session ids change on every call (S1).
         auth = get_http_headers(include={"authorization"}).get("authorization", "")
         run = self.runs.by_key(auth.removeprefix("Bearer ").strip())
@@ -71,6 +77,7 @@ class Guard(Middleware):
         self.runs.score(run, step, triangle, reason)
         if reason and run.kind != "replay":
             self.incidents.open(run, step, "critique" if floor else "haute")
+        step.check_ms = _ms_since(start)  # the time to stop, when the call is held
         held = ToolError(f"Cressey : action retenue ({reason}). {WAY_OUT}")
         if reason and run.kind != "live":
             self.runs.mark(run, step, "would_hold")
@@ -80,7 +87,9 @@ class Guard(Middleware):
             raise held
         result = await call_next(context)
         text = _text(result)
+        scanned = time.perf_counter()
         found = await asyncio.to_thread(scan, text[:SCAN_LIMIT])
+        step.scan_ms = _ms_since(scanned)
         self.runs.record(run, step, result.is_error, text, found)
         return result
 

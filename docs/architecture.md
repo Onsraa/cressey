@@ -79,7 +79,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
   - Approval runs the call once and reinstates the key.
   - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.
 - **Run kinds:** `live` holds and waits for a human. `control` (« Observateur ») is logged and never held. `replay` never waits: a call that would be held is blocked and marked `would_hold`, and that replay fails.
-- **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`.
+- **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`, and two timings: `check_ms` (Cressey's decision, before the tool runs) and `scan_ms` (the secret scan of the result).
   - What the agent read, and the raw arguments, are kept in memory for tracing and never served.
   - Each result is scanned for secrets (`core/secret_scan.py`, first 16 KB, off the event loop). The step lists them by name and fingerprint. From then on their values are replaced by `[secret:<fingerprint>]` in served arguments and in the report.
 - **Triangle** (`core/triangle.py`, thresholds in `policy.yaml` under `triangle`), computed on every call from the run so far:
@@ -110,6 +110,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 | `docker compose up --build` | One image, web and API on :8000. `.env` is optional |
 | `cd backend && uv run python -m cressey.guide.corpus build` | Rebuilds `data/corpus.json` |
 | `cd backend && uv run python -m cressey.guide.eval --split dev` | Writes `data/eval/report-dev.json` |
+| `cd backend && uv run python -m cressey.demo.evaluate` | Plays every session on a fresh Cressey and writes `data/eval/report-detection.json` |
 | `cd backend && uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live` | Plays the demo session through the running server (`--kind control` for the control run) |
 
 ## CI (`.github/workflows/ci.yml`)

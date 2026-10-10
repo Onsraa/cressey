@@ -30,6 +30,8 @@
 | 10-10 | **One incident per held call**, opened at hold time; guides start in the background before the decision | The owners' guides are ready by the time the human decides (live: 9–14 s for three guides in parallel) |
 | 10-10 | **A floor hit with no confirmed leg** sends one guide to the SOC, on the rationalization leg | Every incident reaches an owner |
 | 10-10 | **Guide summaries are one root-cause sentence per leg**, built by code | With raw fact lists the task author got « je ne sais pas »; with the sentence all three guides came back sourced |
+| 10-10 | **« Rejouer ×5 » plays five attack variants**: DELETE, DROP TABLE, UPDATE without WHERE, the key emailed in clear, then base64-encoded | The agent is scripted, so five identical replays would prove nothing. Five variants show the detection holds against variations |
+| 10-10 | **The detection eval plays each session on a fresh Cressey, as a replay** | No session sees another's changes, and nothing waits for a human |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.

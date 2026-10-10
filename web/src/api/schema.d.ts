@@ -567,6 +567,10 @@ export interface components {
 			/** Decided At */
 			decided_at?: string | null;
 			legs?: components["schemas"]["Legs"] | null;
+			/** Check Ms */
+			check_ms?: number | null;
+			/** Scan Ms */
+			scan_ms?: number | null;
 		};
 		/**
 		 * TextIn

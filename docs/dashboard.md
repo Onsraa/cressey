@@ -94,6 +94,6 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Incidents, fixes, replay, control run | incident endpoints, with a guide status and id per owner | incidents exist: `GET /api/incidents` (queue order) and `/{id}`: severity, sources, legs, decision, and per owner `status` and `guide_id`. The control run exists (`kind: control`). Fixes and replay: to add |
 | Integrity strip | the log head: hash and count | exists: `GET /api/status` → `log` (`hash`, `count`, `intact`) |
 | Header and waiting state | status: protection mode, model mode, MCP URL | exists: `GET /api/status` (`mode`, `model_mode`, `mcp_path`) |
-| Évaluation | the eval reports, with their date and their misses (`backend/data/eval/report-dev.json` exists) | to add |
+| Évaluation | the eval reports, with their date and their misses | the files exist: `report-dev.json` (guides) and `report-detection.json` (sessions held, misses, time to stop, decision time per call). The endpoint is still to add |
 
 The interface polls the runs and holds about once a second. It moves to SSE only if polling lags.

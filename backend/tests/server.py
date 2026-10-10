@@ -1,18 +1,15 @@
 """A live Cressey server for tests: uvicorn in a thread, no model called."""
 
 import asyncio
-import socket
 import sqlite3
-import threading
-import time
 from collections.abc import Generator
 from contextlib import closing, contextmanager
 from pathlib import Path
 
 import httpx2
-import uvicorn
 
 from cressey.app import create_app
+from cressey.demo.server import serve
 from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
 
@@ -39,23 +36,8 @@ def serving(demo: Path, hold_timeout: float) -> Generator[str]:
         demo_dir=demo,
         hold_timeout=hold_timeout,
     )
-    app = create_app(settings, make_guide=fake_guide)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(
-        uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=1)
-    )
-    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]})
-    thread.start()
-    for _ in range(500):
-        if server.started:
-            break
-        time.sleep(0.01)
-    try:
-        yield f"http://127.0.0.1:{sock.getsockname()[1]}"
-    finally:
-        server.should_exit = True
-        thread.join(10)
+    with serve(create_app(settings, make_guide=fake_guide)) as base:
+        yield base
 
 
 async def api(base: str, method: str, path: str, **kw) -> httpx2.Response:

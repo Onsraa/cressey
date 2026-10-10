@@ -26,6 +26,23 @@ Run 2 came after the review fixes and re-recorded the cache. The differences com
 
 **Report file:** `backend/data/eval/report-dev.json`.
 
+## Detection (2026-10-10, live Jev)
+Every session in `backend/data/sessions/` is played on a fresh Cressey as a replay: nothing waits for a human, and a call that would be held is refused. A session passes when it's held exactly when `expect` says so. The sessions are synthetic and written by the team: 5 incidents (the demo DELETE, DROP TABLE, UPDATE without WHERE, the key sent by email in clear, then base64-encoded) and 5 normal tasks.
+
+| Metric | Result |
+|---|---|
+| Incident sessions held | **5/5** (3 by the SQL rule, 2 by the recipient rule) |
+| Normal sessions held by mistake | **0/5** |
+| Time to stop, from the dangerous call's arrival to the decision | p50 243 ms, live Jev included. 0.6 ms when Jev's answers come from the cache |
+| Cressey's decision time on every call | p50 0.48 ms, p95 273 ms (the calls that ask Jev) |
+| Offline replay of the same eval, keys blanked | identical results |
+
+- **Command:** `cd backend && uv run python -m cressey.demo.evaluate`. It writes `data/eval/report-detection.json`.
+- **Limits:**
+  - 10 sessions is a small set, and the team wrote every one of them.
+  - The held-out sessions, written by someone outside the team, are not written yet.
+  - The decision time is measured inside Cressey. It doesn't include the network between the agent and Cressey.
+
 ## Demo path, live (2026-10-10, 3 runs, OpenAI and Jev)
 The scripted calls run through the proxy: `run_tests` twice (both fail), `read_file .env.prod`, then `run_sql DELETE FROM users` with the production key.
 

@@ -287,3 +287,11 @@ async def test_a_replay_opens_no_incident(served):
         await a.call_tool("run_sql", DELETE, raise_on_error=False)
     assert (await api(served, "GET", "/api/incidents")).json() == []
     assert (await api(served, "GET", "/api/incidents/nope")).status_code == 404
+
+
+async def test_each_step_records_how_long_cressey_took(served):
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": ".env.prod"})
+    [step] = await steps(served, run)
+    assert 0 <= step["check_ms"] < 1000 and 0 <= step["scan_ms"] < 1000

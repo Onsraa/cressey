@@ -83,6 +83,10 @@ class Step(BaseModel):
     held_until: str | None = None
     decided_at: str | None = None
     legs: Legs | None = None  # the triangle when this call came in
+    check_ms: float | None = (
+        None  # Cressey's decision, before the tool runs or a hold waits
+    )
+    scan_ms: float | None = None  # the secret scan of what the call returned
     # Kept in memory for tracing, never served.
     raw_args: dict[str, JsonValue] = Field(default_factory=dict, exclude=True)
     result: str = Field("", exclude=True)
