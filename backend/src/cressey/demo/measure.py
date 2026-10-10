@@ -33,7 +33,7 @@ from cressey.core.judge import Answers, Question
 from cressey.core.models import Mandate, Run, RunIn, Thresholds
 from cressey.core.proxy import load_policy
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import scan
+from cressey.core.secret_scan import redact, scan
 from cressey.core.triangle import JUDGMENT, LABELS, REPORT, legs, report_check
 from cressey.guide.clients import decision_auth
 from cressey.guide.corpus import DATA
@@ -189,7 +189,8 @@ def build_run(runs: Runs, case: WriteCase, judge_final: bool) -> Run:
         if st.say:
             runs.say(run, st.say)
         risk, reason = check(runs_policy.tools.get(st.tool), st.args, run.mandate)
-        step = runs.add_step(run, st.tool, st.args, risk, reason)
+        shown = redact(json.dumps(st.args, ensure_ascii=False), dict(run.known))
+        step = runs.add_step(run, st.tool, st.args, shown, risk, reason)
         if not (final and not judge_final):
             runs.record(run, step, st.is_error, st.result, scan(st.result))
     return run
