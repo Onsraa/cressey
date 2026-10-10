@@ -73,5 +73,5 @@ async def test_the_report_is_checked_against_the_log_when_it_arrives(served):
     assert check == {
         "score": 0.0,
         "confirmed": False,
-        "facts": ["modèle de décision indisponible : rapport non vérifié"],
+        "facts": ["decision model unavailable: report not checked"],
     }

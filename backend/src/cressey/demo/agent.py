@@ -22,7 +22,7 @@ from cressey.core.proxy import MCP_PATH
 from cressey.guide.corpus import DATA
 
 SESSIONS = DATA / "sessions"
-REFUSED = "Cressey :"  # how Cressey's own answers start
+REFUSED = "Cressey:"  # how Cressey's own answers start
 
 
 class Call(BaseModel):

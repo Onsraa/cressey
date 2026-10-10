@@ -41,32 +41,32 @@ RISK_WHEN_LOW = {"way_out"}  # every other factor is a risk when high
 CUT = 0.5  # a factor at this risk or more is shown
 # What a factor at risk reads as; its number is the risk, so higher is riskier everywhere.
 RISKS = {
-    "impossible": "la tâche peut échouer même faite honnêtement",
-    "way_out": "la tâche ne dit pas quoi faire si elle est impossible",
-    "deadline": "la tâche impose une échéance",
-    "wider": "le mandat permet plus que la tâche ne demande",
-    "grader": "les outils peuvent changer ce qui juge le travail",
-    "ends_over_means": "la tâche demande un résultat sans limiter les moyens",
+    "impossible": "the task can fail even when done honestly",
+    "way_out": "the task doesn't say what to do if it can't be done",
+    "deadline": "the task imposes a deadline",
+    "wider": "the mandate allows more than the task needs",
+    "grader": "the tools can change what judges the work",
+    "ends_over_means": "the task asks for a result without limiting the means",
 }
 # Who fixes each factor, and how: the guides' owners.
 FIXES: dict[str, tuple[OwnerRole, str]] = {
     "impossible": (
         "task_author",
-        "vérifier que les tests, les données et les accès dont elle dépend sont prêts",
+        "check that the tests, data and access it depends on are ready",
     ),
-    "way_out": ("task_author", f"ajouter « {TASK_WAY_OUT} »"),
-    "deadline": ("task_author", "retirer l'échéance, ou dire qu'un retard est accepté"),
-    "wider": ("key_owner", "limiter le mandat à ce que la tâche demande"),
-    "grader": ("platform_owner", "geler les tests et le correcteur (frozen)"),
+    "way_out": ("task_author", f"add “{TASK_WAY_OUT}”"),
+    "deadline": ("task_author", "remove the deadline, or say that a delay is accepted"),
+    "wider": ("key_owner", "limit the mandate to what the task needs"),
+    "grader": ("platform_owner", "freeze the tests and the scorer (frozen)"),
     "ends_over_means": (
         "task_author",
-        "dire aussi ce que l'agent ne doit pas faire pour y arriver",
+        "also say what the agent must not do to get there",
     ),
 }
-OWNER_NAMES: dict[OwnerRole, str] = {  # as the web names them (web/src/lib/labels.ts)
-    "task_author": "auteur de la tâche",
-    "key_owner": "propriétaire de la clé",
-    "platform_owner": "responsable de la plateforme",
+OWNER_NAMES: dict[OwnerRole, str] = {
+    "task_author": "task author",
+    "key_owner": "key owner",
+    "platform_owner": "platform owner",
 }
 
 
@@ -97,7 +97,7 @@ async def assess(
         risk = 1 - p if k in RISK_WHEN_LOW else p
         if risk >= CUT:
             owner, fix = FIXES[k]
-            facts.append(f"{RISKS[k]} ({risk:.2f}) → {OWNER_NAMES[owner]} : {fix}")
+            facts.append(f"{RISKS[k]} ({risk:.2f}) → {OWNER_NAMES[owner]}: {fix}")
     return Preflight(scores=scores, facts=facts)
 
 

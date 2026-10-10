@@ -62,7 +62,7 @@ async def test_allowed_call_reaches_the_tool_and_is_recorded(served):
 async def test_a_key_cressey_did_not_issue_is_refused(served):
     async with agent(served, "csy_not-issued") as a:
         r = await a.call_tool("read_file", {"path": "README.md"}, raise_on_error=False)
-    assert r.is_error and "clé inconnue" in r.content[0].text
+    assert r.is_error and "unknown key" in r.content[0].text
 
 
 async def test_destructive_sql_outside_the_mandate_waits_for_a_human(served, tmp_path):
@@ -86,7 +86,7 @@ async def test_rejected_hold_never_runs_and_offers_a_way_out(served, tmp_path):
         n = (await next_hold(served))["step"]["n"]
         await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
         r = await call
-    assert r.is_error and "Déclarer la tâche impossible" in r.content[0].text
+    assert r.is_error and "Declaring the task impossible" in r.content[0].text
     assert users(tmp_path) == 5
     assert [s["status"] for s in await steps(served, run)] == ["rejected"]
 
@@ -101,7 +101,7 @@ async def test_a_held_call_suspends_the_rest_of_the_run(served):
         )
         await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
         await call
-    assert other.is_error and "suspendue" in other.content[0].text
+    assert other.is_error and "suspended" in other.content[0].text
     assert [s["status"] for s in await steps(served, run)] == ["rejected", "denied"]
 
 
@@ -118,10 +118,10 @@ async def test_with_holds_refused_a_call_that_would_be_held_is_refused_at_once(
             "read_file", {"path": "README.md"}, raise_on_error=False
         )
     [incident] = (await api(base, "GET", "/api/incidents")).json()
-    assert r.is_error and r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert r.is_error and r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     assert users(tmp_path) == 5 and (await api(base, "GET", "/api/holds")).json() == []
     assert [s["status"] for s in await steps(base, run)] == ["denied", "denied"]
-    assert after.is_error and "suspendue" in after.content[0].text
+    assert after.is_error and "suspended" in after.content[0].text
     assert (incident["step"], incident["decision"]) == (1, "denied")
 
 
@@ -264,7 +264,7 @@ async def test_pressure_and_opportunity_alone_no_longer_hold_a_write(served):
     assert not r.is_error and (last["status"], last["reason"]) == ("allowed", None)
     assert legs["pressure"]["confirmed"] and legs["opportunity"]["confirmed"]
     assert legs["rationalization"]["facts"] == [
-        "modèle de décision indisponible : rationalisation non mesurée"
+        "decision model unavailable: rationalization not measured"
     ]
 
 
@@ -278,7 +278,7 @@ async def test_pressure_puts_the_way_out_in_the_next_result_once(served):
     page = (await api(served, "GET", f"/api/runs/{run['id']}")).json()
     assert [c.text for c in first.content] == [
         "# Demo app\n\nShipping to production tonight.\n",
-        f"Cressey : {WAY_OUT}",
+        f"Cressey: {WAY_OUT}",
     ]
     assert all(WAY_OUT not in c.text for c in second.content)
     assert (page["way_out_step"], page["read_only_step"]) == (3, None)
@@ -299,13 +299,13 @@ async def test_pressure_and_a_key_in_reach_refuse_destructive_calls_without_a_ho
         w = await a.call_tool("write_file", write, raise_on_error=False)
     page = (await api(served, "GET", f"/api/runs/{run['id']}")).json()
     sql = page["steps"][3]
-    assert r.is_error and r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert r.is_error and r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     assert (
         users(tmp_path) == 5 and (await api(served, "GET", "/api/holds")).json() == []
     )
     assert (sql["status"], sql["reason"]) == (
         "denied",
-        "clé en lecture seule : pression et opportunité confirmées",
+        "read-only key: pressure and opportunity confirmed",
     )
     assert page["read_only_step"] == 4 and not w.is_error
     assert (await api(served, "GET", "/api/incidents")).json() == []
@@ -523,7 +523,7 @@ async def test_the_agent_isnt_told_that_a_key_is_a_trap(served_short_holds):
         query = {"query": "SELECT count(*) FROM users", "key": TRAP_KEY}
         r = await a.call_tool("run_sql", query, raise_on_error=False)
     told = r.content[0].text
-    assert r.is_error and told == f"Cressey : action retenue. {WAY_OUT}"
+    assert r.is_error and told == f"Cressey: action held. {WAY_OUT}"
     [step] = await steps(base, run)
     assert step["reason"] == "trap key used: DB_ADMIN_KEY"
 
@@ -534,7 +534,7 @@ async def test_the_agent_is_told_it_was_held_but_never_why(served_short_holds):
     run = await new_run(base)
     async with agent(base, run["key"]) as a:
         r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
-    assert r.is_error and r.content[0].text == f"Cressey : action retenue. {WAY_OUT}"
+    assert r.is_error and r.content[0].text == f"Cressey: action held. {WAY_OUT}"
     [step] = await steps(base, run)
     assert step["reason"] == "destructive SQL outside the mandate: users"
 
@@ -601,11 +601,11 @@ async def test_on_stop_the_floor_refuses_at_once_with_no_hold(served, tmp_path):
         after = await a.call_tool(
             "read_file", {"path": "README.md"}, raise_on_error=False
         )
-    assert r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     assert (await api(served, "GET", "/api/holds")).json() == [] and users(
         tmp_path
     ) == 5
-    assert after.is_error and "suspendue" in after.content[0].text
+    assert after.is_error and "suspended" in after.content[0].text
 
 
 async def test_on_fleet_stop_a_target_several_runs_went_after_is_refused_at_once(
@@ -626,7 +626,7 @@ async def test_on_fleet_stop_a_target_several_runs_went_after_is_refused_at_once
     )  # the third run raises the fleet signal: no human queue
     async with agent(served, third["key"]) as a:
         r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
-    assert r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     [step] = await steps(served, third)
     assert step["status"] == "denied"
 
@@ -639,7 +639,7 @@ async def test_on_stop_a_trap_key_is_refused_at_once(served):
     async with agent(served, run["key"]) as a:
         query = {"query": "SELECT 1", "key": TRAP_KEY}
         r = await a.call_tool("run_sql", query, raise_on_error=False)
-    assert r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     assert (await api(served, "GET", "/api/holds")).json() == []
 
 
@@ -739,7 +739,7 @@ async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_pa
             written = await write
             await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
             await delete
-    assert written.is_error and "suspendue" in written.content[0].text
+    assert written.is_error and "suspended" in written.content[0].text
     assert not (tmp_path / "workspace" / "notes.md").exists()
 
 
@@ -798,11 +798,11 @@ async def test_a_late_read_that_doesnt_alarm_still_shows_what_it_found(
         for _ in range(250):
             [step] = await steps(base, run)
             facts = step["legs"]["rationalization"]["facts"]
-            if not any("lu après coup" in f for f in facts):
+            if not any("read afterwards" in f for f in facts):
                 break
             await asyncio.sleep(0.02)
         incidents = (await api(base, "GET", "/api/incidents")).json()
-    assert facts == ["modèle de décision indisponible : rationalisation non mesurée"]
+    assert facts == ["decision model unavailable: rationalization not measured"]
     assert step["status"] == "allowed" and incidents == []
 
 
@@ -837,7 +837,7 @@ async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(
         alerted = []
         for _ in range(250):
             incidents = (await api(base, "GET", "/api/incidents")).json()
-            alerted = [i for i in incidents if "lu après coup" in i["reason"]]
+            alerted = [i for i in incidents if "read afterwards" in i["reason"]]
             if alerted:
                 break
             await asyncio.sleep(0.02)

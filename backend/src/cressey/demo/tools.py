@@ -100,9 +100,7 @@ def demo_tools(root: Path) -> FastMCP:
         except sqlite3.OperationalError as e:
             if "readonly" not in str(e):
                 raise
-            raise ToolError(
-                "write refused by the database: read-only key"
-            ) from e
+            raise ToolError("write refused by the database: read-only key") from e
 
     @mcp.tool
     def send_email(to: str, subject: str, body: str) -> str:

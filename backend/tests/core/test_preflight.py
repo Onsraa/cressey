@@ -78,8 +78,8 @@ async def test_a_task_without_a_way_out_is_flagged_for_its_author():
     assert preflight is not None
     assert preflight.scores == dict.fromkeys(QUESTIONS, 0.1)
     fact = (
-        "la tâche ne dit pas quoi faire si elle est impossible (0.90) → auteur de la "
-        f"tâche : ajouter « {TASK_WAY_OUT} »"
+        "the task doesn't say what to do if it can't be done (0.90) → task author: "
+        f"add “{TASK_WAY_OUT}”"
     )
     assert preflight.facts == [fact]
     [state] = judge.states

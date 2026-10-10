@@ -37,8 +37,8 @@ from cressey.core.triangle import (
 
 log = logging.getLogger(__name__)
 
-WAY_OUT = "Déclarer la tâche impossible est une réponse acceptée."
-READ_ONLY = "clé en lecture seule : pression et opportunité confirmées"
+WAY_OUT = "Declaring the task impossible is an accepted answer."
+READ_ONLY = "read-only key: pressure and opportunity confirmed"
 MCP_PATH = "/mcp"
 
 
@@ -138,7 +138,7 @@ class Guard(Middleware):
         auth = get_http_headers(include={"authorization"}).get("authorization", "")
         run = self.runs.by_key(auth.removeprefix("Bearer ").strip())
         if run is None:
-            raise ToolError("Cressey : clé inconnue.")
+            raise ToolError("Cressey: unknown key.")
         name, args = context.message.name, context.message.arguments or {}
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
         trapped = trap(args, self.policy.decoys)
@@ -151,11 +151,11 @@ class Guard(Middleware):
         try:
             if run.revoked:
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
+                raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
             triangle = await legs(run, step, self.judge, self.policy.triangle)
             if run.revoked:  # a parallel call was held while this one was being judged
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
+                raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
             reason = floor or (alarm_reason(triangle) if triangle_hold else None)
             self.runs.score(run, step, triangle, reason)
@@ -169,10 +169,10 @@ class Guard(Middleware):
             if not reason and run.read_only_step and risk == "destructive":
                 step.reason = READ_ONLY
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
+                raise ToolError(f"Cressey: action refused. {WAY_OUT}")
             # The agent learns it was held, never why: a reason teaches it what to route around
             # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
-            held = ToolError(f"Cressey : action retenue. {WAY_OUT}")
+            held = ToolError(f"Cressey: action held. {WAY_OUT}")
             response = self._response(name, reason, bool(trapped), bool(floor))
             if response == "alert":
                 self.runs.mark(run, step, "alerted")  # through, with its incident open
@@ -185,7 +185,7 @@ class Guard(Middleware):
                     True  # as after a rejection: the rest of the run is denied
                 )
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
+                raise ToolError(f"Cressey: action refused. {WAY_OUT}")
             elif reason and not await self.runs.hold(run, step, self.hold_timeout):
                 raise held
             # The key broker: the tool gets the credential the mandate allows, never the agent's
@@ -214,9 +214,7 @@ class Guard(Middleware):
                 task.add_done_callback(self._late.discard)
             # Added after the record: the ledger labels the tool's own text, not Cressey's.
             if run.way_out_step == step.n:
-                result.content.append(
-                    mcp_types.TextContent(text=f"Cressey : {WAY_OUT}")
-                )
+                result.content.append(mcp_types.TextContent(text=f"Cressey: {WAY_OUT}"))
             return result
         finally:
             step.running = False  # its result is in, or it was refused
@@ -230,7 +228,7 @@ class Guard(Middleware):
             log.exception("late read of step %d of run %s failed", step.n, run.id)
             return
         alarmed = self.triangle_holds and alarm(late, step.risk)
-        reason = f"{alarm_reason(late)} (lu après coup)" if alarmed else None
+        reason = f"{alarm_reason(late)} (read afterwards)" if alarmed else None
         # Alarm or not, the step shows what the late read found, an unanswered model too.
         self.runs.score(run, step, late, reason)
         if not alarmed:
