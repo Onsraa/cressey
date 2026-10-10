@@ -1,0 +1,10 @@
+{
+  "_comment": "STUB for the Cressey team. Copy to .mcp.json to give the agent Railway access THROUGH Cressey's MCP proxy instead of (or alongside) the hook. Replace CRESSEY_MCP_URL and CRESSEY_RUN_KEY. Leave it out for a control run.",
+  "mcpServers": {
+    "cressey": {
+      "type": "http",
+      "url": "CRESSEY_MCP_URL/mcp",
+      "headers": { "Authorization": "Bearer CRESSEY_RUN_KEY" }
+    }
+  }
+}
