@@ -230,6 +230,29 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
         s.quotes = {c: _quote(parts, str(k)) for c, k in picked.items() if k in parts}
 
 
+# Labels being read: (run, step position) -> the task reading it. A write or a report waits
+# for the read already running instead of asking again.
+_READING: dict[tuple[str, int], asyncio.Task[None]] = {}
+
+
+def label_soon(run: Run, i: int, judge: Judge) -> asyncio.Task[None]:
+    """Read step i in the background as soon as its result is in, unless it's being read.
+    The write that follows then waits for one judgment, not for every earlier step."""
+    key = (run.id, i)
+    task = _READING.get(key)
+    if task is None:
+        task = asyncio.get_running_loop().create_task(_label(run, i, judge))
+        _READING[key] = task
+        task.add_done_callback(lambda _: _READING.pop(key, None))
+    return task
+
+
+async def _read(run: Run, steps: list[Step], judge: Judge) -> None:
+    """Every one of these steps read once: the reads in flight are awaited, not repeated."""
+    positions = [s.n - 1 for s in steps if s.labels is None]
+    await asyncio.gather(*(label_soon(run, i, judge) for i in positions))
+
+
 def _evidence(run: Run, t: Thresholds) -> list[dict[str, JsonValue]]:
     """The flagged parts of earlier steps, from any distance back: the strongest t.evidence,
     in step order. A fixed size, whatever the run's length."""
@@ -279,8 +302,7 @@ def judgment_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
 async def _rationalization(run: Run, judge: Judge, t: Thresholds) -> Leg:
     if run.steps[-1].risk == "read":
         return Leg(score=0.0, confirmed=False, facts=[])
-    unlabelled = [i for i, s in enumerate(_earlier(run)) if s.labels is None]
-    await asyncio.gather(*(_label(run, i, judge) for i in unlabelled))
+    await _read(run, _earlier(run), judge)
     state = judgment_state(run, t)
     answer = await judge.answers(state, JUDGMENT)
     if answer is None:
@@ -332,8 +354,7 @@ def report_state(run: Run, t: Thresholds) -> dict[str, JsonValue]:
 
 async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
     """S9: is the agent's final report contradicted by the log? Flagged at t.report."""
-    unlabelled = [i for i, s in enumerate(run.steps) if s.labels is None]
-    await asyncio.gather(*(_label(run, i, judge) for i in unlabelled))
+    await _read(run, run.steps, judge)
     answer = await judge.answers(report_state(run, t), REPORT)
     if answer is None:
         return Leg(

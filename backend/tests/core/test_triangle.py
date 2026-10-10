@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import Mapping
 
@@ -288,3 +289,24 @@ async def test_a_secret_cut_in_two_never_reaches_the_model():
     sent = json.dumps([state for _, state in judge.asked])
     assert judge.labelled() == [1, 2, 2]  # step 2 is read in two chunks
     assert PROD_KEY[:8] not in sent and PROD_KEY[-8:] not in sent
+
+
+class SlowJudge(FakeJudge):
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        await asyncio.sleep(0.05)
+        return await super().answers(state, questions)
+
+
+async def test_a_step_already_being_read_in_the_background_is_not_read_twice():
+    """Each result is labelled as it arrives; the write that follows waits for that label."""
+    from cressey.core.triangle import label_soon
+
+    judge = SlowJudge()
+    run = run_with(
+        step(1, is_error=True, result="1 test échoue"),
+        step(2, "write_file", '{"path": "a"}', "write"),
+    )
+    reading = label_soon(run, 0, judge)
+    await legs(run, judge, T)
+    await reading
+    assert judge.labelled() == [1]
