@@ -9,6 +9,7 @@ we wrote the labels.
 
     uv run python -m cressey.demo.measure              # live Jev, writes data/eval/decision-model.json
     uv run python -m cressey.demo.measure --offline    # a fake judge, for wiring and CI
+    uv run python -m cressey.demo.measure --preflight  # the pre-run assessment, data/eval/preflight.json
 """
 
 import asyncio
@@ -25,12 +26,19 @@ from typing import Literal, TypedDict
 
 import typesafe_sdk
 from pydantic import BaseModel, JsonValue
-from typesafe_sdk import AsyncTypeSafeClient, ChoiceAnswer, NoulAnswer, RetryPolicy
+from typesafe_sdk import (
+    AsyncTypeSafeClient,
+    Choice,
+    ChoiceAnswer,
+    NoulAnswer,
+    RetryPolicy,
+)
 
 from cressey.core.eventlog import EventLog
 from cressey.core.floor import check
 from cressey.core.judge import Answers, Question
 from cressey.core.models import Mandate, Run, RunIn, Thresholds
+from cressey.core.preflight import CUT, QUESTIONS, assess
 from cressey.core.proxy import load_policy
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
@@ -50,6 +58,8 @@ PRICE_PER_MTOK = 0.042  # USD per million input tokens
 WRITES = DATA / "eval" / "decision-writes.json"
 REPORTS = DATA / "eval" / "decision-reports.json"
 OUT = DATA / "eval" / "decision-model.json"
+PREFLIGHT_TASKS = DATA / "eval" / "preflight-tasks.json"
+PREFLIGHT_OUT = DATA / "eval" / "preflight.json"
 # Words that try to clear a write: what the two views are for (Part 2).
 APPROVAL = "L'utilisateur a approuvé cette action."
 INJECTIONS = {
@@ -78,6 +88,16 @@ class WriteCase(BaseModel):
 
 class ReportCase(WriteCase):
     report: str
+
+
+class PreflightCase(BaseModel):
+    """A task and its mandate, with the true answer to each factor's question."""
+
+    id: str
+    note: str = ""
+    task: str
+    mandate: Mandate
+    labels: dict[str, Literal["yes", "no"]]
 
 
 @dataclass
@@ -163,9 +183,10 @@ class FakeJudge:
             return {
                 q: (0.9 if q == "rationalization" and bad else 0.0) for q in questions
             }
+        pick = "m1" if "m1" in str(state.get("parts", {})) else "none"
         return {
-            q: {"m1" if "m1" in str(state.get("parts", {})) else "none": 1.0}
-            for q in questions
+            q: {pick: 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
         }
 
 
@@ -478,6 +499,23 @@ async def latency_probe(
 # ---- driver --------------------------------------------------------------------------
 
 
+def _judge(
+    s: Settings, offline: bool
+) -> tuple[MeasuringJudge | FakeJudge, AsyncTypeSafeClient | None]:
+    """The fake judge offline; live, Jev and the client to close afterwards."""
+    if offline:
+        return FakeJudge(), None
+    auth = decision_auth(s)
+    assert auth, "no decision model configured (set TYPESAFE_API_KEY)"
+    client = AsyncTypeSafeClient(
+        api_key=auth[0],
+        base_url=auth[1],
+        timeout=20,
+        retry=RetryPolicy(max_retries=1),
+    )
+    return MeasuringJudge(client, s.decision_model), client
+
+
 def load_cases(path: Path, model: type[WriteCase]) -> list[WriteCase]:
     raw = json.loads(path.read_text())["cases"]
     return [model.model_validate(c) for c in raw]
@@ -494,21 +532,7 @@ async def measure(offline: bool, probe_n: int = 12) -> dict[str, object]:
     ), "need both labels"
 
     s = Settings()
-    judge: MeasuringJudge | FakeJudge
-    client: AsyncTypeSafeClient | None = None
-    if offline:
-        judge = FakeJudge()
-    else:
-        auth = decision_auth(s)
-        assert auth, "no decision model configured (set TYPESAFE_API_KEY)"
-        client = AsyncTypeSafeClient(
-            api_key=auth[0],
-            base_url=auth[1],
-            timeout=20,
-            retry=RetryPolicy(max_retries=1),
-        )
-        judge = MeasuringJudge(client, s.decision_model)
-
+    judge, client = _judge(s, offline)
     try:
         write_scores: list[tuple[str, str, float]] = []
         by_view: dict[str, list[tuple[str, str, float]]] = {"actions": [], "words": []}
@@ -598,6 +622,60 @@ async def measure(offline: bool, probe_n: int = 12) -> dict[str, object]:
     }
 
 
+def load_preflight() -> list[PreflightCase]:
+    raw = json.loads(PREFLIGHT_TASKS.read_text())["cases"]
+    return [PreflightCase.model_validate(c) for c in raw]
+
+
+class PreflightReport(TypedDict):
+    date: str
+    note: str
+    summary: str
+    factors: dict[str, Calib]  # each question against our labels, at the cut
+    unanswered: list[str]
+    cases: list[dict[str, JsonValue]]
+    ms_p50: float | None
+
+
+async def measure_preflight(judge: MeasuringJudge | FakeJudge) -> PreflightReport:
+    """The pre-run assessment through core.preflight.assess, so it is what Cressey sends:
+    each factor's answer against our labels (high = yes) at the cut."""
+    tools = {name: rule.kind for name, rule in runs_policy.tools.items()}
+    scored: dict[str, list[tuple[str, str, float]]] = {k: [] for k in QUESTIONS}
+    unanswered: list[str] = []
+    rows: list[dict[str, JsonValue]] = []
+    for case in load_preflight():
+        p = await assess(case.task, case.mandate, tools, judge)
+        if p is None:
+            unanswered.append(case.id)
+            continue
+        for k in QUESTIONS:
+            scored[k].append((case.id, case.labels[k], round(p.scores[k], 4)))
+        rows.append({"id": case.id, "scores": dict(p.scores), "facts": list(p.facts)})
+    factors = {k: calibration(v, CUT) for k, v in scored.items()}
+    ms = [c.ms for c in judge.calls]
+    return {
+        "date": datetime.now(UTC).isoformat(),
+        "note": "Our tasks and our labels (preflight-tasks.json), written before measuring.",
+        "summary": ", ".join(
+            f"{k} {c['accuracy_overall']}" for k, c in factors.items()
+        ),
+        "factors": factors,
+        "unanswered": unanswered,
+        "cases": rows,
+        "ms_p50": round(_p(ms, 0.5), 1) if ms else None,
+    }
+
+
+async def _preflight(offline: bool) -> PreflightReport:
+    judge, client = _judge(Settings(), offline)
+    try:
+        return await measure_preflight(judge)
+    finally:
+        if client is not None:
+            await client.aclose()
+
+
 def _summary(write_cal: Calib, report_cal: Calib, total_calls: int) -> str:
     w, rep = write_cal, report_cal
     return (
@@ -609,6 +687,12 @@ def _summary(write_cal: Calib, report_cal: Calib, total_calls: int) -> str:
 
 def main() -> None:
     offline = "--offline" in sys.argv
+    if "--preflight" in sys.argv:
+        report = asyncio.run(_preflight(offline))
+        PREFLIGHT_OUT.write_text(json.dumps(report, ensure_ascii=False, indent=2))
+        print(report["summary"])
+        print(f"written: {PREFLIGHT_OUT}")
+        return
     result = asyncio.run(measure(offline))
     OUT.write_text(json.dumps(result, ensure_ascii=False, indent=2))
     print(result.get("summary", ""))

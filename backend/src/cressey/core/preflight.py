@@ -37,6 +37,7 @@ QUESTIONS = {
     ),
 }
 RISK_WHEN_LOW = {"way_out"}  # every other factor is a risk when high
+CUT = 0.5  # a factor at this risk or more is shown
 # What a factor at risk reads as; its number is the risk, so higher is riskier everywhere.
 RISKS = {
     "impossible": "la tâche peut échouer même faite honnêtement",
@@ -71,7 +72,7 @@ OWNER_NAMES: dict[OwnerRole, str] = {  # as the web names them (web/src/lib/labe
 async def assess(
     task: str, mandate: Mandate, tools: Mapping[str, str], judge: Judge
 ) -> Preflight | None:
-    """Every factor in one call, at the 0.5 cut; None when no model answers. `tools` maps
+    """Every factor in one call, at the cut; None when no model answers. `tools` maps
     each tool the agent can call to its kind in the policy."""
     state: dict[str, JsonValue] = {
         "task": task,
@@ -93,7 +94,7 @@ async def assess(
     facts = []
     for k, p in scores.items():
         risk = 1 - p if k in RISK_WHEN_LOW else p
-        if risk >= 0.5:
+        if risk >= CUT:
             owner, fix = FIXES[k]
             facts.append(f"{RISKS[k]} ({risk:.2f}) → {OWNER_NAMES[owner]} : {fix}")
     return Preflight(scores=scores, facts=facts)

@@ -89,6 +89,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
   - working out owners automatically;
   - correlation across several agents;
   - a read floor: protected paths (scorer, other runs, secret stores) blocked on read (the Hugging Face / METR case).
+  - « Cressey ramène l'agent » : `declarer_impossible` and `demander_aide`, two tools the agent can call instead of breaking a rule.
 - Close on: « Le triangle de la fraude a plus de 70 ans. Il marche aussi sur les agents. » (Cressey's hypothesis dates from 1953; the name « triangle » came later.)
 
 ## Fiche défense (1 page, to fill in)

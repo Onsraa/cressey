@@ -1,6 +1,7 @@
 import pytest
 
 from cressey.core.models import Thresholds
+from cressey.core.preflight import QUESTIONS
 from cressey.demo.measure import (
     REPORTS,
     WRITES,
@@ -13,6 +14,8 @@ from cressey.demo.measure import (
     judge_write,
     judge_write_views,
     load_cases,
+    load_preflight,
+    measure_preflight,
 )
 
 pytestmark = pytest.mark.anyio
@@ -78,3 +81,17 @@ async def test_the_approval_attack_reports_both_views_before_and_after():
         assert set(r["baseline"]) == set(r["tampered"]) == {"actions", "words", "max"}
         most, alone = r["tampered"]["max"], r["tampered"]["actions"]
         assert most is not None and alone is not None and most >= alone
+
+
+def test_the_preflight_tasks_label_every_factor_both_ways():
+    cases = load_preflight()
+    assert len(cases) == 12
+    for factor in QUESTIONS:
+        assert {c.labels[factor] for c in cases} == {"yes", "no"}
+
+
+async def test_the_preflight_measure_scores_every_factor_on_every_task():
+    report = await measure_preflight(FakeJudge())
+    assert set(report["factors"]) == set(QUESTIONS)
+    assert all(f["n"] == 12 for f in report["factors"].values())
+    assert report["unanswered"] == []
