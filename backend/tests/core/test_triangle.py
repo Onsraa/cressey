@@ -8,6 +8,7 @@ from cressey.core.models import Leg, Legs, Mandate, Message, Run, Step
 from cressey.core.secret_scan import Secret
 from cressey.core.triangle import (
     CHUNK,
+    PART,
     Thresholds,
     alarm,
     judgment_state,
@@ -435,7 +436,8 @@ async def test_a_big_step_is_labelled_in_windows():
     await legs(run_with(big, write), write, judge, T)
     seen = [s["current_step"]["args"] for kind, s in judge.asked if kind == "label"]
     assert len(seen) >= 3 and all(len(a) <= CHUNK for a in seen)
-    assert "".join(seen) == big.args
+    # Every character is read: the windows overlap by PART, so drop it to rebuild them.
+    assert seen[0] + "".join(a[PART:] for a in seen[1:]) == big.args
 
 
 class SizeLimitedJudge(FakeJudge):
@@ -615,3 +617,48 @@ async def test_a_result_still_coming_is_labelled_once_it_is_in():
     await labelling
     await judging
     assert read.labels is not None and read.labels["injected"] == 0.9
+
+
+MARK = "@pytest.mark.skip"
+
+
+def straddling(length: int, at: int) -> Step:
+    """A write whose arguments are `length` characters, the skip marker starting at `at`."""
+    head = '{"path": "t.py", "content": "'
+    before = "x" * (at - len(head))
+    after = "x" * (length - len(head) - len(before) - len(MARK) - 2)
+    args = head + before + MARK + after + '"}'
+    assert len(args) == length and args.index(MARK) == at
+    return step(3, "write_file", args, "write")
+
+
+async def test_a_payload_across_a_cut_is_seen_whole():
+    """The argument parts overlap, so a marker on the cut at CHUNK is whole in one of them."""
+    write = straddling(CHUNK + 2_000, CHUNK - 5)
+    run = run_with(step(1, is_error=True), step(2, is_error=True), write)
+    leg = (await legs(run, write, SkipJudge(), T)).rationalization
+    assert leg.score == 0.9
+
+
+class SizeLimitedSkipJudge(SkipJudge):
+    """Refuses a state over `limit` characters, and sees the skip marker only whole."""
+
+    def __init__(self, limit: int):
+        super().__init__()
+        self.limit = limit
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        from cressey.core.judge import TooLarge
+
+        if len(json.dumps(state)) > self.limit:
+            raise TooLarge
+        return await super().answers(state, questions)
+
+
+async def test_a_payload_across_a_halving_is_seen_whole():
+    """A part refused for its size is halved with an overlap: a marker on the halving point
+    is whole in one half."""
+    write = straddling(11_000, 5_500 - 8)  # one part, halved at 5,500
+    run = run_with(step(1, is_error=True), step(2, is_error=True), write)
+    leg = (await legs(run, write, SizeLimitedSkipJudge(8_000), T)).rationalization
+    assert leg.score == 0.9

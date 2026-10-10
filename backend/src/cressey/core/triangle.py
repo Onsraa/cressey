@@ -214,8 +214,13 @@ def _chunks(text: str) -> list[str]:
 
 
 def _args_parts(s: Step) -> list[str]:
-    """The call's arguments cut like a result: each part is read whole; at least one."""
-    return _chunks(s.args)
+    """The call's arguments in parts of at most CHUNK characters, each overlapping the next,
+    so a payload up to PART long is whole in one of them (an agent can pad a write to put
+    it on a cut). Arguments up to CHUNK are one part, as before; at least one."""
+    a, overlap = s.args, min(PART, CHUNK // 2)
+    return [
+        a[i : i + CHUNK] for i in range(0, max(len(a) - overlap, 1), CHUNK - overlap)
+    ]
 
 
 def read_before(step: Step) -> bool:
@@ -275,7 +280,10 @@ async def _answers_over_parts(
                 )
                 return None
             half = len(part) // 2
-            halves = await asyncio.gather(one(part[:half]), one(part[half:]))
+            # The halves overlap too, so a payload on the halving point is whole in one;
+            # each is still shorter than the part, so the halving ends.
+            o = min(PART, half) // 2
+            halves = await asyncio.gather(one(part[: half + o]), one(part[half - o :]))
             if any(h is None for h in halves):
                 return None
             return [pair for h in halves if h for pair in h]
