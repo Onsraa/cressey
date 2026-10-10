@@ -112,14 +112,13 @@ function Sidebar({
 		{
 			Icon: Cpu,
 			label: "Modèle",
-			value:
-				mode === "live"
-					? "live"
-					: mode === "record"
-						? "enregistrement"
-						: "réponses enregistrées",
+			// replay and fallback answer from the recording: « réponses enregistrées ».
+			value: mode === "live" || mode === "record" ? mode : "enregistré",
 			dot: mode === "live" ? "var(--color-ok-strong)" : "var(--color-warn-bd)",
-			tip: `Mode des modèles : ${mode ?? "?"}`,
+			tip:
+				mode === "live" || mode === "record"
+					? `Mode des modèles : ${mode}`
+					: `Mode des modèles : réponses enregistrées (${mode ?? "?"})`,
 		},
 		{
 			Icon: Hash,
@@ -198,13 +197,13 @@ function Sidebar({
 						data-tip={tip}
 						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 						tabIndex={0}
-						className="flex h-8 items-center gap-2.5 overflow-hidden whitespace-nowrap px-3"
+						className="flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap px-2"
 					>
 						<Icon size={15} />
 						{open && (
 							<>
 								<span className="text-[12.5px] text-mute">{label}</span>
-								<span className="ml-auto inline-flex items-center gap-1.5 font-medium font-mono text-[11.5px]">
+								<span className="ml-auto inline-flex items-center gap-1.5 font-medium font-mono text-[11px]">
 									<span className="size-[7px]" style={{ background: dot }} />
 									{value}
 								</span>

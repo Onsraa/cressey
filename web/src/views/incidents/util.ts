@@ -10,6 +10,9 @@ export const LEG = Object.fromEntries(
 export const acted = (i: Incident) =>
 	i.decision === "approved" || i.decision === "alerted";
 
+// A control run opens an incident too: the call ran, and Cressey would have held it.
+export const OBSERVER_TIP = "Run sans Cressey : cet appel aurait été retenu";
+
 function parse(json: string): unknown {
 	try {
 		return JSON.parse(json);

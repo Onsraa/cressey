@@ -19,7 +19,7 @@ import { Guides } from "./Guides";
 import { Observer } from "./Observer";
 import { Overview } from "./Overview";
 import { Tip } from "./ui";
-import { acted } from "./util";
+import { acted, OBSERVER_TIP } from "./util";
 
 type Tab = "overview" | "guides" | "fixes" | "observer";
 
@@ -72,6 +72,12 @@ export function Detail({ incident: i }: { incident: Incident }) {
 							? "en attente de décision"
 							: decision(i.decision)}
 					</Tip>
+					{run?.kind === "control" && (
+						<Tip tip={OBSERVER_TIP} className={`chip ${TONE.info}`}>
+							<Eye size={11} />
+							Observateur
+						</Tip>
+					)}
 					{acted(i) && (
 						<Tip
 							tip="L'action a eu lieu : ce qu'elle a révélé reste réel"

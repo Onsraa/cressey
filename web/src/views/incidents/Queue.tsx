@@ -1,13 +1,21 @@
-import { ArrowDownWideNarrow, ArrowRight, SquareCheck } from "lucide-react";
+import {
+	ArrowDownWideNarrow,
+	ArrowRight,
+	Eye,
+	SquareCheck,
+} from "lucide-react";
 import { useLive } from "@/api/live";
 import type { Incident } from "@/api/types";
 import { LIFE, stage } from "@/lib/incident";
 import { SEVERITY, TONE, time } from "@/lib/labels";
 import { Tip } from "./ui";
-import { acted } from "./util";
+import { acted, OBSERVER_TIP } from "./util";
 
 export function Queue({ selected }: { selected?: string }) {
-	const { incidents, go } = useLive();
+	const { incidents, runs, go } = useLive();
+	const control = new Set(
+		runs.filter((r) => r.kind === "control").map((r) => r.id),
+	);
 	return (
 		<section aria-label="File des incidents" className="panel rise">
 			<div className="panel-head">
@@ -27,6 +35,7 @@ export function Queue({ selected }: { selected?: string }) {
 						key={i.id}
 						incident={i}
 						on={i.id === selected}
+						observer={control.has(i.run_id)}
 						pick={() => go("inc", { incident: i.id })}
 					/>
 				))}
@@ -53,10 +62,12 @@ export function Queue({ selected }: { selected?: string }) {
 function Item({
 	incident: i,
 	on,
+	observer,
 	pick,
 }: {
 	incident: Incident;
 	on: boolean;
+	observer: boolean;
 	pick: () => void;
 }) {
 	const st = stage(i);
@@ -76,6 +87,15 @@ function Item({
 					{sev.label}
 				</span>
 				<span className="font-medium font-mono text-xs">{i.id}</span>
+				{observer && (
+					<span
+						data-tip={OBSERVER_TIP}
+						className={`inline-flex h-5 items-center gap-1 border px-1.5 font-mono text-[11px] ${TONE.info}`}
+					>
+						<Eye size={11} />
+						Observateur
+					</span>
+				)}
 				{acted(i) && (
 					<span
 						data-tip="L'action a eu lieu : ce qu'elle a révélé reste réel"
