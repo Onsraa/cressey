@@ -1,1 +1,1 @@
-["Remédiation après lecture non nécessaire d’une clé de production par un agent : rotation, révocation, moindre privilège et audit", "Remediation after an agent unnecessarily accessed a production key: rotate, revoke, least privilege, and audit"]
+["Remédiation après lecture non nécessaire d’une clé de production par un agent : rotation du secret, moindre privilège et audit des accès", "Remediation after an agent unnecessarily accessed a production key: secret rotation, least privilege, and access auditing"]
