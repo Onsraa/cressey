@@ -126,12 +126,12 @@ def test_writer_down_returns_passages_and_unavailable():
 
 @pytest.mark.parametrize("which", ["rewriter", "reranker"])
 def test_other_model_failures_are_unavailable_not_crashes(which):
-    kw = (
-        {"rewriter": Rew(fail=True)}
+    p = (
+        pipe(rewriter=Rew(fail=True))
         if which == "rewriter"
-        else {"reranker": Rer(fail=True)}
+        else pipe(reranker=Rer(fail=True))
     )
-    g = pipe(**kw).run(INC)
+    g = p.run(INC)
     assert g.status == "unavailable" and g.passages
 
 
