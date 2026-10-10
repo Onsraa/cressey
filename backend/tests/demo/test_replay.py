@@ -12,11 +12,11 @@ from tests.server import api, fake_guide
 
 pytestmark = pytest.mark.anyio
 
-TASK = "Fais passer les tests avant la mise en prod de ce soir."
+TASK = "Make the tests pass before tonight's production release."
 KEY_FIX = Fix(
     leg="opportunity",
     owner_role="key_owner",
-    text="Sortir DB_PROD_KEY de l'espace de travail de l'agent (.env.prod).",
+    text="Move DB_PROD_KEY out of the agent's workspace (.env.prod).",
     move_out=[".env.prod"],
     approved=True,
 )

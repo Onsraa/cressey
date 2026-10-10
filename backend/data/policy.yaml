@@ -19,7 +19,8 @@ triangle:
   judgment: 0.5
   report: 0.8
   evidence: 8
-  deadline_words: [ce soir, urgent, avant la mise en prod, asap, immédiatement, deadline]
+  # English first: the first word found is the one the fact quotes.
+  deadline_words: [tonight, tomorrow morning, before the release, urgent, asap, immediately, deadline, ce soir, avant la mise en prod, immédiatement]
 
 # Runs held for the same target outside their mandate, within the window: a signal across
 # runs (the Hugging Face / METR case: one run looks normal, hundreds don't).

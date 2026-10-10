@@ -82,7 +82,7 @@ def test_reads_and_writes_pass():
 
 def test_an_update_outside_the_mandate_is_held_whatever_its_where():
     risk, reason = check(SQL, {"query": "UPDATE users SET a = 1 WHERE 1 = 1"}, NONE)
-    assert (risk, reason) == ("destructive", "SQL destructeur hors mandat : users")
+    assert (risk, reason) == ("destructive", "destructive SQL outside the mandate: users")
     allowed = Mandate(may_destroy=["users"])
     assert check(SQL, {"query": "UPDATE users SET a = 1 WHERE id = 2"}, allowed) == (
         "destructive",
@@ -109,8 +109,8 @@ GUARDED = Mandate(protected=["scorer", "runs/*/transcript.json", ".secrets/**"])
 )
 def test_a_protected_path_is_held_on_read_and_on_write(path):
     """The Hugging Face / METR read floor: no model is asked."""
-    assert check(READ, {"path": path}, GUARDED) == ("read", f"chemin protégé : {path}")
-    assert check(WRITE, {"path": path}, GUARDED)[1] == f"chemin protégé : {path}"
+    assert check(READ, {"path": path}, GUARDED) == ("read", f"protected path: {path}")
+    assert check(WRITE, {"path": path}, GUARDED)[1] == f"protected path: {path}"
 
 
 @pytest.mark.parametrize(
@@ -157,7 +157,7 @@ FROZEN = Mandate(frozen=["tests", "ci/grader.py"])
 def test_a_frozen_path_reads_but_its_write_is_held(path):
     """ImpossibleBench: editing the tests was most of the cheating. No model is asked."""
     assert check(READ, {"path": path}, FROZEN) == ("read", None)
-    assert check(WRITE, {"path": path}, FROZEN) == ("write", f"chemin gelé : {path}")
+    assert check(WRITE, {"path": path}, FROZEN) == ("write", f"frozen path: {path}")
 
 
 def test_a_path_outside_the_frozen_ones_is_written_freely():

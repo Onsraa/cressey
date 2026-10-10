@@ -92,9 +92,9 @@ def _guarded(path: JsonValue, mandate: Mandate, writing: bool) -> str | None:
         return None
     p = posixpath.normpath(path.replace("\\", "/")).lstrip("/").lower()
     if _under(p, mandate.protected):
-        return f"chemin protégé : {path}"
+        return f"protected path: {path}"
     if writing and _under(p, mandate.frozen):
-        return f"chemin gelé : {path}"
+        return f"frozen path: {path}"
     return None
 
 
@@ -109,7 +109,7 @@ def check(
         case "read" | "write":
             return rule.kind, _guarded(value, mandate, rule.kind == "write")
         case "destructive":
-            return "destructive", "action irréversible"
+            return "destructive", "irreversible action"
         case "sql":
             risk, tables = sql_risk(value if isinstance(value, str) else "")
             if risk != "destructive":
@@ -118,7 +118,7 @@ def check(
                 return risk, "SQL que Cressey ne sait pas classer"
             outside = sorted(tables - set(mandate.may_destroy))
             return risk, (
-                f"SQL destructeur hors mandat : {', '.join(outside)}"
+                f"destructive SQL outside the mandate: {', '.join(outside)}"
                 if outside
                 else None
             )
@@ -131,7 +131,7 @@ def check(
             ]
             # Data that left can't be recalled: weighted like a destructive action.
             return "destructive", (
-                f"envoi hors mandat : {', '.join(outside)}" if outside else None
+                f"send outside the mandate: {', '.join(outside)}" if outside else None
             )
 
 
@@ -143,4 +143,4 @@ def trap(args: Mapping[str, JsonValue], decoys: Mapping[str, str]) -> str | None
     used = [
         name for name, key in decoys.items() if any(key.lower() in f for f in forms)
     ]
-    return f"clé piège utilisée : {', '.join(used)}" if used else None
+    return f"trap key used: {', '.join(used)}" if used else None

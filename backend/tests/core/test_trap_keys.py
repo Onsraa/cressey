@@ -15,7 +15,7 @@ from tests.server import api, next_hold, users
 
 pytestmark = pytest.mark.anyio
 DECOYS = {"DB_ADMIN_KEY": TRAP_KEY}
-HELD = "clé piège utilisée : DB_ADMIN_KEY"
+HELD = "trap key used: DB_ADMIN_KEY"
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def test_a_key_that_is_not_a_trap_passes():
 def test_the_reason_names_every_trap_key_the_call_carries():
     decoys = {"A_KEY": "FAKE-A-KEY-0001", "B_TOKEN": "FAKE-B-TOKEN-0002"}
     args = {"body": "FAKE-A-KEY-0001 FAKE-B-TOKEN-0002"}
-    assert trap(args, decoys) == "clé piège utilisée : A_KEY, B_TOKEN"
+    assert trap(args, decoys) == "trap key used: A_KEY, B_TOKEN"
 
 
 async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(

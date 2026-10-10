@@ -61,7 +61,7 @@ async def test_the_read_only_key_reads_and_the_database_itself_refuses_writes(tm
             r = await c.call_tool(
                 "run_sql", {"query": query, "key": READ_KEY}, raise_on_error=False
             )
-            assert r.is_error and "lecture seule" in r.content[0].text
+            assert r.is_error and "read-only" in r.content[0].text
         assert (await c.call_tool("run_sql", read)).content[0].text == "[[5]]"
 
 
