@@ -21,7 +21,7 @@ from cressey.core.broker import scoped
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
-from cressey.core.models import Policy
+from cressey.core.models import Policy, Response
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
 from cressey.core.triangle import alarm, alarm_reason, label_soon, legs
@@ -60,6 +60,20 @@ class Guard(Middleware):
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
         self.triangle_holds, self.holds = triangle_holds, holds
 
+    def _response(
+        self, tool: str, reason: str | None, trapped: bool, floor: bool
+    ) -> Response | None:
+        """What the policy does with a call a check fired on, or None when none did."""
+        if reason is None:
+            return None
+        r = self.policy.responses
+        response = r.trap_key if trapped else r.floor if floor else r.triangle
+        if r.fleet == "stop" and self.incidents.signalled(f"{tool} | {reason}"):
+            response = "stop"  # many runs after one target: no human queue for them all
+        if response == "review" and self.holds == "refuse":
+            response = "stop"  # CRESSEY_HOLDS=refuse: nobody waits for a human
+        return response
+
     async def on_call_tool(
         self,
         context: MiddlewareContext[mcp_types.CallToolRequestParams],
@@ -73,7 +87,8 @@ class Guard(Middleware):
             raise ToolError("Cressey : clé inconnue.")
         name, args = context.message.name, context.message.arguments or {}
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
-        floor = trap(args, self.policy.decoys) or floor
+        trapped = trap(args, self.policy.decoys)
+        floor = trapped or floor
         # Off the event loop, like the result scan: a large argument takes a while to redact.
         # A copy of the secrets known so far, which other calls may add to meanwhile.
         dumped = json.dumps(args, ensure_ascii=False)
@@ -100,11 +115,14 @@ class Guard(Middleware):
         # The agent learns it was held, never why: a reason teaches it what to route around
         # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
         held = ToolError(f"Cressey : action retenue. {WAY_OUT}")
-        if reason and run.kind != "live":
+        response = self._response(name, reason, bool(trapped), bool(floor))
+        if response == "alert":
+            self.runs.mark(run, step, "alerted")  # through, with its incident open
+        elif reason and run.kind != "live":
             self.runs.mark(run, step, "would_hold")
             if run.kind == "replay":
                 raise held
-        elif reason and self.holds == "refuse":
+        elif response == "stop":
             run.revoked = True  # as after a rejection: the rest of the run is denied
             self.runs.mark(run, step, "denied")
             raise ToolError(f"Cressey : action refusée. {WAY_OUT}")

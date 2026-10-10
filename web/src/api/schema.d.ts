@@ -202,6 +202,30 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/policy/responses": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Get Responses
+		 * @description What Cressey does when each check fires: alert, review or stop.
+		 */
+		get: operations["get_responses_api_policy_responses_get"];
+		/**
+		 * Set Responses
+		 * @description Change it live. Every change is logged: alert means no call waits for a human.
+		 */
+		put: operations["set_responses_api_policy_responses_put"];
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/fleet": {
 		parameters: {
 			query?: never;
@@ -610,6 +634,38 @@ export interface components {
 			/** Ok */
 			ok: boolean;
 		};
+		/**
+		 * Responses
+		 * @description What Cressey does when each check fires (policy.yaml, `responses`), changeable live.
+		 *     Alert lets the call through and opens an incident; the key broker still hands it only
+		 *     what the mandate grants. The report check only ever alerts: the run is over.
+		 */
+		Responses: {
+			/**
+			 * Floor
+			 * @default review
+			 * @enum {string}
+			 */
+			floor: "alert" | "review" | "stop";
+			/**
+			 * Trap Key
+			 * @default review
+			 * @enum {string}
+			 */
+			trap_key: "alert" | "review" | "stop";
+			/**
+			 * Triangle
+			 * @default review
+			 * @enum {string}
+			 */
+			triangle: "alert" | "review" | "stop";
+			/**
+			 * Fleet
+			 * @default alert
+			 * @enum {string}
+			 */
+			fleet: "alert" | "stop";
+		};
 		/** Run */
 		Run: {
 			/** Id */
@@ -744,6 +800,7 @@ export interface components {
 			 */
 			status:
 				| "allowed"
+				| "alerted"
 				| "held"
 				| "approved"
 				| "rejected"
@@ -1171,6 +1228,59 @@ export interface operations {
 				};
 				content: {
 					"application/json": components["schemas"]["Incident"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	get_responses_api_policy_responses_get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Responses"];
+				};
+			};
+		};
+	};
+	set_responses_api_policy_responses_put: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["Responses"];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Responses"];
 				};
 			};
 			/** @description Validation Error */

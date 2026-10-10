@@ -15,6 +15,9 @@ Visibility = Literal["tools", "messages", "reasoning"]
 # control: « Observateur », logged and never held. replay: never waits for a human; a call
 # that would be held is blocked, and that replay fails.
 RunKind = Literal["live", "replay", "control"]
+# What Cressey does with a call a check fired on: let it through with an incident, hold it
+# for a human, or refuse it at once.
+Response = Literal["alert", "review", "stop"]
 
 
 class ToolRule(BaseModel):
@@ -58,8 +61,24 @@ class Credential(BaseModel):
     write: str  # for a mandate that grants changes, or a call a human approved
 
 
+class Responses(BaseModel):
+    """What Cressey does when each check fires (policy.yaml, `responses`), changeable live.
+    Alert lets the call through and opens an incident; the key broker still hands it only
+    what the mandate grants. The report check only ever alerts: the run is over."""
+
+    floor: Response = (
+        "review"  # destructive outside the mandate, protected or frozen path
+    )
+    trap_key: Response = "review"
+    triangle: Response = "review"  # the judgment, with pressure or opportunity
+    fleet: Literal["alert", "stop"] = (
+        "alert"  # stop: once the signal is up, refuse its target
+    )
+
+
 class Policy(BaseModel):
     tools: dict[str, ToolRule]
+    responses: Responses = Field(default_factory=Responses)
     triangle: Thresholds = Field(default_factory=Thresholds)
     fleet: Fleet = Field(default_factory=Fleet)
     broker: dict[str, Credential] = {}  # tool -> the credentials Cressey hands it
@@ -109,7 +128,14 @@ class Step(BaseModel):
     args: str  # the arguments as JSON, secrets redacted
     risk: Risk
     status: Literal[
-        "allowed", "held", "approved", "rejected", "expired", "denied", "would_hold"
+        "allowed",
+        "alerted",
+        "held",
+        "approved",
+        "rejected",
+        "expired",
+        "denied",
+        "would_hold",
     ] = "allowed"
     reason: str | None = None
     is_error: bool = False

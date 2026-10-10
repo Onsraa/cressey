@@ -105,7 +105,7 @@ class Runs:
             self._log(run, step, "read_only")
 
     def mark(
-        self, run: Run, step: Step, status: Literal["denied", "would_hold"]
+        self, run: Run, step: Step, status: Literal["alerted", "denied", "would_hold"]
     ) -> None:
         step.status = status
         self._log(run, step, "status", status=status)

@@ -251,6 +251,10 @@ class Incidents:
             last_at=now.isoformat(),
         )
 
+    def signalled(self, target: str) -> bool:
+        """Has a fleet signal gone up for this target (the tool and the floor's reason)?"""
+        return target in self._signals
+
     def fleet(self) -> list[FleetSignal]:
         """The signals across runs, the latest first."""
         return sorted(self._signals.values(), key=lambda s: s.last_at, reverse=True)

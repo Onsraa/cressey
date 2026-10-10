@@ -53,6 +53,7 @@ def create_app(
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s
     app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check
+    app.state.policy = policy  # its responses change live
     api = APIRouter(prefix="/api")
 
     @api.get("/health")

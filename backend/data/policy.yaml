@@ -31,3 +31,12 @@ fleet:
 # unless the mandate grants changes (may_destroy) or a human approved the call. Fake values.
 broker:
   run_sql: {arg: key, read: FAKE-DB-READ-KEY-0000, write: FAKE-DB-PROD-KEY-0000}
+
+# What Cressey does when each check fires: alert (let the call through and open an incident),
+# review (hold it for a human) or stop (refuse it at once). Changeable live with
+# PUT /api/policy/responses. The report check only ever alerts: the run is over.
+responses:
+  floor: review
+  trap_key: review
+  triangle: review
+  fleet: alert

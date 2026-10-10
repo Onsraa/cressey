@@ -16,6 +16,7 @@ from cressey.core.models import (
     Incident,
     LogHead,
     Replay,
+    Responses,
     Run,
     RunCreated,
     RunIn,
@@ -121,6 +122,20 @@ async def get_incident(incident_id: str, incidents: IncidentsDep) -> Incident:
     if incident is None:
         raise HTTPException(404)
     return incident
+
+
+@router.get("/policy/responses")
+async def get_responses(request: Request) -> Responses:
+    """What Cressey does when each check fires: alert, review or stop."""
+    return request.app.state.policy.responses
+
+
+@router.put("/policy/responses")
+async def set_responses(body: Responses, request: Request, runs: RunsDep) -> Responses:
+    """Change it live. Every change is logged: alert means no call waits for a human."""
+    request.app.state.policy.responses = body
+    runs.log.append("responses", dict(body.model_dump()))
+    return body
 
 
 @router.get("/fleet")

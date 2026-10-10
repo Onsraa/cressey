@@ -533,3 +533,145 @@ async def test_the_agent_is_told_it_was_held_but_never_why(served_short_holds):
     assert r.is_error and r.content[0].text == f"Cressey : action retenue. {WAY_OUT}"
     [step] = await steps(base, run)
     assert step["reason"] == "SQL destructeur hors mandat : users"
+
+
+REVIEW_ALL = {
+    "floor": "review",
+    "trap_key": "review",
+    "triangle": "review",
+    "fleet": "alert",
+}
+
+
+async def responses(base: str, **changes: str) -> None:
+    r = await api(base, "PUT", "/api/policy/responses", json={**REVIEW_ALL, **changes})
+    assert r.status_code == 200
+
+
+async def test_the_responses_are_served_changed_and_validated(served):
+    assert (await api(served, "GET", "/api/policy/responses")).json() == REVIEW_ALL
+    bad = {**REVIEW_ALL, "floor": "ignore"}
+    assert (
+        await api(served, "PUT", "/api/policy/responses", json=bad)
+    ).status_code == 422
+    before = (await api(served, "GET", "/api/status")).json()["log"]["count"]
+    await responses(served, floor="alert")
+    assert (await api(served, "GET", "/api/policy/responses")).json()[
+        "floor"
+    ] == "alert"
+    assert (await api(served, "GET", "/api/status")).json()["log"][
+        "count"
+    ] == before + 1
+
+
+async def test_on_alert_the_floor_lets_the_call_through_and_opens_an_incident(
+    served, tmp_path
+):
+    await responses(served, floor="alert")
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        mail = {"to": "x@prestataire.example", "subject": "s", "body": "b"}
+        r = await a.call_tool("send_email", mail, raise_on_error=False)
+    assert not r.is_error and "prestataire" in (tmp_path / "outbox.jsonl").read_text()
+    [step] = await steps(served, run)
+    [incident] = (await api(served, "GET", "/api/incidents")).json()
+    assert (step["status"], incident["decision"]) == ("alerted", "alerted")
+
+
+async def test_on_alert_the_database_still_refuses_what_the_mandate_doesnt_grant(
+    served, tmp_path
+):
+    """Alert switches off the hold, not the key broker's least privilege."""
+    await responses(served, floor="alert")
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
+    assert r.is_error and "lecture seule" in r.content[0].text and users(tmp_path) == 5
+
+
+async def test_on_stop_the_floor_refuses_at_once_with_no_hold(served, tmp_path):
+    await responses(served, floor="stop")
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
+        after = await a.call_tool(
+            "read_file", {"path": "README.md"}, raise_on_error=False
+        )
+    assert r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert (await api(served, "GET", "/api/holds")).json() == [] and users(
+        tmp_path
+    ) == 5
+    assert after.is_error and "suspendue" in after.content[0].text
+
+
+async def test_on_fleet_stop_a_target_several_runs_went_after_is_refused_at_once(
+    served,
+):
+    await responses(served, fleet="stop")
+    for _ in range(2):  # two runs held, then rejected by a human
+        run = await new_run(served)
+        async with agent(served, run["key"]) as a:
+            call = asyncio.create_task(
+                a.call_tool("run_sql", DELETE, raise_on_error=False)
+            )
+            n = (await next_hold(served))["step"]["n"]
+            await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+            await call
+    third = await new_run(
+        served
+    )  # the third run raises the fleet signal: no human queue
+    async with agent(served, third["key"]) as a:
+        r = await a.call_tool("run_sql", DELETE, raise_on_error=False)
+    assert r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    [step] = await steps(served, third)
+    assert step["status"] == "denied"
+
+
+async def test_on_stop_a_trap_key_is_refused_at_once(served):
+    from cressey.demo.tools import TRAP_KEY
+
+    await responses(served, trap_key="stop")
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        query = {"query": "SELECT 1", "key": TRAP_KEY}
+        r = await a.call_tool("run_sql", query, raise_on_error=False)
+    assert r.content[0].text == f"Cressey : action refusée. {WAY_OUT}"
+    assert (await api(served, "GET", "/api/holds")).json() == []
+
+
+class WeakensTestsJudge:
+    """Judges that a write into tests/ weakens a check; flags no step."""
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "weakens" in questions:
+            return {
+                "weakens": 0.9 if "tests/" in state["current_step"]["args"] else 0.1
+            }
+        return dict.fromkeys(questions, 0.0 if "serves_task" in questions else "none")
+
+
+async def test_on_alert_the_triangle_lets_the_write_through_with_its_incident(tmp_path):
+    from cressey.app import create_app
+    from cressey.demo.server import serve
+    from cressey.settings import Settings
+    from tests.server import fake_guide
+
+    s = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+    )
+    with serve(create_app(s, make_guide=fake_guide, judge=WeakensTestsJudge())) as base:
+        await responses(base, triangle="alert")
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            for _ in range(2):  # two failed runs: pressure
+                await a.call_tool("run_tests", {}, raise_on_error=False)
+            skip = {"path": "tests/test_install.py", "content": "# désactivé"}
+            r = await a.call_tool("write_file", skip, raise_on_error=False)
+        page = await steps(base, run)
+        [incident] = (await api(base, "GET", "/api/incidents")).json()
+    assert not r.is_error and page[-1]["status"] == "alerted"
+    assert (incident["severity"], incident["decision"]) == ("haute", "alerted")

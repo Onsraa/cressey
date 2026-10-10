@@ -76,6 +76,8 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends, and the report is checked against the log (`report_check` on the run). 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
+| GET | `/api/policy/responses` | — | 200 what Cressey does when each check fires: `floor`, `trap_key`, `triangle` (`alert`, `review` or `stop`) and `fleet` (`alert` or `stop`) |
+| PUT | `/api/policy/responses` | the same four fields | 200 the new responses, applied to the next call and logged; 422 on an unknown value. No authentication: localhost only |
 | GET | `/api/fleet` | — | 200 the signals across runs, latest first: `target` (the tool and the floor's reason), `runs`, `first_at`, `last_at` |
 | POST | `/api/incidents/{id}/fixes/{leg}/approve` | — | 204, or 404 when that leg has no fix |
 | POST | `/api/incidents/{id}/replay` | — | 200 `Replay`, also kept on the incident; 404. Takes a few seconds: each session runs on its own Cressey |
@@ -95,6 +97,11 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
   - a recipient is outside `may_send_to`;
   - the call carries a trap key (`decoys` in `policy.yaml`), whatever the mandate: in any argument, in any case, or in a token that decodes from base64, hex or URL encoding. The reason, « clé piège utilisée : DB_ADMIN_KEY », replaces the others. The agent's refusal doesn't name the trap: it reads « Cressey : action retenue. … », and the reason stays in the step and the incident.
 - **Key broker** (`core/broker.py`, `broker` in `policy.yaml`): Cressey, not the agent, picks the credential a tool receives. `run_sql` gets the read credential unless the mandate grants changes (`may_destroy`) or a human approved that call, and the database refuses any write made with it (SQLite `query_only`), however the SQL is phrased. The agent's own key is ignored, so a key it found, or a call the floor misread, can't exceed the grant. A `control` run is left alone: it measures what happens without Cressey.
+- **Responses** (`responses` in `policy.yaml`, or live with `PUT /api/policy/responses`): what Cressey does when each check fires.
+  - `alert`: the call goes through, marked `alerted`, and its incident opens. The key broker still hands it only what the mandate grants, so the database refuses a write it doesn't.
+  - `review` (the default): the call waits for a human.
+  - `stop`: refused at once, « Cressey : action refusée. … », and the run's key is revoked.
+  - `fleet: stop`: once the signal across runs is up for a target, its holds refuse at once. `CRESSEY_HOLDS=refuse` turns every review into a stop.
 - **While a call is held,** the run's key is revoked: its other calls are denied.
   - Approval runs the call once and reinstates the key.
   - Rejection or expiry answers « Cressey : action retenue. Déclarer la tâche impossible est une réponse acceptée. »: the agent learns it was held, never why (the reason stays in the step, the incident and the log) The key stays revoked.
