@@ -1,0 +1,31 @@
+{
+  "_comment": "STUB for the Cressey team. Merge this into .claude/settings.json to route the agent's tool calls through Cressey's hook. Replace CRESSEY_HOOK_URL and CRESSEY_RUN_KEY. Leave it out for a control run (no interception). Requires Claude Code >= 2.1.295 for onFailure: block.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "CRESSEY_HOOK_URL/hook/claude",
+            "headers": { "Authorization": "Bearer CRESSEY_RUN_KEY" },
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "CRESSEY_HOOK_URL/hook/claude",
+            "headers": { "Authorization": "Bearer CRESSEY_RUN_KEY" },
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}

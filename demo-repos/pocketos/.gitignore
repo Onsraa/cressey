@@ -1,0 +1,4 @@
+# The committed fixture keeps FAKE- token values; the runner injects real ones into a
+# throwaway temp copy, never here. These rules catch anything created locally by mistake.
+.env
+node_modules/
