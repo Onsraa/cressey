@@ -1,4 +1,24 @@
-// Stub: replaced by the Réglages view.
+import { ConnectPanel } from "./ConnectPanel";
+import { ResponsesPanel } from "./ResponsesPanel";
+
+// The design's « Connect » view, renamed « Réglages » (cressey-dashboard-v3-fixes.md, Add 1).
 export function SettingsView() {
-	return <div className="p-7 font-mono text-mute">Réglages</div>;
+	return (
+		<div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-7">
+			<header className="rise flex flex-none flex-col gap-[7px]">
+				<div className="flex items-center gap-1.5 font-mono text-xs">
+					<span className="text-mute">Réglages</span>
+					<span className="text-mute-3">/</span>
+					<span className="font-medium">Garde</span>
+				</div>
+				<h1 className="m-0 font-medium text-[22px] leading-[1.15] tracking-[-0.02em]">
+					Ce que fait Cressey, et comment y brancher un agent
+				</h1>
+			</header>
+			<div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] items-start gap-4">
+				<ResponsesPanel />
+				<ConnectPanel />
+			</div>
+		</div>
+	);
 }
