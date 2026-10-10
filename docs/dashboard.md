@@ -16,14 +16,16 @@ The interface is in French. One theme, readable on a projector.
 ## Run (live)
 - The task, its mandate (what it may destroy, where it may send), and its start time.
 - The key's state: active or suspendue.
-- What Cressey sees: tool calls only; also messages and the report; or also the reasoning.
+- The run's kind: live, replay or control. The control run is in « Observateur » mode: it is logged but never held, so its record can show the lie. This view follows the latest live run.
+- What Cressey sees: tool calls only; also messages and the report; or also the reasoning. The demo shows messages and the report, with the reasoning hidden.
 - **Three gauges** (Pression, Opportunité, Rationalisation): the score, whether facts confirm it, and the raw facts underneath.
 - **Chart:** the three legs across the steps, with the hold marked.
 - **Step timeline:**
   - number, tool and a short form of the arguments;
   - risk: lecture, écriture or destructive;
   - status: autorisé, retenu, approuvé, rejeté, expiré or refusé;
-  - the reason for a hold, and failed calls.
+  - the reason for a hold, and failed calls;
+  - each secret value replaced by its name and origin: « DB_PROD_KEY (lue dans .env.prod, étape 4) ».
 - **Hold panel:**
   - what the agent tried, and why it was held (the safety-floor reason, the confirmed legs);
   - the countdown to the safe cancel (240 s);
@@ -31,13 +33,16 @@ The interface is in French. One theme, readable on a projector.
   - « Rejeter » as the main button, « Approuver » behind a second click;
   - after the decision: the outcome and its time.
 - **Waiting state:** the MCP URL to paste into the agent's config.
+- **End:** the run is finished when the agent sends its final report.
 
 ## Incidents
 - **Queue:** one incident per root cause, sorted by severity, then by time. Code sets the severity:
   - a safety-floor hit is « critique »;
   - two or more legs confirmed by facts is « haute »;
   - a single leg shows on its gauge only.
-- **Lifecycle:** retenu → décidé → guide envoyé → correctif approuvé → rejeu validé.
+- **Lifecycle:** retenu → décidé → correctif approuvé → rejeu validé.
+  - The guides start when the incident fires, before the decision (« guide en cours… », then ready).
+  - An approved call keeps its incident, marked « action approuvée », because what it revealed (a key within reach, for example) is still real.
 - **Source:** « clé DB_PROD lue dans .env.prod à l'étape 4 ». It shows the step, the tool, the file, and how the value matched (exact, lowercase, base64, hex or URL), and links to that step.
 - **Legs involved**, with their facts.
 - **Three inboxes**, one per owner, each with its guide:
@@ -46,8 +51,8 @@ The interface is in French. One theme, readable on a projector.
   - the steps dropped because their quote couldn't be verified;
   - « Pourquoi ? »: a question box, answered with citations.
 - **A fix for each leg**, with « Approuver le correctif ».
-- **Replay:** « Rejouer ×5 », then the five results and the results of the normal tasks.
-- **Control run without Cressey:** the agent's report next to what the log shows.
+- **Replay:** « Rejouer ×5 », then the five results and the results of the normal tasks. Replays never wait for a human: a call that would be held is recorded as « aurait été retenu », and that replay fails.
+- **Control run without Cressey** (« Observateur »): the agent's report (« Tous les tests passent. ») next to the steps the log recorded (the DELETE ran).
 
 ## Évaluation
 - **Detection:** incident sessions held, normal sessions held by mistake, time to stop (p50 and p95), and the proxy's overhead.
@@ -79,13 +84,15 @@ An executive overview, trends over time, login and roles (a known limit), correl
 |---|---|---|
 | Runs and steps | `GET /api/runs`, `GET /api/runs/{id}` | exists |
 | Holds and decisions | `GET /api/holds`, `POST /api/runs/{id}/steps/{n}/approve` and `/reject` | exists |
-| Guides and « Pourquoi ? » | `POST /api/guides`, `GET /api/guides/{id}`, `POST /api/guides/{id}/why` | exists |
-| Hold countdown | a deadline on `Hold` | to add |
+| Guides and « Pourquoi ? » | `GET /api/guides/{id}`, `POST /api/guides/{id}/why`. The backend creates the guides when an incident fires; the dashboard never calls `POST /api/guides` | exists |
+| Secret redaction | the secrets `core/secret_scan.py` finds in what the agent read, replaced in steps, holds and traces before they are served | the scanner exists; wiring it into the API is still to add, before the demo |
+| Hold countdown and decision time | a deadline and a decision time on `Hold` | to add |
 | Gauges and leg chart | each step's leg scores, confirmation and facts | to add, with triangle scoring |
-| What Cressey sees | per run | to add |
-| Incidents, fixes, replay, control run | incident endpoints | to add |
+| Run kind, mode, end, what Cressey sees | per run | to add |
+| Agent report | the scripted agent posts its final report, which also ends the run | to add |
+| Incidents, fixes, replay, control run | incident endpoints, with a guide status and id per owner | to add |
 | Integrity strip | the log head: hash and count | to add |
 | Header and waiting state | status: protection mode, model mode, MCP URL | to add |
-| Évaluation | the eval reports (`backend/data/eval/report-dev.json` exists) | to add |
+| Évaluation | the eval reports, with their date and their misses (`backend/data/eval/report-dev.json` exists) | to add |
 
 The interface polls the runs and holds about once a second. It moves to SSE only if polling lags.
