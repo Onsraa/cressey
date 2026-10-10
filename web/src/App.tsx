@@ -123,9 +123,11 @@ function Sidebar({
 		{
 			Icon: Hash,
 			label: "Journal",
-			value: status
-				? `${status.log.hash.slice(0, 12)} · ${status.log.count}`
-				: "…",
+			value: !status
+				? "…"
+				: status.log.count
+					? `${status.log.hash.slice(0, 12)} · ${status.log.count}`
+					: "vide",
 			dot: status?.log.intact
 				? "var(--color-ok-strong)"
 				: "var(--color-held-strong)",
