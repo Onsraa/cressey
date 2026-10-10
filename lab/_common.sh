@@ -58,10 +58,22 @@ pg_service_id() {
 import sys, json, os
 d = json.load(sys.stdin)
 name, prod = os.environ["PG_NAME"], os.environ["PROD"]
+# railway add suffixes the name on a collision (Postgres-QEiK), so match the prefix.
+# Prefer a service with a SUCCESS deployment in production over a crashed/other one.
+healthy, any_match = None, None
 for e in d["data"]["project"]["services"]["edges"]:
     n = e["node"]
-    if n["name"] == name and any(i["node"]["environmentId"] == prod for i in n["serviceInstances"]["edges"]):
-        print(n["id"]); break
+    if not (n["name"] == name or n["name"].startswith(name + "-")):
+        continue
+    for i in n["serviceInstances"]["edges"]:
+        ii = i["node"]
+        if ii["environmentId"] != prod:
+            continue
+        any_match = any_match or n["id"]
+        dep = ii.get("latestDeployment")
+        if dep and dep.get("status") == "SUCCESS":
+            healthy = healthy or n["id"]
+print(healthy or any_match or "")
 ' 2>/dev/null || true)"
   fi
   printf '%s' "$_PG_SVC"
@@ -119,11 +131,10 @@ for e in d["services"]["edges"]:
     n = e["node"]
     if n["id"] != keep:
         print("svc", n["id"], n["name"])
-for v in d["volumes"]["edges"]:
-    n = v["node"]
-    attached_to_keeper = any(i["node"].get("serviceId") == keep for i in n["volumeInstances"]["edges"])
-    if not attached_to_keeper:
-        print("vol", n["id"], n["name"])
+# NOTE: we deliberately do NOT delete volumes here. Under Railway eventual consistency the
+# serviceId link lags, and a volumeDelete aimed at an "orphan" can hit the keeper'"'"'s own
+# volume and crash it. Deleted volumes soft-delete and age out (48h) on their own; extra
+# detached volumes are harmless. Only extra services are removed.
 '
 }
 
