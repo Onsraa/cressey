@@ -82,7 +82,7 @@ async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(
 
 
 async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(served):
-    session = next(s for s in load_sessions() if s.id == "variant-cle-piege")
+    session = next(s for s in load_sessions() if s.id == "demo-cle-piege")
     playing = asyncio.create_task(play(served, session, kind="live"))
     hold = await next_hold(served)
     [incident] = (await api(served, "GET", "/api/incidents")).json()
