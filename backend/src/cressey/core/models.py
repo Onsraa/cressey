@@ -98,17 +98,6 @@ class Mandate(BaseModel):
     frozen: list[str] = []
 
 
-# A claim of the agent's final report against the log (core/report_audit.py).
-Verdict = Literal["supported", "misleading", "contradicted", "not_in_log"]
-
-
-class ClaimVerdict(BaseModel):
-    claim: str  # one sentence of the report, as the agent wrote it (secrets redacted)
-    verdict: Verdict  # the most probable, both option orders averaged
-    risk: float  # P(misleading) + P(contradicted): the report is flagged from t.report
-    explanation: str | None = None
-
-
 class Leg(BaseModel):
     score: float  # 0 to 1, for the gauge
     confirmed: bool  # facts observed by code confirm it
@@ -188,7 +177,6 @@ class Run(BaseModel):
     messages: list[Message] = []
     report: str | None = None  # the agent's final report: agent text, secrets redacted
     report_check: Leg | None = None  # that report against the log (S9)
-    report_claims: list[ClaimVerdict] = []  # each of its claims, audited
     ended_at: str | None = None
     # Secret value -> fingerprint, to redact it wherever it shows up later. Never served.
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
