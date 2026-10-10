@@ -24,7 +24,7 @@ from cressey.core.models import (
     Step,
 )
 from cressey.core.secret_scan import Secret, redact
-from cressey.core.triangle import confirmed
+from cressey.core.triangle import confirmed, read_only
 
 
 def _digest(key: str) -> str:
@@ -92,6 +92,16 @@ class Runs:
         step.legs, step.reason = legs, reason
         legs_confirmed: list[JsonValue] = list(confirmed(legs))
         self._log(run, step, "legs", confirmed=legs_confirmed, reason=reason)
+
+    def act_on_pressure(self, run: Run, step: Step, legs: Legs) -> None:
+        """Without a human, once each: pressure sends the way out with this call's result;
+        pressure and opportunity drop the key to read-only for destructive calls."""
+        if legs.pressure.confirmed and run.way_out_step is None:
+            run.way_out_step = step.n
+            self._log(run, step, "way_out")
+        if read_only(legs) and run.read_only_step is None:
+            run.read_only_step = step.n
+            self._log(run, step, "read_only")
 
     def mark(
         self, run: Run, step: Step, status: Literal["denied", "would_hold"]

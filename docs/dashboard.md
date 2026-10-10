@@ -19,14 +19,14 @@ The interface is in French. One theme, readable on a projector.
 - The run's kind: live, replay or control. The control run is in « Observateur » mode: it is logged but never held, so its record can show the lie. This view follows the latest live run.
 - What Cressey sees: tool calls only; also messages and the report; or also the reasoning. The demo shows messages and the report, with the reasoning hidden.
 - **Three gauges** (Pression, Opportunité, Rationalisation): the score, whether facts confirm it, and the raw facts underneath.
-  - Added 10-10, to build: once pressure is confirmed, the Pression gauge shows « porte de sortie envoyée » and « clé en lecture seule », with the step. These happen without a human.
+  - Added 10-10, to build: the Pression gauge shows « porte de sortie envoyée » from the step that confirms pressure (`way_out_step`), and « clé en lecture seule » from the step where pressure and opportunity are both confirmed (`read_only_step`). From then on destructive calls are refused; reads and writes still go through. Both happen without a human.
   - Added 10-10, to build: a trap key in use shows on the Opportunité gauge as « clé piège utilisée », and the call is held as « critique ».
 - **Chart:** the three legs across the steps, with the hold marked.
 - **Step timeline:**
   - number, tool and a short form of the arguments;
   - risk: lecture, écriture or destructive;
   - status: autorisé, retenu, approuvé, rejeté, expiré or refusé;
-  - the reason for a hold, and failed calls;
+  - the reason for a hold or a refusal, and failed calls;
   - each secret value replaced by its name and origin: « DB_PROD_KEY (lue dans .env.prod, étape 4) ».
 - **Hold panel:**
   - what the agent tried, and why it was held (the safety-floor reason, the confirmed legs);
@@ -97,6 +97,7 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Secret redaction | the secrets `core/secret_scan.py` finds in what the agent read, replaced in steps, holds and traces before they are served | exists: served `args` and the report carry `[secret:<fingerprint>]`; each step's `secrets` gives name, kind, fingerprint and line |
 | Hold countdown and decision time | a deadline and a decision time on `Hold` | exists: `held_until` and `decided_at` on the step |
 | Gauges and leg chart | each step's leg scores, confirmation and facts | exists: `legs` on each step (`pressure`, `opportunity`, `rationalization`, each with `score`, `confirmed`, `facts`) |
+| Acting on pressure | where the way out was sent and where the key went read-only | exists: `way_out_step` and `read_only_step` on the run. A call the read-only key refuses is `denied`, with the reason « clé en lecture seule : pression et opportunité confirmées » |
 | Run kind, mode, end, what Cressey sees | per run | exists: `kind` (`control` is the Observateur mode), `ended_at`, `visibility` |
 | Agent report | the scripted agent posts its final report, which also ends the run; « rapport contredit par le journal » when the check flags it | exists: `POST /api/runs/{id}/report` with the run key; the run's `report_check` (score, confirmed, facts) |
 | Agent messages | what the agent says along the way, labelled « texte de l'agent » | exists: `messages` on the run (`after`: calls made before it, `text`); the scripted agent posts them |

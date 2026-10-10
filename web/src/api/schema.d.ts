@@ -593,6 +593,10 @@ export interface components {
 			 * @default false
 			 */
 			revoked: boolean;
+			/** Way Out Step */
+			way_out_step?: number | null;
+			/** Read Only Step */
+			read_only_step?: number | null;
 			/**
 			 * Steps
 			 * @default []

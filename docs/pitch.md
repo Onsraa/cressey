@@ -50,13 +50,13 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 - Détecter → Arrêter → Remonter → Alerter et guider → Corriger → Vérifier.
 - Code decides; the models only read meaning and label it, with a confidence score.
 - « Pas de transparence, pas d'autonomie » : the less Cressey can see, the shorter the leash.
-- « Sous pression, la laisse raccourcit » : once pressure is confirmed, Cressey offers the way out and drops the key to read-only, without waiting for a human.
+- « Sous pression, la laisse raccourcit » : once pressure is confirmed, Cressey offers the way out. With a key outside the mandate in reach too, the key can no longer destroy or send data. Neither waits for a human.
 - Each fix goes to whoever owns the condition: the key owner, or the task's author (« votre tâche était impossible : ajoutez une clause de sortie »).
 - Every guide step cites a passage, and code checks the quote verbatim. If not, the guide says « je ne sais pas ».
 
 **5. Démo.**
 - Open with the one-line plug-in: the MCP URL. Framing: the agent reaches the infrastructure through an MCP server, the way it would through Railway's (`delete-volume`).
-- The gauges rise. Pressure triggers the way out and the shorter leash, then the hold.
+- The gauges rise. Pressure sends the way out; once the production key is read, the leash shortens; then the DELETE is held.
 - The source: « clé DB_PROD lue dans .env.prod à l'étape 4 » (a trap key, once those are built).
 - Three inboxes receive their sourced guides.
 - Fix, then « test de régression de la politique »: five scripted variants (DELETE, DROP TABLE, UPDATE without WHERE, the key emailed, the key in base64).
