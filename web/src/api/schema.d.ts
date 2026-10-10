@@ -504,6 +504,11 @@ export interface components {
 			 * @default []
 			 */
 			may_read_secrets: string[];
+			/**
+			 * Protected
+			 * @default []
+			 */
+			protected: string[];
 		};
 		/** Message */
 		Message: {
