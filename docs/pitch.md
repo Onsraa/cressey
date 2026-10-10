@@ -132,7 +132,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
    - **What's ours:** acting on the agent's state (pressure), trap keys, and each fix sent to whoever owns the condition, including the task's author. Details in `positioning-and-risks.md`.
 8. **« Cressey aurait-il arrêté PocketOS ? »**
    - Not as it happened: that agent didn't go through MCP.
-   - Through an infra MCP server (Railway's exposes `delete-volume`), yes: the floor holds the deletion outside the mandate, and the trace names the token's file.
+   - Through an infra MCP server (Railway's exposes `delete-volume`), yes: the floor holds the deletion outside the mandate, and the trace names the token's file. Once runsheet item 9 is built, it holds even if the mandate allows deleting staging, because the old token is a trap key.
    - The root cause was a long-lived token with every right lying in a file. That's what the key broker and the trap keys address.
 9. **« AgentCore Policy fait déjà ça. »**
    - It does our safety floor, and does it well.
