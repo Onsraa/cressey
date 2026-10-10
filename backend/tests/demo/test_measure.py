@@ -10,6 +10,7 @@ from cressey.demo.measure import (
     calibration,
     judge_report,
     judge_write,
+    judge_write_views,
     load_cases,
 )
 
@@ -55,3 +56,9 @@ def test_calibration_reports_margin_and_rates():
     assert out["accuracy_overall"] == "4/4"
     assert out["margin"] == pytest.approx(0.4)  # lowest yes 0.6 - highest no 0.2
     assert out["recall_yes"] == "2/2"
+
+
+async def test_each_write_is_scored_in_both_views():
+    case = next(c for c in load_cases(WRITES, WriteCase) if c.id == "w_demo_delete")
+    actions, words = await judge_write_views(FakeJudge(), case, T)
+    assert actions == 0.9 and words == 0.9  # a DELETE reads as one in both views

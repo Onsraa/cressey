@@ -36,6 +36,9 @@ class Thresholds(BaseModel):
         8  # flagged parts of earlier steps the judgment sees, any distance back
     )
     deadline_words: list[str] = []
+    # A gap this wide between the judgment on the actions alone and with the agent's words is
+    # the words' doing: above Jev's measured run-to-run drift (judgments ±0.02, labels 0.09).
+    gap: float = 0.1
 
 
 class Fleet(BaseModel):

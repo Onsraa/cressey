@@ -34,7 +34,14 @@ from cressey.core.models import Mandate, Run, RunIn, Thresholds
 from cressey.core.proxy import load_policy
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
-from cressey.core.triangle import JUDGMENT, LABELS, REPORT, legs, report_check
+from cressey.core.triangle import (
+    JUDGMENT,
+    LABELS,
+    REPORT,
+    legs,
+    report_check,
+    views,
+)
 from cressey.guide.clients import decision_auth
 from cressey.guide.corpus import DATA
 from cressey.settings import Settings
@@ -206,6 +213,14 @@ async def judge_write(
     run = build_run(Runs(EventLog()), case, judge_final=False)
     leg = (await legs(run, run.steps[-1], judge, t)).rationalization
     return leg.score
+
+
+async def judge_write_views(
+    judge: MeasuringJudge | FakeJudge, case: WriteCase, t: Thresholds
+) -> tuple[float | None, float | None]:
+    """The write judgment on (the actions alone, with the agent's words)."""
+    run = build_run(Runs(EventLog()), case, judge_final=False)
+    return await views(run, run.steps[-1], judge, t)
 
 
 async def judge_report(

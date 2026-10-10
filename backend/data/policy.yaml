@@ -19,6 +19,7 @@ triangle:
   judgment: 0.5
   report: 0.8
   evidence: 8
+  gap: 0.1
   deadline_words: [ce soir, urgent, avant la mise en prod, asap, immédiatement, deadline]
 
 # Runs held for the same target outside their mandate, within the window: a signal across
