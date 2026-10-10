@@ -2,6 +2,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from cressey.guide.api import router as guide_router
 from cressey.settings import Settings
 
 
@@ -14,6 +15,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         ok = s.openai_api_key is not None and s.typesafe_api_key is not None
         return {"status": "ok", "models": "configured" if ok else "missing-keys"}
+
+    api.include_router(guide_router)
 
     # Must stay the last /api route: keeps API typos from falling through to the SPA.
     @api.get("", include_in_schema=False)
