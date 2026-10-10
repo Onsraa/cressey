@@ -107,6 +107,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/runs/{run_id}/messages": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Message
+		 * @description What the agent says along the way. Only the run's own key may send it.
+		 */
+		post: operations["message_api_runs__run_id__messages_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/runs/{run_id}/report": {
 		parameters: {
 			query?: never;
@@ -367,6 +387,13 @@ export interface components {
 			 */
 			may_read_secrets: string[];
 		};
+		/** Message */
+		Message: {
+			/** After */
+			after: number;
+			/** Text */
+			text: string;
+		};
 		/** OwnerGuide */
 		OwnerGuide: {
 			/**
@@ -387,11 +414,6 @@ export interface components {
 			status: "pending" | "ok" | "unsure" | "unavailable";
 			/** Guide Id */
 			guide_id?: string | null;
-		};
-		/** ReportIn */
-		ReportIn: {
-			/** Text */
-			text: string;
 		};
 		/** Run */
 		Run: {
@@ -422,6 +444,11 @@ export interface components {
 			 * @default []
 			 */
 			steps: components["schemas"]["Step"][];
+			/**
+			 * Messages
+			 * @default []
+			 */
+			messages: components["schemas"]["Message"][];
 			/** Report */
 			report?: string | null;
 			/** Ended At */
@@ -540,6 +567,14 @@ export interface components {
 			/** Decided At */
 			decided_at?: string | null;
 			legs?: components["schemas"]["Legs"] | null;
+		};
+		/**
+		 * TextIn
+		 * @description A message or the final report, from the agent.
+		 */
+		TextIn: {
+			/** Text */
+			text: string;
 		};
 		/** Unit */
 		Unit: {
@@ -804,6 +839,41 @@ export interface operations {
 			};
 		};
 	};
+	message_api_runs__run_id__messages_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["TextIn"];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
 	report_api_runs__run_id__report_post: {
 		parameters: {
 			query?: never;
@@ -817,7 +887,7 @@ export interface operations {
 		};
 		requestBody: {
 			content: {
-				"application/json": components["schemas"]["ReportIn"];
+				"application/json": components["schemas"]["TextIn"];
 			};
 		};
 		responses: {

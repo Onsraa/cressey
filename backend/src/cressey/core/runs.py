@@ -12,7 +12,16 @@ from typing import Literal
 from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
-from cressey.core.models import Hold, Legs, Risk, Run, RunCreated, RunIn, Step
+from cressey.core.models import (
+    Hold,
+    Legs,
+    Message,
+    Risk,
+    Run,
+    RunCreated,
+    RunIn,
+    Step,
+)
 from cressey.core.secret_scan import Secret, redact
 from cressey.core.triangle import confirmed
 
@@ -88,6 +97,11 @@ class Runs:
     ) -> None:
         step.status = status
         self._log(run, step, "status", status=status)
+
+    def say(self, run: Run, text: str) -> None:
+        message = Message(after=len(run.steps), text=redact(text, run.known))
+        run.messages.append(message)
+        self.log.append("message", {"run": run.id, **message.model_dump()})
 
     def end(self, run: Run, report: str) -> None:
         run.report, run.ended_at = redact(report, run.known), _now().isoformat()

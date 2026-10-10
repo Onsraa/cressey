@@ -88,6 +88,11 @@ class Step(BaseModel):
     result: str = Field("", exclude=True)
 
 
+class Message(BaseModel):
+    after: int  # how many calls the agent had made when it said this
+    text: str  # agent text, secrets redacted
+
+
 class Run(BaseModel):
     id: str
     task: str
@@ -97,13 +102,16 @@ class Run(BaseModel):
     started_at: str
     revoked: bool = False
     steps: list[Step] = []
+    messages: list[Message] = []
     report: str | None = None  # the agent's final report: agent text, secrets redacted
     ended_at: str | None = None
     # Secret value -> fingerprint, to redact it wherever it shows up later. Never served.
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
 
 
-class ReportIn(BaseModel):
+class TextIn(BaseModel):
+    """A message or the final report, from the agent."""
+
     text: str = Field(min_length=1, max_length=5000)
 
 

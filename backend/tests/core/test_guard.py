@@ -2,25 +2,14 @@
 
 import asyncio
 import json
-import socket
-import sqlite3
-import threading
-import time
-from collections.abc import Generator
-from contextlib import closing, contextmanager
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
-import httpx2
 import pytest
-import uvicorn
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
-from cressey.app import create_app
 from cressey.demo.tools import PROD_KEY
-from cressey.guide.models import Guide, GuideIncident
-from cressey.settings import Settings
+from tests.server import api, next_hold, users
 
 pytestmark = pytest.mark.anyio
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -32,70 +21,12 @@ def anyio_backend():
     return "asyncio"
 
 
-def fake_guide(gi: GuideIncident) -> Guide:
-    """No model is called in these tests."""
-    return Guide(
-        id=f"g-{gi.id}",
-        incident_id=gi.id,
-        status="ok",
-        message=None,
-        steps=[],
-        passages=[],
-        dropped_steps=0,
-    )
-
-
-@contextmanager
-def serving(demo: Path, hold_timeout: float) -> Generator[str]:
-    settings = Settings(
-        _env_file=None,
-        openai_api_key=None,
-        typesafe_api_key=None,
-        demo_dir=demo,
-        hold_timeout=hold_timeout,
-    )
-    app = create_app(settings, make_guide=fake_guide)
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(
-        uvicorn.Config(app, log_level="warning", timeout_graceful_shutdown=1)
-    )
-    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]})
-    thread.start()
-    for _ in range(500):
-        if server.started:
-            break
-        time.sleep(0.01)
-    try:
-        yield f"http://127.0.0.1:{sock.getsockname()[1]}"
-    finally:
-        server.should_exit = True
-        thread.join(10)
-
-
-@pytest.fixture
-def served(tmp_path):
-    with serving(tmp_path, hold_timeout=10) as base:
-        yield base
-
-
-@pytest.fixture
-def served_short_holds(tmp_path):
-    with serving(tmp_path, hold_timeout=0.3) as base:
-        yield base
-
-
 def agent(base: str, key: str) -> Client:
     return Client(
         StreamableHttpTransport(
             f"{base}/mcp", headers={"Authorization": f"Bearer {key}"}
         )
     )
-
-
-async def api(base: str, method: str, path: str, **kw) -> httpx2.Response:
-    async with httpx2.AsyncClient(base_url=base) as h:
-        return await h.request(method, path, **kw)
 
 
 async def new_run(base: str, mandate: dict | None = None, **extra: str) -> dict:
@@ -105,22 +36,8 @@ async def new_run(base: str, mandate: dict | None = None, **extra: str) -> dict:
     return r.json()
 
 
-async def next_hold(base: str) -> dict:
-    for _ in range(250):
-        holds = (await api(base, "GET", "/api/holds")).json()
-        if holds:
-            return holds[0]
-        await asyncio.sleep(0.02)
-    raise AssertionError("no hold appeared")
-
-
 async def steps(base: str, run: dict) -> list[dict]:
     return (await api(base, "GET", f"/api/runs/{run['id']}")).json()["steps"]
-
-
-def users(demo: Path) -> int:
-    with closing(sqlite3.connect(demo / "prod.sqlite")) as c:
-        return c.execute("SELECT count(*) FROM users").fetchone()[0]
 
 
 async def test_allowed_call_reaches_the_tool_and_is_recorded(served):

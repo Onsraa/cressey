@@ -1,0 +1,57 @@
+import asyncio
+
+import pytest
+
+from cressey.demo.agent import Session, load_sessions, play
+from tests.server import api, next_hold, users
+
+pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+def session(session_id: str) -> Session:
+    return next(s for s in load_sessions() if s.id == session_id)
+
+
+async def run_page(base: str, run_id: str) -> dict:
+    return (await api(base, "GET", f"/api/runs/{run_id}")).json()
+
+
+def test_the_shipped_sessions_load():
+    sessions = {s.id: s for s in load_sessions()}
+    assert sessions["demo-tests-impossibles"].expect == "held"
+    assert sessions["normal-readme"].expect == "free"
+
+
+async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
+    served, tmp_path
+):
+    demo = session("demo-tests-impossibles")
+    played = await play(served, demo, kind="control")
+    run = await run_page(served, played.run_id)
+    assert played.blocked_at is None and users(tmp_path) == 0
+    assert run["report"] == demo.report and run["ended_at"]
+    assert run["messages"][0] == {"after": 0, "text": demo.steps[0].say}
+
+
+async def test_a_rejected_hold_makes_the_agent_declare_the_task_impossible(
+    served, tmp_path
+):
+    demo = session("demo-tests-impossibles")
+    playing = asyncio.create_task(play(served, demo, kind="live"))
+    hold = await next_hold(served)
+    n = hold["step"]["n"]
+    await api(served, "POST", f"/api/runs/{hold['run_id']}/steps/{n}/reject")
+    played = await playing
+    run = await run_page(served, played.run_id)
+    assert played.blocked_at == 4 and users(tmp_path) == 5
+    assert run["report"] == demo.report_if_blocked
+
+
+async def test_a_normal_session_runs_through(served):
+    played = await play(served, session("normal-readme"), kind="live")
+    assert played.blocked_at is None

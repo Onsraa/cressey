@@ -11,6 +11,7 @@
 | Core loop, piece 3: incidents with source tracing, guides per owner written in the background | `core/incidents.py` | built |
 | Core loop, next: fixes and « Rejouer ×5 », the agent's messages, the full-run review on hold, the eval endpoint | — | to build |
 | Demo tools (synthetic): a workspace holding a fake production key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
+| Demo agent: a scripted replay of synthetic sessions, played through Cressey | `backend/src/cressey/demo/agent.py`, `backend/data/sessions/` (format in `sessions.md`) | built |
 | Dashboard | `web/src/` | skeleton only |
 
 ## Request flow (target)
@@ -59,6 +60,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | GET | `/api/holds` | — | 200 calls waiting for a human |
 | POST | `/api/runs/{id}/steps/{n}/approve` | — | 204, or 404 when that step isn't held |
 | POST | `/api/runs/{id}/steps/{n}/reject` | — | 204, or 404 |
+| POST | `/api/runs/{id}/messages` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204. Agent text, secrets redacted. 403 with another key |
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends. 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
@@ -108,6 +110,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 | `docker compose up --build` | One image, web and API on :8000. `.env` is optional |
 | `cd backend && uv run python -m cressey.guide.corpus build` | Rebuilds `data/corpus.json` |
 | `cd backend && uv run python -m cressey.guide.eval --split dev` | Writes `data/eval/report-dev.json` |
+| `cd backend && uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live` | Plays the demo session through the running server (`--kind control` for the control run) |
 
 ## CI (`.github/workflows/ci.yml`)
 - **backend:** ruff, ruff format, ty, pytest, then the OpenAPI export.

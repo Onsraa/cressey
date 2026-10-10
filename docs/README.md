@@ -9,6 +9,7 @@
 | `evaluation.md` | Method and current dev results |
 | `decisions.md` | Decisions with dates and reasons; open items |
 | `pitch.md` | 8-slide outline, fiche défense draft, jury questions, every number checked against its source |
+| `sessions.md` | The synthetic sessions the demo agent plays: format, demo tools, how to play one |
 | `runsheet.md` | Event timeline, checkpoint answers, what to do when something breaks |
 | `plans/` | Implementation plans: `plan-setup.md` (done), `plan-guide-rag.md` (done) |
 | `test-results/` | Pre-event test results S1–S8 |

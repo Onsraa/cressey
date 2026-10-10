@@ -11,11 +11,11 @@ from cressey.core.models import (
     Hold,
     Incident,
     LogHead,
-    ReportIn,
     Run,
     RunCreated,
     RunIn,
     Status,
+    TextIn,
 )
 from cressey.core.proxy import MCP_PATH
 from cressey.core.runs import Runs
@@ -55,18 +55,31 @@ async def get_run(run_id: str, runs: RunsDep) -> Run:
     return run
 
 
-@router.post("/runs/{run_id}/report", status_code=204)
-async def report(
-    run_id: str,
-    body: ReportIn,
-    runs: RunsDep,
-    authorization: Annotated[str, Header()] = "",
-) -> None:
-    """The agent's final report. It ends the run; only the run's own key may send it."""
+def _own_run(runs: Runs, run_id: str, authorization: str) -> Run:
+    """The run, when the request carries that run's own key."""
     run = runs.by_key(authorization.removeprefix("Bearer ").strip())
     if run is None or run.id != run_id:
         raise HTTPException(403)
-    runs.end(run, body.text)
+    return run
+
+
+AuthorizationHeader = Annotated[str, Header()]
+
+
+@router.post("/runs/{run_id}/messages", status_code=204)
+async def message(
+    run_id: str, body: TextIn, runs: RunsDep, authorization: AuthorizationHeader = ""
+) -> None:
+    """What the agent says along the way. Only the run's own key may send it."""
+    runs.say(_own_run(runs, run_id, authorization), body.text)
+
+
+@router.post("/runs/{run_id}/report", status_code=204)
+async def report(
+    run_id: str, body: TextIn, runs: RunsDep, authorization: AuthorizationHeader = ""
+) -> None:
+    """The agent's final report. It ends the run; only the run's own key may send it."""
+    runs.end(_own_run(runs, run_id, authorization), body.text)
 
 
 @router.get("/status")
