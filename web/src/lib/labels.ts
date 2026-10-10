@@ -158,7 +158,7 @@ export const CHECK: Record<keyof Responses, string> = {
 };
 
 export const time = (iso?: string | null) =>
-	iso ? new Date(iso).toLocaleTimeString("en-US") : "";
+	iso ? new Date(iso).toLocaleTimeString("en-GB") : ""; // 24-hour, shorter on a projector
 
 // The checks currently on “Alert”: Cressey lets their calls through.
 export const onAlert = (r?: Responses) =>
