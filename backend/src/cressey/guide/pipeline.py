@@ -53,7 +53,7 @@ class GuidePipeline:
         )
         self.relevance_min = relevance_min
 
-    def _keep(self, question: str, units: list[Unit]) -> list[Unit]:
+    def keep(self, question: str, units: list[Unit]) -> list[Unit]:
         scores = self.reranker.relevance(question, units)
         kept = [u for u in units if scores.get(u.id, 0.0) >= self.relevance_min]
         return sorted(kept, key=lambda u: -scores[u.id])
@@ -95,7 +95,7 @@ class GuidePipeline:
             )
         found = self.retriever.search([fr, en, raw])
         try:
-            kept = self._keep(fr, found)
+            kept = self.keep(fr, found)
             if not kept:
                 return guide("unsure", MSG_NO_SOURCE, passages=found)
             draft = self.writer.write(incident, kept)
@@ -109,7 +109,7 @@ class GuidePipeline:
     def why(self, guide: Guide, question: str) -> WhyAnswer:
         try:
             fr, _ = self.rewriter.rewrite_question(question)
-            kept = self._keep(fr, guide.passages)
+            kept = self.keep(fr, guide.passages)
             if not kept:
                 return WhyAnswer(text=MSG_NO_SOURCE, citations=[], status="unsure")
             draft = self.writer.answer(question, kept)

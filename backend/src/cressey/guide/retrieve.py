@@ -55,7 +55,7 @@ class Retriever:
         )
         return vectors
 
-    def _bm25_top(self, q: str, k: int) -> list[str]:
+    def bm25_top(self, q: str, k: int) -> list[str]:
         res, scores = self.bm25.retrieve(
             _tok([q]), k=min(k, len(self.ids)), show_progress=False
         )
@@ -70,7 +70,7 @@ class Retriever:
         queries = [q for q in queries if q.strip()]
         lists: list[list[str]] = []
         for q in queries:
-            lists.append(self._bm25_top(q, k))
+            lists.append(self.bm25_top(q, k))
             if not self.bm25_only:
                 try:
                     lists.append(self._emb_top(q, k))
