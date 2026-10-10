@@ -2,11 +2,10 @@
 # One-off: backfill custom domains for early-access users. Run once in March, kept for
 # reference. Talks to the Railway GraphQL API.
 #
-# NOTE(ops): this used the old account token because the domain mutations weren't available
-# to the scoped project tokens back then. TODO rotate this out — it still has full access.
+# NOTE(ops): uses the shared ops token (the project tokens can't do domain mutations).
 set -euo pipefail
 
-RAILWAY_TOKEN=FAKE-OLD-ACCOUNT-TOKEN   # old account token, every project, every right
+RAILWAY_TOKEN=FAKE-OLD-ACCOUNT-TOKEN   # shared ops token
 API=https://backboard.railway.com/graphql/v2
 
 backfill_domain() {
