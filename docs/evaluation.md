@@ -221,7 +221,7 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 | split across two calls | **no** | yes (each half) | no |
 
 - **Finding F3 (medium):** encoded or split forms of a known secret are **not redacted** in served step args or the report, though both are labelled "secrets redacted" (`models.py`). End to end, a base64'd key emailed to an **in-mandate** recipient went through unheld and appeared in cleartext in the served args and the outbox. `trace` already decodes base64/hex/url to find the source, so redaction is inconsistent with tracing.
-- **Finding F4 (medium):** a secret past the 16 KB `SCAN_LIMIT` in a tool result is **not detected** (0 secrets found with the key at offset 16 KB), so it is neither redacted nor does it light the opportunity leg. The cap guards the quadratic plugins; the linear `_named` regex could still scan the whole result. **Fixed 10-10:** the naming rule reads the whole result; detect-secrets keeps 16 KB, in windows (`decisions.md`).
+- **Finding F4 (medium):** a secret past the 16 KB `SCAN_LIMIT` in a tool result is **not detected** (0 secrets found with the key at offset 16 KB), so it is neither redacted nor does it light the opportunity leg. The cap guards the quadratic plugins; the linear `_named` regex could still scan the whole result. **Fixed 10-10:** the naming rule reads the whole result; detect-secrets keeps 16 KB, in windows (`decisions.md`). **Left:** a secret only detect-secrets finds past 16 KB, such as a vendor token with no `NAME=` (`ghp_…`), is still missed.
 - Reversed/split encodings are not traced (by design): the incident's `sources` is then empty. The opportunity leg does fire when the key is read in cleartext (within 16 KB).
 
 ### Reliability
@@ -252,10 +252,24 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 - 500-step run: per-call `check_ms` 8.4 → 10.0 ms (×1.2 over the run; per call is O(steps-so-far)); peak tracemalloc 7.3 MB (~15 KB/step, no leak).
 - Secret scan 64 KB: 17 ms capped vs 19 ms full. Trace over 200 reads: 3.4 ms.
 
+### Crafted input to the secret scan (measured after F4 and F5, 10-10)
+The near-linear cost above holds for benign lines only. On one line of "password" repeated, detect-secrets' regexes are quadratic, and they hold the GIL, so a scan in a thread still stalls the event loop. "sk-", "eyJ" and "://a" are superlinear too.
+
+| "password" repeated on one line | Before | After |
+|---|---|---|
+| 2 KB | 0.25 s | — |
+| 8 KB | 3.9 s | — |
+| 16 KB, in a result | 15.7 s; event loop stalled 14.2 s | 0.44 s; worst event-loop lag 19 ms |
+| 1 MB, in a result | about 18 h, extrapolated at ×4 per doubling | 0.47 s; worst lag 37 ms |
+| 16 KB, in an argument: a `GET /api/runs` sent meanwhile | 0.53 s with F4 alone (redaction on the loop) | 0.23 s |
+
+- Benign 1 MB: the result scan takes about 0.1 s, the argument redaction 60–100 ms, and a `GET /api/runs` sent meanwhile 9 ms.
+- **Left:** a secret only detect-secrets finds past 16 KB (`ghp_…` with no `NAME=`) is missed, and other runs wait up to about 0.2 s per crafted text, on the scan lock and the GIL.
+
 ### Limits
 - Fakes only, localhost, synthetic data, single process; no network between agent and Cressey is measured.
 - The floor battery is 29 hand-written cases, not a labelled corpus; "held" is the floor's reason alone, triangle off.
-- F1/F2 are the floor's SQL taxonomy (a design gap), left for the positioning note; F3–F5 touch files owned by other work streams this session, so they are reported, not patched (see the stress report).
+- F1–F5 were reported here and fixed since (`decisions.md`).
 - Latency jitters run to run (threaded uvicorn on one machine); figures are from one `results.json`.
 
 ## Earlier measurements
