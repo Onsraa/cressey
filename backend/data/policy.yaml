@@ -1,0 +1,7 @@
+# What each tool does, for the safety floor. A tool missing here counts as destructive.
+tools:
+  read_file: {kind: read}
+  run_tests: {kind: read}
+  write_file: {kind: write}
+  run_sql: {kind: sql, arg: query}
+  send_email: {kind: egress, arg: to}

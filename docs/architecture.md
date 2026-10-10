@@ -5,7 +5,10 @@
 |---|---|---|
 | App factory, settings, health, SPA fallback | `backend/src/cressey/app.py`, `settings.py` | built |
 | Guide pipeline: corpus, retrieval, adapters, pipeline, store, API, eval, cache | `backend/src/cressey/guide/` | built |
-| Core loop: MCP proxy, mandate and safety floor, triangle scoring, hold, revoke, trace, incidents | — | to build (design in `concept.md`) |
+| Core loop, piece 1: MCP proxy, safety floor, hold and revoke, runs API | `backend/src/cressey/core/` (`proxy.py`, `floor.py`, `runs.py`, `api.py`), `backend/data/policy.yaml` | built |
+| Core loop, building blocks: source tracing, hash-chained event log | `core/trace.py`, `core/eventlog.py` | built, not wired in yet |
+| Core loop, next: triangle scoring, secret scan, incidents sent to the guide pipeline | — | to build |
+| Demo tools (synthetic): a workspace holding a fake production key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
 | Dashboard | `web/src/` | skeleton only |
 
 ## Request flow (target)
@@ -38,6 +41,8 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `writer_model` | — | `gpt-5.5` |
 | `embedding_model` | — | `text-embedding-3-small` |
 | `relevance_min` | — | `0.4` |
+| `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
+| `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
 
 ## API
 | Method | Path | Body | Response |
@@ -46,8 +51,27 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/guides` | `GuideIncident` | 201 `Guide`, including when status is `unavailable` |
 | GET | `/api/guides/{id}` | — | 200 `Guide`, or 404 |
 | POST | `/api/guides/{id}/why` | `{"question": str}`, 3–500 characters | 200 `WhyAnswer`, 404 or 422 |
+| POST | `/api/runs` | `{"task": str, "mandate": {"may_destroy": [tables], "may_send_to": [addresses or "@domain"]}}` | 201 `{"id", "key"}`. The key is shown once; Cressey keeps only its hash |
+| GET | `/api/runs` | — | 200 runs with their steps |
+| GET | `/api/runs/{id}` | — | 200 `Run`, or 404 |
+| GET | `/api/holds` | — | 200 calls waiting for a human |
+| POST | `/api/runs/{id}/steps/{n}/approve` | — | 204, or 404 when that step isn't held |
+| POST | `/api/runs/{id}/steps/{n}/reject` | — | 204, or 404 |
+| any | `/mcp` | MCP over streamable HTTP, `Authorization: Bearer <run key>` | the proxied tools |
 
 Types are in `backend/src/cressey/guide/models.py`. The web app uses the generated `web/src/api/schema.d.ts`.
+
+## Core loop, piece 1
+- **Check:** each call is classified with the policy (`backend/data/policy.yaml`: `read`, `write`, `destructive`, `sql`, `egress`) and checked against the run's mandate (`core/floor.py`).
+- **Held when:**
+  - the tool is missing from the policy, or is `destructive`;
+  - the SQL is destructive and touches a table outside `may_destroy`, or can't be classified;
+  - a recipient is outside `may_send_to`.
+- **While a call is held,** the run's key is revoked: its other calls are denied.
+  - Approval runs the call once and reinstates the key.
+  - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.
+- **Records:** every call becomes a step with its risk class and status. What the agent read is kept in memory for tracing and is never served by the API.
+- **State:** runs and holds live in memory for the life of the process.
 
 ## Web
 - **Stack:** Vite 8, React 19, TypeScript 6, Tailwind v4, shadcn (radix, preset nova), Biome.

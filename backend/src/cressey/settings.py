@@ -24,6 +24,11 @@ class Settings(BaseSettings):
         "live", validation_alias="CRESSEY_MODEL_MODE"
     )
     cache_dir: Path = Field(Path("data/cache"), validation_alias="CRESSEY_CACHE_DIR")
+    # Under the MCP client's default 300 s read timeout, so the agent gets Cressey's answer.
+    hold_timeout: float = Field(240, validation_alias="CRESSEY_HOLD_TIMEOUT")
+    demo_dir: Path | None = Field(
+        None, validation_alias="CRESSEY_DEMO_DIR"
+    )  # temp dir when unset
     relevance_min: float = (
         0.4  # S6 calibration: keeps 51/55 expected passages, 16/185 others
     )

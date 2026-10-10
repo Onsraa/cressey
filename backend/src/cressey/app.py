@@ -1,7 +1,15 @@
+import tempfile
+from pathlib import Path
+
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Route
 
+from cressey.core.api import router as core_router
+from cressey.core.proxy import build_mcp, load_policy
+from cressey.core.runs import Runs
+from cressey.demo.tools import demo_tools
 from cressey.guide.api import router as guide_router
 from cressey.guide.corpus import DATA, load_corpus
 from cressey.settings import Settings
@@ -10,7 +18,13 @@ from cressey.settings import Settings
 def create_app(settings: Settings | None = None) -> FastAPI:
     s = settings or Settings()
     load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
-    app = FastAPI(title="Cressey")
+    runs = Runs()
+    demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
+    mcp = build_mcp(
+        runs, load_policy(DATA / "policy.yaml"), demo_tools(demo), s.hold_timeout
+    )
+    app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
+    app.state.runs = runs
     api = APIRouter(prefix="/api")
 
     @api.get("/health")
@@ -19,6 +33,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "models": "configured" if ok else "missing-keys"}
 
     api.include_router(guide_router)
+    api.include_router(core_router)
 
     # Must stay the last /api route: keeps API typos from falling through to the SPA.
     @api.get("", include_in_schema=False)
@@ -27,6 +42,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         raise HTTPException(404)
 
     app.include_router(api)
+    # The URL agents put in their MCP config. Registered before the SPA fallback.
+    app.router.routes.append(Route("/mcp", endpoint=mcp))
     _mount_web(app, s)
     return app
 

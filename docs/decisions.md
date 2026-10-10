@@ -20,6 +20,10 @@
 | 10-10 | **Check on each call, judge on the whole run**: Jev gets a run summary, and an LLM reads the whole run while a call is held | Fraud builds over several steps. One step judged alone misses rationalization spread over steps and attacks split into harmless steps |
 | 10-10 | **Model calls are not stored and fail fast**: `store=False`; OpenAI 20 s read, 5 s connect, 1 retry; Jev 5 s, 1 retry | Incident text must not stay at the provider (30 days by default on OpenAI and Bedrock). In `fallback` mode the cache answers only after the live call gives up |
 | 10-10 | **Bedrock through the OpenAI SDK** (base URL and a Bedrock API key) | Bedrock serves the Responses API, so the adapters stay. The models change (GPT-5.6) and the embeddings move to a Bedrock model |
+| 10-10 | **A held call revokes the run's key until a human decides.** Approval runs the call once and reinstates the key; rejection or expiry keeps it revoked | Fail closed: an agent that drifted keeps no access while it waits |
+| 10-10 | **Hold timeout 240 s** | Under the MCP client's 300 s default, so the agent receives the way out instead of a client timeout |
+| 10-10 | **`REPLACE INTO` read as `INSERT INTO` before parsing** | sqlglot's default dialect can't parse it. Classed as a write, as in S4 |
+| 10-10 | **Data leaving counts as destructive** for the risk weight | It can't be recalled |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
@@ -28,3 +32,4 @@
 - `GITGUARDIAN_API_KEY` repo secret: needed for the secret scan in CI.
 - Bedrock switch: test `text_format` through Bedrock, choose the embedding model (Cohere Embed Multilingual v3 is the candidate), re-record the cache, re-run the eval. Then the AWS deploy.
 - Whether the run summary improves Jev's scores over the action alone: measure on the labelled set.
+- The API, approval included, has no authentication: localhost demo only.
