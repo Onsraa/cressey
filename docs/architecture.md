@@ -65,7 +65,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/guides` | `GuideIncident` | 201 `Guide`, including when status is `unavailable` |
 | GET | `/api/guides/{id}` | — | 200 `Guide`, or 404 |
 | POST | `/api/guides/{id}/why` | `{"question": str}`, 3–500 characters | 200 `WhyAnswer`, 404 or 422 |
-| POST | `/api/runs` | `{"task": str, "mandate": {"may_destroy": [tables], "may_send_to": [addresses or "@domain"], "may_read_secrets": [names]}, "visibility": "tools"\|"messages"\|"reasoning", "kind": "live"\|"replay"\|"control"}` | 201 `{"id", "key"}`. The key is shown once; Cressey keeps only its hash |
+| POST | `/api/runs` | `{"task": str, "mandate": {"may_destroy": [tables], "may_send_to": [addresses or "@domain"], "may_read_secrets": [names], "protected": [paths]}, "visibility": "tools"\|"messages"\|"reasoning", "kind": "live"\|"replay"\|"control"}` | 201 `{"id", "key"}`. The key is shown once; Cressey keeps only its hash |
 | GET | `/api/runs` | — | 200 runs with their steps |
 | GET | `/api/runs/{id}` | — | 200 `Run`, or 404 |
 | GET | `/api/holds` | — | 200 calls waiting for a human |
@@ -87,7 +87,8 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 - **Check:** each call is classified with the policy (`backend/data/policy.yaml`: `read`, `write`, `destructive`, `sql`, `egress`) and checked against the run's mandate (`core/floor.py`).
 - **Held when:**
   - the tool is missing from the policy, or is `destructive`;
-  - the SQL is destructive and touches a table outside `may_destroy`, or can't be classified;
+  - the SQL is destructive and touches a table outside `may_destroy`, or can't be classified. Destructive: a DELETE, DROP or TRUNCATE; any UPDATE, whatever its WHERE; a MERGE; an insert that replaces or updates on conflict (`REPLACE INTO`, `INSERT OR REPLACE`, `ON CONFLICT DO UPDATE`); a rename;
+  - a read or a write touches a path the mandate protects (`protected`), with no model asked: « chemin protégé : … ». A name protects everything under it, and globs work. Case and `..` can't step around it. This is the read floor from the Hugging Face / METR case;
   - a recipient is outside `may_send_to`;
   - the call carries a trap key (`decoys` in `policy.yaml`), whatever the mandate: in any argument, in any case, or in a token that decodes from base64, hex or URL encoding. The reason, « clé piège utilisée : DB_ADMIN_KEY », replaces the others.
 - **While a call is held,** the run's key is revoked: its other calls are denied.

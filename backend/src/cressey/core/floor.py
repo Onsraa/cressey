@@ -2,6 +2,8 @@
 leaving, outside the task's mandate. Anything it can't classify counts as destructive.
 A call that carries a trap key is held whatever the mandate."""
 
+import fnmatch
+import posixpath
 import re
 from collections.abc import Mapping
 
@@ -13,17 +15,30 @@ from cressey.core.models import Mandate, Risk, ToolRule
 from cressey.core.trace import decoded, strings
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
-# sqlglot can't parse REPLACE INTO (S4). It inserts or overwrites rows: classed as a write.
+# sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
 REPLACE_INTO = re.compile(r"(^|;)(\s*)REPLACE\s+INTO\b", re.IGNORECASE)
+
+
+def _overwrites(s: exp.Expr) -> bool:
+    """Rows changed in place, whose old values are lost: any UPDATE whatever its WHERE (a
+    WHERE 1 = 1 matches them all), a MERGE, or an insert that replaces or updates on conflict."""
+    if s.find(exp.Update, exp.Merge):
+        return True
+    return any(
+        str(i.args.get("alternative") or "").upper() == "REPLACE"
+        or bool(c and c.args.get("expressions"))
+        for i in s.find_all(exp.Insert)
+        for c in [i.args.get("conflict")]
+    )
 
 
 def _statement_risk(s: exp.Expr) -> Risk | None:
     """None when code can't classify the statement."""
-    if s.find(exp.Delete, exp.Drop, exp.TruncateTable) or any(
-        not u.args.get("where") for u in s.find_all(exp.Update)
-    ):
+    if s.find(
+        exp.Delete, exp.Drop, exp.TruncateTable, exp.AlterRename, exp.RenameColumn
+    ) or _overwrites(s):
         return "destructive"
-    if s.find(exp.Insert, exp.Update, exp.Merge, exp.Create, exp.Alter):
+    if s.find(exp.Insert, exp.Create, exp.Alter):
         return "write"
     if isinstance(s, (exp.Query, exp.Transaction, exp.Commit, exp.Rollback)):
         return "read"
@@ -34,7 +49,7 @@ def sql_risk(sql: str) -> tuple[Risk, set[str] | None]:
     """Risk of a SQL string, and the tables its destructive statements touch
     (None when a statement can't be classified)."""
     try:
-        parsed = sqlglot.parse(REPLACE_INTO.sub(r"\1\2INSERT INTO", sql))
+        parsed = sqlglot.parse(REPLACE_INTO.sub(r"\1\2INSERT OR REPLACE INTO", sql))
         statements = [s for s in parsed if s is not None]
     except sqlglot.errors.SqlglotError:
         return "destructive", None
@@ -60,6 +75,18 @@ def _may_send(address: str, mandate: Mandate) -> bool:
     )
 
 
+def _protected(path: JsonValue, mandate: Mandate) -> str | None:
+    """Why a read or write of a path the mandate protects is held, with no model asked (the
+    Hugging Face / METR read floor). Case and `..` can't step around it."""
+    if not mandate.protected or not isinstance(path, str):
+        return None
+    p = posixpath.normpath(path.replace("\\", "/")).lstrip("/").lower()
+    for g in (g.strip("/").lower() for g in mandate.protected):
+        if p == g or p.startswith(g + "/") or fnmatch.fnmatchcase(p, g):
+            return f"chemin protégé : {path}"
+    return None
+
+
 def check(
     rule: ToolRule | None, args: Mapping[str, JsonValue], mandate: Mandate
 ) -> tuple[Risk, str | None]:
@@ -69,7 +96,7 @@ def check(
     value = args.get(rule.arg) if rule.arg else None
     match rule.kind:
         case "read" | "write":
-            return rule.kind, None
+            return rule.kind, _protected(value, mandate)
         case "destructive":
             return "destructive", "action irréversible"
         case "sql":

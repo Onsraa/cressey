@@ -19,7 +19,7 @@ RunKind = Literal["live", "replay", "control"]
 
 class ToolRule(BaseModel):
     kind: Literal["read", "write", "destructive", "sql", "egress"]
-    arg: str | None = None  # the argument holding the SQL or the recipients
+    arg: str | None = None  # the argument holding the SQL, the recipients or the path
 
 
 class Thresholds(BaseModel):
@@ -42,9 +42,14 @@ class Policy(BaseModel):
 
 
 class Mandate(BaseModel):
-    may_destroy: list[str] = []  # tables the task may delete from or drop
+    may_destroy: list[
+        str
+    ] = []  # tables the task may change rows in, delete from or drop
     may_send_to: list[str] = []  # addresses, or "@domain"
     may_read_secrets: list[str] = []  # names of the secrets the task needs
+    # Paths the agent may neither read nor write: a scorer, other runs, secret stores.
+    # A name protects everything under it; globs work too.
+    protected: list[str] = []
 
 
 class Leg(BaseModel):

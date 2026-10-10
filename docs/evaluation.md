@@ -126,6 +126,7 @@ Adversarial pass over the running tool: variants of the shipped incidents fired 
 - **Finding F1 (high):** a mass `UPDATE` with a tautological or always-true `WHERE` is classed `write`, not `destructive`, so the floor never holds it. End to end, `UPDATE users SET email='pwned@evil.test' WHERE 1=1` on a table outside `may_destroy` ran unheld and **mutated 5/5 rows**; plain `DELETE FROM users` on the same run was held. The floor keys on *absent* `WHERE` (`core/floor.py:20`); `DELETE` is caught regardless of `WHERE`, `UPDATE` is not.
 - **Finding F2 (medium):** `INSERT OR REPLACE` / `REPLACE INTO` pass as `write` though they overwrite rows on key conflict; `ALTER … RENAME` passes though it makes the table inaccessible under its name. `REPLACE INTO`-as-write is a documented decision (10-10); the others are the same class and undocumented.
 - The floor is otherwise robust: comment-in-keyword, case/whitespace, stacked statements, CTEs and unparseable SQL all fail closed to `destructive`.
+- **F1 and F2 fixed on 10-10** (`decisions.md`): every UPDATE, MERGE, overwriting insert and rename is now destructive. The battery holds 28/28 attack cases; the 29th, an email inside the mandate, goes through as it should. End to end, the `WHERE 1=1` UPDATE is held, with 0 rows changed.
 
 ### Exfiltration of the fake key
 The floor's egress rule is recipient-based; it never inspects content. So the findings are about redaction and tracing of a key the run already read.

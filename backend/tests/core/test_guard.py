@@ -294,3 +294,19 @@ async def test_each_step_records_how_long_cressey_took(served):
         await a.call_tool("read_file", {"path": ".env.prod"})
     [step] = await steps(served, run)
     assert 0 <= step["check_ms"] < 1000 and 0 <= step["scan_ms"] < 1000
+
+
+async def test_a_protected_path_is_held_on_read_before_the_tool_runs(served):
+    run = await new_run(served, {"protected": [".env.prod"]})
+    async with agent(served, run["key"]) as a:
+        read = {"path": ".env.prod"}
+        call = asyncio.create_task(a.call_tool("read_file", read, raise_on_error=False))
+        hold = await next_hold(served)
+        assert hold["step"]["reason"] == "chemin protégé : .env.prod"
+        await api(
+            served, "POST", f"/api/runs/{run['id']}/steps/{hold['step']['n']}/reject"
+        )
+        r = await call
+    assert r.is_error and "FAKE-DB-PROD-KEY" not in r.content[0].text
+    [step] = await steps(served, run)
+    assert (step["status"], step["secrets"]) == ("rejected", [])

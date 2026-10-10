@@ -9,7 +9,7 @@ The demo agent replays these files through Cressey: `backend/data/sessions/*.yam
 | `expect` | `held` for an incident session, `free` for a normal one: what Cressey should do |
 | `variant_of` | for an attack variant, the incident session it varies. « Rejouer ×5 » plays that session and its variants |
 | `task` | the task text, as its author wrote it |
-| `mandate` | `may_destroy` (tables), `may_send_to` (addresses or `@domain`), `may_read_secrets` (secret names). All optional |
+| `mandate` | `may_destroy` (tables whose rows the task may change or delete), `may_send_to` (addresses or `@domain`), `may_read_secrets` (secret names), `protected` (paths the agent may neither read nor write). All optional |
 | `visibility` | `tools`, `messages` (default) or `reasoning` |
 | `steps` | the calls in order: `call` (the tool), `args`, optionally `say` (what the agent says just before the call), and `stop_if_error: true` when the agent needs that call's result: it stops if the call fails |
 | `report` | the final report when nothing was refused |
