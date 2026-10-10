@@ -174,7 +174,7 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 | split across two calls | **no** | yes (each half) | no |
 
 - **Finding F3 (medium):** encoded or split forms of a known secret are **not redacted** in served step args or the report, though both are labelled "secrets redacted" (`models.py`). End to end, a base64'd key emailed to an **in-mandate** recipient went through unheld and appeared in cleartext in the served args and the outbox. `trace` already decodes base64/hex/url to find the source, so redaction is inconsistent with tracing.
-- **Finding F4 (medium):** a secret past the 16 KB `SCAN_LIMIT` in a tool result is **not detected** (0 secrets found with the key at offset 16 KB), so it is neither redacted nor does it light the opportunity leg. The cap guards the quadratic plugins; the linear `_named` regex could still scan the whole result.
+- **Finding F4 (medium):** a secret past the 16 KB `SCAN_LIMIT` in a tool result is **not detected** (0 secrets found with the key at offset 16 KB), so it is neither redacted nor does it light the opportunity leg. The cap guards the quadratic plugins; the linear `_named` regex could still scan the whole result. **Fixed 10-10:** the naming rule reads the whole result; detect-secrets keeps 16 KB, in windows (`decisions.md`).
 - Reversed/split encodings are not traced (by design): the incident's `sources` is then empty. The opportunity leg does fire when the key is read in cleartext (within 16 KB).
 
 ### Reliability
@@ -188,7 +188,7 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 | Malformed arg (non-string SQL) | held, no crash (fail closed) |
 | Decision model down (fake) | floor still holds `DELETE`; `UPDATE 1=1` still passes; no crash |
 
-- **Finding F5 (medium):** argument redaction (`runs.add_step` → `redact`) has **no `SCAN_LIMIT` and runs on the event loop**, unlike the result scan (16 KB, off-thread). A single large-argument call adds its whole scan time to `check_ms` and blocks every concurrent run: 1 KB → 1.3 ms, 256 KB → 177 ms, 1 MB → **699 ms** (the result scan stays ~0.4 ms throughout). The scan is near-linear (~0.6 ms/KB), so this is latency, not an exponential DoS.
+- **Finding F5 (medium):** argument redaction (`runs.add_step` → `redact`) has **no `SCAN_LIMIT` and runs on the event loop**, unlike the result scan (16 KB, off-thread). A single large-argument call adds its whole scan time to `check_ms` and blocks every concurrent run: 1 KB → 1.3 ms, 256 KB → 177 ms, 1 MB → **699 ms** (the result scan stays ~0.4 ms throughout). The scan is near-linear (~0.6 ms/KB), so this is latency, not an exponential DoS. **Fixed 10-10:** arguments are redacted off the event loop, and detect-secrets reads 16 KB in windows (`decisions.md`); crafted input is quadratic, though, not near-linear.
 
 ### Efficiency
 

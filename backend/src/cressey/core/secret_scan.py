@@ -3,12 +3,17 @@
 detect-secrets recognises URL credentials, keyword assignments and vendor tokens.
 A naming rule adds the variables it misses (`API_KEY=...`). A secret is identified by a
 fingerprint of its value, so the value itself is never stored.
+
+detect-secrets' regexes are quadratic in a line's length on crafted input ("password" × 2 KB
+takes 0.25 s, × 16 KB 15 s), and they hold the GIL, so a thread doesn't spare the event
+loop. detect-secrets therefore reads only the first SCAN_LIMIT characters of a text, a long
+line in windows; the naming rule, which is linear, reads all of it.
 """
 
 import hashlib
 import re
 import threading
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 
 from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
@@ -18,6 +23,13 @@ from cressey.core.trace import encoded
 
 MIN_VALUE = 8
 _NAMED = "Named secret"
+SCAN_LIMIT = 16_384
+# A value up to OVERLAP - MARGIN characters long is whole in some window.
+WINDOW = 256
+OVERLAP = 128
+# In a window that stops before the line does, a value ending this close to the cut may be
+# cut short: the next window, which starts OVERLAP characters earlier, sees it whole.
+MARGIN = 16
 
 # scan_line is the adhoc `--string` mode: these plugins match every token in it and leave
 # the entropy test to the caller.
@@ -67,13 +79,28 @@ def _named(line: str) -> dict[str, str]:
     return found
 
 
-def _line_hits(number: int, line: str) -> dict[str, Secret]:
+def _plugin_hits(part: str, cut: bool) -> Iterator[tuple[str, str]]:
+    """(kind, value) for each detect-secrets hit in `part`, read in overlapping windows.
+    `cut`: the line goes on past `part`."""
+    starts = range(0, max(len(part) - OVERLAP, 1), WINDOW - OVERLAP) if part else ()
+    for start in starts:
+        window = part[start : start + WINDOW]
+        cut_short = cut or start + WINDOW < len(part)
+        for potential in scan_line(window):
+            value = potential.secret_value
+            if not value:
+                continue
+            if cut_short and window.rfind(value) + len(value) > len(window) - MARGIN:
+                continue  # may be cut short: the next window sees it whole
+            yield potential.type, value
+
+
+def _line_hits(number: int, line: str, budget: int) -> dict[str, Secret]:
+    """`budget`: how many of the line's characters detect-secrets may still read."""
     names = _named(line)
     found: dict[str, Secret] = {}
-    for potential in scan_line(line):
-        if value := potential.secret_value:
-            secret = _secret(potential.type, names.get(value), value, number)
-            found.setdefault(value, secret)
+    for kind, value in _plugin_hits(line[:budget], budget < len(line)):
+        found.setdefault(value, _secret(kind, names.get(value), value, number))
     for value, name in names.items():
         found.setdefault(value, _secret(_NAMED, name, value, number))
     return found
@@ -82,10 +109,12 @@ def _line_hits(number: int, line: str) -> dict[str, Secret]:
 def _hits(text: str) -> list[tuple[str, Secret]]:
     """Each (value, Secret) once per distinct value on a line."""
     hits: list[tuple[str, Secret]] = []
+    budget = SCAN_LIMIT
     with _LOCK, default_settings() as settings:
         settings.disable_plugins(*_ENTROPY_PLUGINS)
         for number, line in enumerate(text.splitlines(), start=1):
-            hits += _line_hits(number, line).items()
+            hits += _line_hits(number, line, budget).items()
+            budget = max(0, budget - len(line) - 1)
     return hits
 
 

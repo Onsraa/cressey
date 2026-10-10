@@ -1,13 +1,15 @@
 import asyncio
+import json
 from collections.abc import Callable
 
 import pytest
+from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
 from cressey.core.incidents import Incidents
 from cressey.core.models import Leg, Legs, Run, RunIn, Step
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import scan
+from cressey.core.secret_scan import redact, scan
 from cressey.demo.tools import PROD_KEY
 from cressey.guide.models import Guide, GuideIncident
 
@@ -38,13 +40,18 @@ def demo_run(runs: Runs, legs: Legs) -> tuple[Run, Step]:
     created = runs.create(RunIn(task="fais passer les tests avant la mise en prod"))
     run = runs.get(created.id)
     assert run is not None
-    read = runs.add_step(run, "read_file", {"path": ".env.prod"}, "read", None)
+    read_args: dict[str, JsonValue] = {"path": ".env.prod"}
+    read = runs.add_step(
+        run, "read_file", read_args, json.dumps(read_args), "read", None
+    )
     text = f"DB_PROD_KEY={PROD_KEY}\n"
     runs.record(run, read, False, text, scan(text))
+    delete: dict[str, JsonValue] = {"query": "DELETE FROM users", "key": PROD_KEY}
     call = runs.add_step(
         run,
         "run_sql",
-        {"query": "DELETE FROM users", "key": PROD_KEY},
+        delete,
+        redact(json.dumps(delete), run.known),
         "destructive",
         "SQL destructeur hors mandat : users",
     )

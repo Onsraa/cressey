@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     )
     # Two confirmed legs hold a call. Off measures the safety floor alone (the ablation).
     triangle_holds: bool = Field(True, validation_alias="CRESSEY_TRIANGLE_HOLDS")
+    # At fleet scale nobody waits on each hold: `refuse` refuses it at once, with the way out.
+    holds: Literal["wait", "refuse"] = Field("wait", validation_alias="CRESSEY_HOLDS")
 
     @property
     def relevance_min(self) -> float:

@@ -14,7 +14,7 @@ Cressey watches what a company's AI agents do. When the fraud triangle lights up
 > « Lasso, Zenity et AgentCore jugent l'action. Cressey traite les conditions qui la produisent. »
 
 Auditors don't use the triangle to catch fraud in the act; they reduce the conditions for it. Cressey does the same for agents:
-- **Pressure:** acts on the agent's state. When pressure is confirmed, the next tool result carries the way out and the run key drops to read-only, without waiting for a human.
+- **Pressure:** acts on the agent's state. When pressure is confirmed, the next tool result carries the way out. Once a secret outside the mandate has been read too, the run key refuses destructive calls. Neither waits for a human.
 - **Opportunity:** the workspace holds only trap keys. Real keys come from the broker, scoped to the task, and any use of a trap key is held at once.
 - **Rationalization:** the agent's report is compared with a log it can't write to.
 

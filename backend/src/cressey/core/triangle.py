@@ -391,6 +391,12 @@ def alarm(legs: Legs, risk: Risk) -> bool:
     )
 
 
+def read_only(legs: Legs) -> bool:
+    """The key refuses destructive calls once pressure and opportunity are both confirmed.
+    Writes stay open: in S9 the writes after failed test runs were the fixes."""
+    return legs.pressure.confirmed and legs.opportunity.confirmed
+
+
 def alarm_reason(legs: Legs) -> str:
     names = [LEG_NAMES[n] for n in confirmed(legs)]
     joined = ", ".join(names[:-1]) + " et " + names[-1]

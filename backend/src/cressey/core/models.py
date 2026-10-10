@@ -141,6 +141,10 @@ class Run(BaseModel):
     kind: RunKind
     started_at: str
     revoked: bool = False
+    # Acting on pressure, without a human: the step whose result carried the way out, and
+    # the step from which the key refuses destructive calls.
+    way_out_step: int | None = None
+    read_only_step: int | None = None
     steps: list[Step] = []
     messages: list[Message] = []
     report: str | None = None  # the agent's final report: agent text, secrets redacted

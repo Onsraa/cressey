@@ -5,6 +5,7 @@ import sqlite3
 from collections.abc import Generator
 from contextlib import closing, contextmanager
 from pathlib import Path
+from typing import Literal
 
 import httpx2
 
@@ -28,7 +29,9 @@ def fake_guide(gi: GuideIncident) -> Guide:
 
 
 @contextmanager
-def serving(demo: Path, hold_timeout: float) -> Generator[str]:
+def serving(
+    demo: Path, hold_timeout: float, holds: Literal["wait", "refuse"] = "wait"
+) -> Generator[str]:
     settings = Settings(
         _env_file=None,
         openai_api_key=None,
@@ -36,6 +39,7 @@ def serving(demo: Path, hold_timeout: float) -> Generator[str]:
         decider_url=None,
         demo_dir=demo,
         hold_timeout=hold_timeout,
+        holds=holds,
     )
     with serve(create_app(settings, make_guide=fake_guide)) as base:
         yield base

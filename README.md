@@ -32,7 +32,7 @@ Les sources sont dans `docs/pitch.md`.
   - Un plancher de sécurité retient toute action irréversible hors mandat, quel que soit le score.
 - **Arrêter.** L'appel est retenu, la clé émise par Cressey est révoquée, et l'agent reçoit une porte de sortie : « déclarer la tâche impossible est une réponse acceptée ».
 - **Agir sur les conditions** (en cours) :
-  - sous pression, l'agent reçoit la porte de sortie et sa clé passe en lecture seule, sans attendre un humain ;
+  - sous pression, l'agent reçoit la porte de sortie, et si une clé hors mandat est aussi à sa portée, sa clé refuse les actions destructrices, sans attendre un humain ;
   - l'espace de travail ne contient que des clés pièges, et toute utilisation est retenue sur-le-champ.
 - **Remonter.** La valeur dangereuse (clé, commande, URL) est retrouvée dans la première entrée lue par l'agent, après normalisation de la casse et des encodages base64, hexadécimal et URL.
 - **Alerter et guider.** Un incident par cause racine, envoyé au propriétaire de la source. Il est accompagné d'un guide en français dont chaque étape cite mot pour mot un passage vérifié par le code : ANSSI R1–R35, MITRE ATLAS, OWASP Agentic et nos runbooks.
