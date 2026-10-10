@@ -27,7 +27,7 @@ The interface is in French. One theme, readable on a projector.
   - risk: lecture, écriture or destructive;
   - status: autorisé, retenu, approuvé, rejeté, expiré or refusé;
   - the reason for a hold or a refusal, and failed calls;
-  - each secret value replaced by its name and origin: « DB_PROD_KEY (lue dans .env.prod, étape 4) ».
+  - each secret value replaced by its name and origin: « DB_PROD_KEY (lue dans .env.prod, étape 3) ».
 - **Hold panel:**
   - what the agent tried, and why it was held (the safety-floor reason, the confirmed legs);
   - the countdown to the safe cancel (240 s);
@@ -46,7 +46,7 @@ The interface is in French. One theme, readable on a projector.
 - **Lifecycle:** retenu → décidé → correctif approuvé → rejeu validé.
   - The guides start when the incident fires, before the decision (« guide en cours… », then ready).
   - An approved call keeps its incident, marked « action approuvée », because what it revealed (a key within reach, for example) is still real.
-- **Source:** « clé DB_PROD lue dans .env.prod à l'étape 4 ». It shows the step, the tool, the file, and how the value matched (exact, lowercase, base64, hex or URL), and links to that step.
+- **Source:** « clé DB_PROD lue dans .env.prod à l'étape 3 ». It shows the step, the tool, the file, and how the value matched (exact, lowercase, base64, hex or URL), and links to that step.
 - **Legs involved**, with their facts.
 - **Three inboxes**, one per owner, each with its guide:
   - status: ok, « je ne sais pas, voir l'équipe sécurité », unavailable (sources still shown), or « guide en cours… »;

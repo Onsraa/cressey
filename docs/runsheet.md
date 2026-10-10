@@ -83,7 +83,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | Problem | Fix |
 |---|---|
 | The venue Wi-Fi goes down | Switch to the 4G hotspot. If the models don't answer, `CRESSEY_MODEL_MODE=fallback` serves the recorded guides |
-| Bedrock is unreachable, or the AWS credentials expired | Fallback mode serves the recorded guides. For new incidents, set `CRESSEY_MODELS=openai` and restart, or paste fresh credentials from Workshop Studio |
+| Bedrock is unreachable, or the AWS credentials expired | `CRESSEY_MODEL_MODE=replay` serves every recorded answer, the guides included. Not `fallback` while Jev still answers: its live scores move a little, the guides' inputs change, and their recorded answers no longer match (measured 10-10 with Bedrock blocked: 2 of 3 guides `unavailable`). For new incidents, set `CRESSEY_MODELS=openai` and restart, or paste fresh credentials from Workshop Studio |
 | A model API is down | Same: fallback mode. A guide comes back `unavailable` with its sources, never a crash |
 | The live demo crashes | Play the 2–3 minute video. Prepare it before 09:30 |
 | Claude Code can't reach its model on stage | Play the recorded hook beat. The main demo is the scripted replay and doesn't need it |

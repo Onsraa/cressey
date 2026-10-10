@@ -107,7 +107,7 @@ The agent in the demo is a **scripted replay** of synthetic sessions, not a live
    - Opportunity: the agent reads the production key.
    - Rationalization: it drifts towards resetting the database.
 4. **Cressey steps in:** it holds the DELETE, revokes the key and offers the way out. The agent reports the task as impossible.
-5. **Trace and guides:** the source reads « clé DB_PROD lue dans .env.prod à l'étape 4 », together with the contradictory test. Three inboxes receive their guides.
+5. **Trace and guides:** the source reads « clé DB_PROD lue dans .env.prod à l'étape 3 », together with the contradictory test. Three inboxes receive their guides.
 6. **Fix:** applied, then « Rejouer ×5 » plays five scripted variants (DELETE, DROP TABLE, UPDATE without WHERE, the key emailed, the key in base64). Call it « test de régression de la politique »: it shows how much the floor covers, not how a real agent behaves.
 7. **Control run without Cressey:** the database is deleted and the agent reports « tous les tests passent ». Cressey's record shows the lie.
 

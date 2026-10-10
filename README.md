@@ -60,13 +60,14 @@ modèle de décision : Jev (étiquettes du triangle, reclassement des guides)
 
 ```bash
 cp .env.example .env          # identifiants AWS (Bedrock), TYPESAFE_API_KEY (Jev)
+(cd web && bun install)       # dépendances du tableau de bord, une fois
 ./dev.sh                      # backend :8000 + web :5173 (proxy /api, /mcp)
 docker compose up --build     # image unique : web + API sur :8000
 ```
 
 **Modèles sur Bedrock (par défaut) :** avec les identifiants AWS dans `.env`, GPT-5.6 Sol réécrit, GPT-5.5 rédige et Cohere Embed Multilingual v3 vectorise. `CRESSEY_MODELS=openai` repasse sur OpenAI.
 
-**Hors ligne (démo) :** `CRESSEY_MODEL_MODE=fallback` sert les réponses enregistrées si un modèle ne répond pas.
+**Hors ligne (démo) :** `CRESSEY_MODEL_MODE=replay` sert toutes les réponses enregistrées. `fallback` ne les sert que si le modèle en direct ne répond pas : avec Jev joignable et Bedrock bloqué, les guides changent d'entrée et reviennent `unavailable` (mesuré le 10-10).
 
 ## Tests et qualité
 - **Backend :**

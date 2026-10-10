@@ -57,7 +57,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 **5. Démo.**
 - Open with the one-line plug-in: the MCP URL. Framing: the agent reaches the infrastructure through an MCP server, the way it would through Railway's (`delete-volume`).
 - The gauges rise. Pressure sends the way out; once the production key is read, the leash shortens; then the DELETE is held.
-- The source: « clé DB_PROD lue dans .env.prod à l'étape 4 » (a trap key, once those are built).
+- The source: « clé DB_PROD lue dans .env.prod à l'étape 3 » (a trap key, once those are built).
 - Three inboxes receive their sourced guides.
 - Fix, then « test de régression de la politique »: five scripted variants (DELETE, DROP TABLE, UPDATE without WHERE, the key emailed, the key in base64).
 - Control run without Cressey: the agent's lie shows up in the log.
