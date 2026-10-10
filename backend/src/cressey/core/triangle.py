@@ -5,15 +5,18 @@ is then judged against that evidence, and code decides: a hold needs the judgmen
 pressure or opportunity."""
 
 import asyncio
+import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
 from pydantic import JsonValue
 from typesafe_sdk import Choice, Noul
 
-from cressey.core.judge import Judge
+from cressey.core.judge import Answers, Judge, Question, TooLarge
 from cressey.core.models import Leg, Legs, Risk, Run, Step, Thresholds
 from cressey.core.secret_scan import redact
+
+log = logging.getLogger(__name__)
 
 LEG_NAMES = {
     "pressure": "pression",
@@ -93,6 +96,9 @@ PREVIOUS = 1_000
 # a whole sentence or line fits, and a longer one is split.
 PART = 1_000
 SAID = 5_000  # the agent's newest words shown with a step: one full message (TextIn's limit)
+# A part Jev refuses for its size is halved until it fits; one this short that still doesn't
+# means the rest of the state is too big, and splitting further would only read noise.
+MIN_PART = 1_000
 SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 
 
@@ -229,6 +235,50 @@ def _quote(parts: dict[str, str], key: str) -> str:
     return " ".join(parts[k] for k in said[max(0, i - 1) : i + 2])
 
 
+async def _answers_over_parts(
+    judge: Judge,
+    state_for: Callable[[str], dict[str, JsonValue]],
+    parts: list[str],
+    questions: Mapping[str, Question],
+) -> list[tuple[str, Answers]] | None:
+    """Each part asked once, as (part, answers). A part Jev refuses for its size is halved and
+    its halves asked, down to MIN_PART. None when any part gets no answer."""
+
+    async def one(part: str) -> list[tuple[str, Answers]] | None:
+        try:
+            got = await judge.answers(state_for(part), questions)
+        except TooLarge:
+            if len(part) <= MIN_PART:
+                log.error(
+                    "too large for the decision model at %d characters", len(part)
+                )
+                return None
+            half = len(part) // 2
+            halves = await asyncio.gather(one(part[:half]), one(part[half:]))
+            if any(h is None for h in halves):
+                return None
+            return [pair for h in halves if h for pair in h]
+        return None if got is None else [(part, got)]
+
+    found = await asyncio.gather(*(one(p) for p in parts))
+    if any(f is None for f in found):
+        return None
+    return [pair for f in found if f for pair in f]
+
+
+async def _max_over_parts(
+    judge: Judge,
+    state_for: Callable[[str], dict[str, JsonValue]],
+    parts: list[str],
+    questions: Mapping[str, Question],
+) -> Answers | None:
+    """Yes/no questions asked over every part: each question's highest probability."""
+    pairs = await _answers_over_parts(judge, state_for, parts, questions)
+    if pairs is None:
+        return None
+    return {q: max(float(a[q]) for _, a in pairs) for q in questions}
+
+
 async def _label(run: Run, i: int, judge: Judge) -> None:
     """Read the finished step at position i once, in parts that fit, and keep the exact part
     behind each flag. Without an answer it stays unlabelled and is asked again next time."""
@@ -247,31 +297,39 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
     # Redact, then cut: a cut could split a secret and leave part of it readable. Each window
     # is one part of the call's arguments or of its result, so all of the step is read.
     args = _args_parts(s)
-    windows = [(args[0], c) for c in _chunks(texts.get(s.n, ""))]
-    windows += [(a, "") for a in args[1:]]
-    got = await asyncio.gather(
-        *(
-            judge.answers({**window, "current_step": _view(run, s, c, a)}, LABELS)
-            for a, c in windows
-        )
+    first = args[0]
+
+    def with_result(r: str) -> dict[str, JsonValue]:
+        return {**window, "current_step": _view(run, s, r, first)}
+
+    def with_args(a: str) -> dict[str, JsonValue]:
+        return {**window, "current_step": _view(run, s, "", a)}
+
+    by_result, by_args = await asyncio.gather(
+        _answers_over_parts(judge, with_result, _chunks(texts.get(s.n, "")), LABELS),
+        _answers_over_parts(judge, with_args, args[1:], LABELS),
     )
-    if any(a is None for a in got):
+    if by_result is None or by_args is None:
         return
-    answers = [a for a in got if a is not None]
-    s.labels = {name: max(float(a[name]) for a in answers) for name in LABELS}
+    windows = [((first, r), a) for r, a in by_result]
+    windows += [((a, ""), got) for a, got in by_args]
+    s.labels = {name: max(float(a[name]) for _, a in windows) for name in LABELS}
     flagged = [c for c, floor in FLOORS.items() if s.labels[c] >= floor]
     if not flagged:
         return
-    best = max(
-        range(len(answers)), key=lambda j: max(float(answers[j][c]) for c in flagged)
+    (best_args, best_result), _ = max(
+        windows, key=lambda w: max(float(w[1][c]) for c in flagged)
     )
-    best_args, best_result = windows[best]
     parts = _parts(run, s, best_result, best_args)
     options = {k: k for k in parts} | {"none": "none"}
-    picked = await judge.answers(
-        {**window, "step": s.n, "parts": dict(parts)},
-        {c: Choice(instructions=POINT[c], criteria=options) for c in flagged},
-    )
+    try:
+        picked = await judge.answers(
+            {**window, "step": s.n, "parts": dict(parts)},
+            {c: Choice(instructions=POINT[c], criteria=options) for c in flagged},
+        )
+    except TooLarge:  # the labels stay; the flag just has no quote
+        log.error("step %d: the point call is too large for the decision model", s.n)
+        return
     if picked:
         s.quotes = {c: _quote(parts, str(k)) for c, k in picked.items() if k in parts}
 
@@ -376,19 +434,19 @@ async def _rationalization(run: Run, call: Step, judge: Judge, t: Thresholds) ->
     earlier = _before(run, call.n)
     shown = await _redacted_off_loop(run, earlier[-1:])
     # The whole call is judged, part by part: the payload can sit anywhere in it.
-    got = await asyncio.gather(
-        *(
-            judge.answers(judgment_state(run, call, t, shown, part), JUDGMENT)
-            for part in _args_parts(call)
-        )
+    answer = await _max_over_parts(
+        judge,
+        lambda part: judgment_state(run, call, t, shown, part),
+        _args_parts(call),
+        JUDGMENT,
     )
-    if any(a is None for a in got):
+    if answer is None:
         return Leg(
             score=0.0,
             confirmed=False,
             facts=["modèle de décision indisponible : rationalisation non mesurée"],
         )
-    score = max(float(a["weakens"]) for a in got if a is not None)
+    score = float(answer["weakens"])
     facts = [f"jugement : affaiblit une vérification ou sort du mandat, {score:.2f}"]
     for item in _evidence(run, call.n, t):
         quotes = item["quotes"] if isinstance(item["quotes"], dict) else {}
@@ -438,7 +496,15 @@ async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
     """S9: is the agent's final report contradicted by the log? Flagged at t.report."""
     await _read(run, run.steps, judge)
     shown = await _redacted_off_loop(run, run.steps)
-    answer = await judge.answers(report_state(run, t, shown), REPORT)
+    try:
+        answer = await judge.answers(report_state(run, t, shown), REPORT)
+    except (
+        TooLarge
+    ):  # the report state is bounded; this would be a bug, so say it loudly
+        log.error(
+            "run %s: the report check is too large for the decision model", run.id
+        )
+        answer = None
     if answer is None:
         return Leg(
             score=0.0,

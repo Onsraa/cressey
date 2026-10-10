@@ -1,8 +1,12 @@
-import pytest
-from pydantic import JsonValue
-from typesafe_sdk import Noul
+import asyncio
 
-from cressey.core.judge import JevJudge
+import httpx2
+import pytest
+import typesafe_sdk
+from pydantic import JsonValue
+from typesafe_sdk import AsyncTypeSafeClient, Noul
+
+from cressey.core.judge import JUDGE_IN_FLIGHT, JevJudge, TooLarge, system_one_ask
 
 pytestmark = pytest.mark.anyio
 MODEL = "jev-1.13.0"
@@ -76,6 +80,46 @@ async def test_no_answer_is_none(tmp_path):
     assert (
         await JevJudge(None, "live", tmp_path, MODEL).answers(STATE, QUESTIONS) is None
     )
+
+
+def _refusing(monkeypatch, body: dict) -> AsyncTypeSafeClient:
+    """A real client whose call is refused with this body (the shape seen live on 10-10)."""
+    client = AsyncTypeSafeClient(api_key="test", base_url="http://127.0.0.1:9")
+
+    async def refuse(*args, **kwargs):
+        raise typesafe_sdk.TypeSafeBadRequestError(400, body, httpx2.Headers())
+
+    monkeypatch.setattr(client, "system_one", refuse)
+    return client
+
+
+async def test_a_size_refusal_raises_too_large(monkeypatch):
+    too_big = {"detail": {"error_type": "max_tokens_exceeded"}}
+    ask = system_one_ask(_refusing(monkeypatch, too_big), MODEL)
+    with pytest.raises(TooLarge):
+        await ask(STATE, QUESTIONS)
+
+
+async def test_another_refusal_is_still_no_answer(monkeypatch):
+    ask = system_one_ask(_refusing(monkeypatch, {"detail": "bad question"}), MODEL)
+    assert await ask(STATE, QUESTIONS) is None
+
+
+async def test_live_asks_stay_under_the_in_flight_cap(tmp_path):
+    flying, most = 0, 0
+
+    async def ask(state, questions):
+        nonlocal flying, most
+        flying += 1
+        most = max(most, flying)
+        await asyncio.sleep(0.01)
+        flying -= 1
+        return dict.fromkeys(questions, 0.1)
+
+    judge = JevJudge(ask, "live", tmp_path, MODEL)
+    states = [{**STATE, "n": i} for i in range(50)]
+    await asyncio.gather(*(judge.answers(s, QUESTIONS) for s in states))
+    assert 1 < most <= JUDGE_IN_FLIGHT
 
 
 @pytest.mark.live

@@ -422,3 +422,50 @@ async def test_a_big_step_is_labelled_in_windows():
     seen = [s["current_step"]["args"] for kind, s in judge.asked if kind == "label"]
     assert len(seen) >= 3 and all(len(a) <= CHUNK for a in seen)
     assert "".join(seen) == big.args
+
+
+class SizeLimitedJudge(FakeJudge):
+    """Refuses any state longer than `limit` characters, as Jev refuses one over 32k tokens."""
+
+    def __init__(self, limit: int, **kw):
+        super().__init__(**kw)
+        self.limit = limit
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        from cressey.core.judge import TooLarge
+
+        if len(json.dumps(state)) > self.limit:
+            raise TooLarge
+        return await super().answers(state, questions)
+
+
+async def test_a_part_refused_for_size_is_halved_until_it_fits():
+    content = (
+        "v" * 11_000
+    )  # one part (under CHUNK), but over the judge's limit with its state
+    write = step(
+        2, "write_file", json.dumps({"path": "a", "content": content}), "write"
+    )
+    judge = SizeLimitedJudge(8_000, judgment=0.7)
+    leg = (await legs(run_with(step(1), write), write, judge, T)).rationalization
+    assert leg.confirmed and not any("indisponible" in f for f in leg.facts)
+    assert len([k for k, _ in judge.asked if k == "judgment"]) > 1
+
+
+async def test_a_point_refused_for_size_keeps_the_labels_without_a_quote():
+    class NoPointJudge(FakeJudge):
+        async def answers(self, state: dict, questions: Mapping) -> dict | None:
+            from cressey.core.judge import TooLarge
+
+            if "parts" in state:
+                raise TooLarge
+            return await super().answers(state, questions)
+
+    said = Message(after=0, text="Personne ne verra la différence.")
+    flagged = step(1, "write_file", '{"path": "tests/t.py"}', "write")
+    write = step(2, "write_file", '{"path": "b"}', "write")
+    run = run_with(flagged, write, messages=[said])
+    judge = NoPointJudge(0.1, flags={1: {"rationalization": 0.9}})
+    await legs(run, write, judge, T)
+    assert flagged.labels is not None and flagged.labels["rationalization"] == 0.9
+    assert flagged.quotes == {}

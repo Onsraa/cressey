@@ -3,7 +3,9 @@ judges each write against the evidence kept (S9). It speaks the System One API: 
 local Strands Decider when its URL is set. Its answers are cached like the guide models',
 so the demo replays offline."""
 
+import asyncio
 import json
+import weakref
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
 from typing import Literal, Protocol, Self
@@ -24,17 +26,26 @@ from cressey.guide.clients import decision_auth
 from cressey.settings import Settings
 
 Question = Noul | Choice
+# Jev allows 80 requests/s (docs.typesafe.ai, Models). At about 0.25 s a call, 20 in flight
+# stay under it: 16 for the judge, 4 for the guides' re-ranker (guide/clients.py).
+JUDGE_IN_FLIGHT = 16
 Answers = dict[str, float | str]  # a Noul's probability, or the option a Choice picked
 Ask = Callable[
     [dict[str, JsonValue], Mapping[str, Question]], Awaitable[Answers | None]
 ]
 
 
+class TooLarge(Exception):
+    """Jev refused the state for its size; the caller splits it. Seen live on 10-10: HTTP 400
+    with the body {'detail': {'error_type': 'max_tokens_exceeded'}}."""
+
+
 class Judge(Protocol):
     async def answers(
         self, state: dict[str, JsonValue], questions: Mapping[str, Question]
     ) -> Answers | None:
-        """Every question about one state, in one call; None when no model answers."""
+        """Every question about one state, in one call; None when no model answers.
+        Raises TooLarge when the state is too big for the model."""
         ...
 
 
@@ -44,6 +55,10 @@ def system_one_ask(client: AsyncTypeSafeClient, model: str) -> Ask:
     ) -> Answers | None:
         try:
             r = await client.system_one(state, questions=dict(questions), model=model)
+        except typesafe_sdk.TypeSafeBadRequestError as e:
+            if "max_tokens_exceeded" in str(e.body):
+                raise TooLarge from e
+            return None
         except typesafe_sdk.TypeSafeError:
             return None
         out: Answers = {}
@@ -66,6 +81,14 @@ class JevJudge:
         model: str,
     ) -> None:
         self.ask, self.mode, self.dir, self.model = ask, mode, cache_dir, model
+        # One cap per event loop: replays serve fresh apps on their own loops with this judge.
+        self._slots: weakref.WeakKeyDictionary[
+            asyncio.AbstractEventLoop, asyncio.Semaphore
+        ] = weakref.WeakKeyDictionary()
+
+    def _in_flight(self) -> asyncio.Semaphore:
+        loop = asyncio.get_running_loop()
+        return self._slots.setdefault(loop, asyncio.Semaphore(JUDGE_IN_FLIGHT))
 
     @classmethod
     def from_settings(cls, s: Settings) -> Self:
@@ -97,7 +120,10 @@ class JevJudge:
         )
         if self.mode == "replay":
             return recorded
-        live = await self.ask(state, questions) if self.ask else None
+        live = None
+        if self.ask:
+            async with self._in_flight():
+                live = await self.ask(state, questions)
         if live is None:
             return recorded if self.mode == "fallback" else None
         if self.mode == "record":

@@ -388,3 +388,31 @@ def test_the_guides_run_on_bedrock_by_default_for_the_event():
         "us.openai.gpt-5.5",
         "cohere.embed-multilingual-v3",
     )
+
+
+def test_the_reranker_stays_under_its_in_flight_cap():
+    """Guides re-rank in threads: their share of Jev's request rate is capped."""
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from cressey.guide.clients import RERANK_IN_FLIGHT
+
+    class CountingTypeSafe(FakeTypeSafe):
+        def __init__(self) -> None:
+            self.lock, self.flying, self.most = threading.Lock(), 0, 0
+
+        def system_one(self, state, questions, **kw):
+            with self.lock:
+                self.flying += 1
+                self.most = max(self.most, self.flying)
+            time.sleep(0.02)
+            with self.lock:
+                self.flying -= 1
+            return super().system_one(state, questions, **kw)
+
+    fake = CountingTypeSafe()
+    reranker = JevReranker(fake, "jev-1.13.0")
+    with ThreadPoolExecutor(12) as pool:
+        list(pool.map(lambda _: reranker.relevance("q", UNITS), range(12)))
+    assert 1 < fake.most <= RERANK_IN_FLIGHT
