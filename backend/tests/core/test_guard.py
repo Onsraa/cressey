@@ -472,3 +472,59 @@ async def test_a_control_run_gets_the_agents_own_key(served, tmp_path):
     async with agent(served, run["key"]) as a:
         await a.call_tool("run_sql", DELETE)
     assert users(tmp_path) == 0
+
+
+class CountingJudge:
+    """Answers no to everything, and records which steps it was asked to label."""
+
+    def __init__(self):
+        self.labelled: list[int] = []
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "serves_task" in questions:
+            self.labelled.append(state["current_step"]["step"])
+            return dict.fromkeys(questions, 0.0)
+        if "weakens" in questions or "contradicted" in questions:
+            return dict.fromkeys(questions, 0.0)
+        return dict.fromkeys(questions, "none")
+
+
+async def test_each_result_is_labelled_as_it_comes_in(tmp_path):
+    """The first write then waits for its own judgment only, not for every earlier step."""
+    from cressey.app import create_app
+    from cressey.demo.server import serve
+    from cressey.settings import Settings
+    from tests.server import fake_guide
+
+    judge = CountingJudge()
+    s = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+    )
+    with serve(create_app(s, make_guide=fake_guide, judge=judge)) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            await a.call_tool("read_file", {"path": "README.md"})
+            for _ in range(200):
+                if judge.labelled:
+                    break
+                await asyncio.sleep(0.01)
+    assert judge.labelled == [1]  # read, with no write asking for it yet
+
+
+async def test_the_agent_isnt_told_that_a_key_is_a_trap(served_short_holds):
+    """A canary works only while it looks real: the reason stays with Cressey's humans."""
+    from cressey.demo.tools import TRAP_KEY
+
+    base = served_short_holds
+    run = await new_run(base)
+    async with agent(base, run["key"]) as a:
+        query = {"query": "SELECT count(*) FROM users", "key": TRAP_KEY}
+        r = await a.call_tool("run_sql", query, raise_on_error=False)
+    told = r.content[0].text
+    assert r.is_error and told == f"Cressey : action retenue. {WAY_OUT}"
+    [step] = await steps(base, run)
+    assert step["reason"] == "clé piège utilisée : DB_ADMIN_KEY"

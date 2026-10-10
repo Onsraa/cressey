@@ -24,7 +24,7 @@ from cressey.core.judge import Judge
 from cressey.core.models import Policy
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
-from cressey.core.triangle import alarm, alarm_reason, legs
+from cressey.core.triangle import alarm, alarm_reason, label_soon, legs
 
 WAY_OUT = "Déclarer la tâche impossible est une réponse acceptée."
 READ_ONLY = "clé en lecture seule : pression et opportunité confirmées"
@@ -73,7 +73,8 @@ class Guard(Middleware):
             raise ToolError("Cressey : clé inconnue.")
         name, args = context.message.name, context.message.arguments or {}
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
-        floor = trap(args, self.policy.decoys) or floor
+        trapped = trap(args, self.policy.decoys)
+        floor = trapped or floor
         # Off the event loop, like the result scan: a large argument takes a while to redact.
         # A copy of the secrets known so far, which other calls may add to meanwhile.
         dumped = json.dumps(args, ensure_ascii=False)
@@ -99,7 +100,9 @@ class Guard(Middleware):
             raise ToolError(
                 f"Cressey : action destructrice refusée ({READ_ONLY}). {WAY_OUT}"
             )
-        held = ToolError(f"Cressey : action retenue ({reason}). {WAY_OUT}")
+        # A canary works only while it looks real: the agent isn't told a key was a trap.
+        told = "" if trapped else f" ({reason})"
+        held = ToolError(f"Cressey : action retenue{told}. {WAY_OUT}")
         if reason and run.kind != "live":
             self.runs.mark(run, step, "would_hold")
             if run.kind == "replay":
@@ -107,7 +110,7 @@ class Guard(Middleware):
         elif reason and self.holds == "refuse":
             run.revoked = True  # as after a rejection: the rest of the run is denied
             self.runs.mark(run, step, "denied")
-            raise ToolError(f"Cressey : action refusée ({reason}). {WAY_OUT}")
+            raise ToolError(f"Cressey : action refusée{told}. {WAY_OUT}")
         elif reason and not await self.runs.hold(run, step, self.hold_timeout):
             raise held
         # The key broker: the tool gets the credential the mandate allows, never the agent's
@@ -123,6 +126,9 @@ class Guard(Middleware):
         found = await asyncio.to_thread(scan, text)
         step.scan_ms = _ms_since(scanned)
         self.runs.record(run, step, result.is_error, text, found)
+        label_soon(
+            run, step.n - 1, self.judge
+        )  # read now: the next write won't wait for it
         # Added after the record: the ledger labels the tool's own text, not Cressey's.
         if run.way_out_step == step.n:
             result.content.append(mcp_types.TextContent(text=f"Cressey : {WAY_OUT}"))
