@@ -8,6 +8,7 @@ import {
 	type LucideIcon,
 	Minus,
 } from "lucide-react";
+import { useLive } from "@/api/live";
 import type { Leg, Run } from "@/api/types";
 import { LEGS, TONE } from "@/lib/labels";
 import { Chart } from "./Chart";
@@ -52,6 +53,9 @@ export function Center({
 	focus?: number;
 	className: string;
 }) {
+	const { focusMode } = useLive();
+	// Focus mode shows the triangle only.
+	const shown = focusMode ? "triangle" : tab;
 	const legs = scored(run).at(-1)?.legs;
 	const trap = run.steps.find((s) => s.reason?.startsWith(TRAP));
 	const auto = (g: LegLook): Auto[] => {
@@ -91,38 +95,42 @@ export function Center({
 			<div className="panel-head pr-1.5">
 				<span className="min-w-0 truncate">FRAUD TRIANGLE</span>
 				<div className="flex-1" />
-				<div
-					role="tablist"
-					aria-label="Triangle view"
-					className="flex flex-none border border-surface"
-				>
-					{TABS.map((x) => (
-						<button
-							key={x.k}
-							type="button"
-							role="tab"
-							aria-selected={tab === x.k}
-							data-tip={x.tip}
-							onClick={() => setTab(x.k)}
-							className={`h-[22px] px-[7px] font-mono text-[11.5px] tracking-normal ${tab === x.k ? "bg-surface text-ink" : "bg-ink text-surface"}`}
-						>
-							{x.label}
-						</button>
-					))}
-				</div>
+				{!focusMode && (
+					<div
+						role="tablist"
+						aria-label="Triangle view"
+						className="flex flex-none border border-surface"
+					>
+						{TABS.map((x) => (
+							<button
+								key={x.k}
+								type="button"
+								role="tab"
+								aria-selected={tab === x.k}
+								data-tip={x.tip}
+								onClick={() => setTab(x.k)}
+								className={`h-[22px] px-[7px] font-mono text-[11.5px] tracking-normal ${tab === x.k ? "bg-surface text-ink" : "bg-ink text-surface"}`}
+							>
+								{x.label}
+							</button>
+						))}
+					</div>
+				)}
 			</div>
 			<div className="relative min-h-0 flex-1 overflow-hidden">
-				{tab === "triangle" ? (
+				{shown === "triangle" ? (
 					<>
 						<Field run={run} focus={focus} />
-						<button
-							type="button"
-							data-tip={LEGEND}
-							aria-label="How to read the triangle"
-							className="absolute top-2 right-2 inline-flex size-6 cursor-help items-center justify-center bg-surface"
-						>
-							<Info size={15} />
-						</button>
+						{!focusMode && (
+							<button
+								type="button"
+								data-tip={LEGEND}
+								aria-label="How to read the triangle"
+								className="absolute top-2 right-2 inline-flex size-6 cursor-help items-center justify-center bg-surface"
+							>
+								<Info size={15} />
+							</button>
+						)}
 					</>
 				) : (
 					<Chart run={run} />
@@ -140,6 +148,7 @@ export function Center({
 // A leg as the latest scored call left it: its score, whether facts confirm it, and those
 // facts.
 function Gauge({ g, leg, auto }: { g: LegLook; leg: Leg; auto: Auto[] }) {
+	const { focusMode } = useLive();
 	const n = leg.facts.length;
 	return (
 		<div className="@container relative flex min-w-0 flex-col gap-[7px] border-line border-r-[1px] px-[18px] py-4 last:border-r-0">
@@ -171,7 +180,7 @@ function Gauge({ g, leg, auto }: { g: LegLook; leg: Leg; auto: Auto[] }) {
 						{a.t}
 					</span>
 				))}
-				{n > 0 && (
+				{n > 0 && !focusMode && (
 					<details className="ml-auto">
 						<summary className="inline-flex min-h-[22px] items-center gap-1 border border-ink bg-surface px-1.5 py-0.5 font-mono text-[11px] leading-[1.3]">
 							{n} fact{n > 1 ? "s" : ""} from the log

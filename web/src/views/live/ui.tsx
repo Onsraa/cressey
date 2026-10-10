@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { Step, StepStatus } from "@/api/types";
 import { Cells } from "@/components/Cells";
 import { type LEGS, RISK, STATUS, TONE } from "@/lib/labels";
@@ -17,6 +17,31 @@ export function useSize() {
 		return () => ro.disconnect();
 	}, []);
 	return { ref, ...size };
+}
+
+// Milliseconds since `key` last changed, counted on each frame until `ms`. Infinite on mount
+// and with reduced motion: nothing moves then.
+export function useAge(key: number, ms: number) {
+	const [start, setStart] = useState({ key, at: Number.NEGATIVE_INFINITY });
+	const [now, setNow] = useState(0);
+	if (start.key !== key)
+		setStart({
+			key,
+			at: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+				? Number.NEGATIVE_INFINITY
+				: performance.now(),
+		});
+	useEffect(() => {
+		if (start.at === Number.NEGATIVE_INFINITY) return;
+		let id = 0;
+		const tick = (ts: number) => {
+			setNow(ts);
+			if (ts - start.at < ms) id = requestAnimationFrame(tick);
+		};
+		id = requestAnimationFrame(tick);
+		return () => cancelAnimationFrame(id);
+	}, [start, ms]);
+	return Math.max(0, now - start.at);
 }
 
 // Cells as wide as their box: n cells and Cells' n - 1 one-pixel gaps.

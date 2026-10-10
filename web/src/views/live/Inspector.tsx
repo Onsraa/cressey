@@ -44,7 +44,9 @@ export function Inspector({
 	decision: Decision;
 	className: string;
 }) {
-	const { incidents, now, go } = useLive();
+	const { incidents, now, go, focusMode } = useLive();
+	// Focus mode has no STEP tab: the hold, or a quiet line.
+	const hold = held && (focusMode || tab === "hold") ? held : undefined;
 	return (
 		<section aria-label="Inspector" className={`panel rise ${className}`}>
 			<div
@@ -54,32 +56,39 @@ export function Inspector({
 			>
 				{held && (
 					<Tab
-						on={tab === "hold"}
+						on={Boolean(hold)}
 						onClick={() => onTab("hold")}
 						Icon={Pause}
 						label="HOLD"
 						dot={held.status === "held"}
 					/>
 				)}
-				<Tab
-					on={tab === "step"}
-					onClick={() => onTab("step")}
-					Icon={List}
-					label="STEP"
-				/>
+				{!focusMode && (
+					<Tab
+						on={tab === "step"}
+						onClick={() => onTab("step")}
+						Icon={List}
+						label="STEP"
+					/>
+				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
-				{tab === "hold" && held ? (
+				{hold ? (
 					<Hold
 						run={run}
-						step={held}
+						step={hold}
 						incident={incidents.find(
-							(i) => i.run_id === run.id && i.step === held.n,
+							(i) => i.run_id === run.id && i.step === hold.n,
 						)}
 						now={now}
 						decision={decision}
 						go={go}
+						focusMode={focusMode}
 					/>
+				) : focusMode ? (
+					<div className="flex h-full min-h-[220px] items-center justify-center p-6 text-center text-[13px] text-mute-2 leading-[1.45]">
+						Cressey is watching every call.
+					</div>
 				) : row?.kind === "call" ? (
 					<Call run={run} step={row.step} />
 				) : row ? (

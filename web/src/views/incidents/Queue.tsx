@@ -70,6 +70,7 @@ function Item({
 	observer: boolean;
 	pick: () => void;
 }) {
+	const { focusMode } = useLive();
 	const st = stage(i);
 	const sev = SEVERITY[i.severity];
 	return (
@@ -96,34 +97,43 @@ function Item({
 					</span>
 				)}
 				<span className="flex-1" />
-				<span className="font-mono text-[11px] text-mute-2">
-					{time(i.created_at)}
-				</span>
+				{!focusMode && (
+					<span className="font-mono text-[11px] text-mute-2">
+						{time(i.created_at)}
+					</span>
+				)}
 			</span>
 			<span className="text-pretty font-medium text-sm leading-[1.3]">
 				{i.reason}
 			</span>
-			<span className="flex items-center gap-2">
-				<span aria-hidden="true" className="flex gap-0.5">
-					{LIFE.map((label, k) => (
+			{/* Focus mode drops the lifecycle: the row stays for the Observer chip only. */}
+			{(!focusMode || observer) && (
+				<span className="flex items-center gap-2">
+					{!focusMode && (
+						<>
+							<span aria-hidden="true" className="flex gap-0.5">
+								{LIFE.map((label, k) => (
+									<span
+										key={label}
+										className={`size-2.5 border ${k <= st ? "border-ok-strong bg-ok-strong" : "border-line-2 bg-surface"}`}
+									/>
+								))}
+							</span>
+							<span className="font-mono text-[11px]">{LIFE[st]}</span>
+						</>
+					)}
+					<span className="flex-1" />
+					{observer && (
 						<span
-							key={label}
-							className={`size-2.5 border ${k <= st ? "border-ok-strong bg-ok-strong" : "border-line-2 bg-surface"}`}
-						/>
-					))}
+							data-tip={OBSERVER_TIP}
+							className={`inline-flex h-5 items-center gap-1 border px-1.5 font-mono text-[11px] ${TONE.info}`}
+						>
+							<Eye size={11} />
+							Observer
+						</span>
+					)}
 				</span>
-				<span className="font-mono text-[11px]">{LIFE[st]}</span>
-				<span className="flex-1" />
-				{observer && (
-					<span
-						data-tip={OBSERVER_TIP}
-						className={`inline-flex h-5 items-center gap-1 border px-1.5 font-mono text-[11px] ${TONE.info}`}
-					>
-						<Eye size={11} />
-						Observer
-					</span>
-				)}
-			</span>
+			)}
 		</button>
 	);
 }

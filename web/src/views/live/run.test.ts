@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Legs, Run, Step } from "@/api/types";
-import { heat, place, triangle } from "./geometry";
+import { heat, place, pulse, triangle } from "./geometry";
 import { argsText, carried, originText, rows } from "./run";
 
 const step = (
@@ -144,6 +144,20 @@ describe("triangle", () => {
 		}
 		expect(place(t, legs(0.7, 0, 0))).toEqual(t.pressure);
 		expect(place(t, legs(0, 0.5, 0.5)).y).toBeCloseTo(t.opportunity.y);
+	});
+	test("a landing pulse: a hot ring leaves the point, then cools away", () => {
+		const p = { x: 105, y: 105 }; // the centre of cell (10, 10)
+		const reach = (cells: { q: number; r: number }[]) =>
+			Math.max(...cells.map((c) => Math.hypot(c.q - 10, c.r - 10)));
+		const hottest = (cells: { band: number }[]) =>
+			Math.max(...cells.map((c) => c.band));
+		const early = pulse(p, 0.1);
+		const later = pulse(p, 0.4);
+		expect(hottest(early)).toBe(3);
+		expect(reach(later)).toBeGreaterThan(reach(early));
+		expect(later.some((c) => c.q === 10 && c.r === 10)).toBe(false);
+		expect(hottest(later)).toBeLessThan(3);
+		expect(pulse(p, 1)).toEqual([]);
 	});
 	test("only a held call's heat is salmon", () => {
 		const at = place(t, legs(1, 1, 1));

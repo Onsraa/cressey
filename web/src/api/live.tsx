@@ -37,11 +37,14 @@ export type Live = Polled & {
 	view: View;
 	focus: Focus;
 	go: (view: View, focus?: Focus) => void;
+	focusMode: boolean; // for the demo: the views hide their secondary contents
+	toggleFocus: () => void;
 };
 
 const LiveContext = createContext<Live | null>(null);
 
 const EMPTY: Polled = { runs: [], holds: [], incidents: [], fleet: [] };
+const FOCUS_KEY = "cressey.focus";
 
 async function poll(): Promise<Polled> {
 	const [status, runs, holds, incidents, responses, fleet] = await Promise.all([
@@ -91,9 +94,36 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 		setFocus(f);
 	}, []);
 
+	// Focus mode outlives a reload; where storage is blocked it starts off.
+	const [focusMode, setFocusMode] = useState(() => {
+		try {
+			return localStorage.getItem(FOCUS_KEY) === "on";
+		} catch {
+			return false;
+		}
+	});
+	useEffect(() => {
+		try {
+			localStorage.setItem(FOCUS_KEY, focusMode ? "on" : "off");
+		} catch {
+			// blocked storage: the mode lasts until the page closes
+		}
+	}, [focusMode]);
+	const toggleFocus = useCallback(() => setFocusMode((f) => !f), []);
+
 	return (
 		<LiveContext.Provider
-			value={{ ...data, now, offline, refresh, view, focus, go }}
+			value={{
+				...data,
+				now,
+				offline,
+				refresh,
+				view,
+				focus,
+				go,
+				focusMode,
+				toggleFocus,
+			}}
 		>
 			{children}
 		</LiveContext.Provider>

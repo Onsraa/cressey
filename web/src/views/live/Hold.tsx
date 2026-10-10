@@ -14,6 +14,7 @@ export function Hold({
 	now,
 	decision,
 	go,
+	focusMode,
 }: {
 	run: Run;
 	step: Step;
@@ -21,6 +22,7 @@ export function Hold({
 	now: number;
 	decision: Decision;
 	go: (view: View, focus?: Focus) => void;
+	focusMode: boolean; // the decision and its why, nothing else
 }) {
 	const st = STATUS[step.status];
 	const sev = incident && SEVERITY[incident.severity];
@@ -42,9 +44,11 @@ export function Hold({
 						{sev.label}
 					</span>
 				)}
-				<span className="font-medium font-mono text-[12.5px]">
-					#{step.n} {step.tool}
-				</span>
+				{!focusMode && (
+					<span className="font-medium font-mono text-[12.5px]">
+						#{step.n} {step.tool}
+					</span>
+				)}
 			</div>
 			{step.status === "held" ? (
 				<>
@@ -105,9 +109,11 @@ export function Hold({
 					)}
 				</>
 			)}
-			<Labeled label="attempted">
-				<Code>{argsText(run, step.args, "\n") || "no arguments"}</Code>
-			</Labeled>
+			{!focusMode && (
+				<Labeled label="attempted">
+					<Code>{argsText(run, step.args, "\n") || "no arguments"}</Code>
+				</Labeled>
+			)}
 			<div className="flex flex-col gap-[7px]">
 				<span className="label">why it is held</span>
 				{step.reason && (
@@ -133,33 +139,35 @@ export function Hold({
 					))}
 				</div>
 			</div>
-			<div className="flex flex-col border-line border-t text-[13px]">
-				<span
-					data-tip={
-						run.revoked
-							? "Suspended as soon as the call was held: the run's next calls are refused."
-							: "Run key active"
-					}
-					className="flex min-h-[34px] items-center gap-2 border-line border-b"
-				>
-					{run.revoked ? (
-						<Lock size={14} className="text-held-strong" />
-					) : (
-						<KeyRound size={14} className="text-ok-strong" />
-					)}
-					Run key {run.revoked ? "suspended" : "active"}
-				</span>
-				{run.way_out_step ? (
+			{!focusMode && (
+				<div className="flex flex-col border-line border-t text-[13px]">
 					<span
-						data-tip="Sent with the result of the call that confirmed the pressure, without a human."
+						data-tip={
+							run.revoked
+								? "Suspended as soon as the call was held: the run's next calls are refused."
+								: "Run key active"
+						}
 						className="flex min-h-[34px] items-center gap-2 border-line border-b"
 					>
-						<DoorOpen size={14} className="text-info-fg" />
-						Way out sent to the agent
-						<span className="label ml-auto">step {run.way_out_step}</span>
+						{run.revoked ? (
+							<Lock size={14} className="text-held-strong" />
+						) : (
+							<KeyRound size={14} className="text-ok-strong" />
+						)}
+						Run key {run.revoked ? "suspended" : "active"}
 					</span>
-				) : null}
-			</div>
+					{run.way_out_step ? (
+						<span
+							data-tip="Sent with the result of the call that confirmed the pressure, without a human."
+							className="flex min-h-[34px] items-center gap-2 border-line border-b"
+						>
+							<DoorOpen size={14} className="text-info-fg" />
+							Way out sent to the agent
+							<span className="label ml-auto">step {run.way_out_step}</span>
+						</span>
+					) : null}
+				</div>
+			)}
 		</div>
 	);
 }

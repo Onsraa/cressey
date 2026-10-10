@@ -307,12 +307,24 @@
 		.rise {
 			animation: rise 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 		}
+		.beacon {
+			animation: beacon 1.2s ease-in-out infinite alternate;
+		}
 	}
 }
 
 @keyframes blink {
 	50% {
 		opacity: 0.15;
+	}
+}
+
+@keyframes beacon {
+	from {
+		fill: var(--color-held);
+	}
+	to {
+		fill: var(--color-held-bd);
 	}
 }
 
