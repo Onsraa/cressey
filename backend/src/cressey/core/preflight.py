@@ -5,6 +5,7 @@ risk is named with the owner of its fix. Display only: no decision uses it yet."
 import logging
 from collections.abc import Mapping
 
+from fastmcp import FastMCP
 from pydantic import JsonValue
 from typesafe_sdk import Noul
 
@@ -73,7 +74,7 @@ async def assess(
     task: str, mandate: Mandate, tools: Mapping[str, str], judge: Judge
 ) -> Preflight | None:
     """Every factor in one call, at the cut; None when no model answers. `tools` maps
-    each tool the agent can call to its kind in the policy."""
+    each tool the agent can call to its description."""
     state: dict[str, JsonValue] = {
         "task": task,
         "mandate": mandate.model_dump(),
@@ -98,3 +99,11 @@ async def assess(
             owner, fix = FIXES[k]
             facts.append(f"{RISKS[k]} ({risk:.2f}) → {OWNER_NAMES[owner]} : {fix}")
     return Preflight(scores=scores, facts=facts)
+
+
+async def assess_for(
+    server: FastMCP, judge: Judge, task: str, mandate: Mandate
+) -> Preflight | None:
+    """`assess`, against the tools as the agent sees them: each name with its description."""
+    tools = {t.name: t.description or "" for t in await server.list_tools()}
+    return await assess(task, mandate, tools, judge)

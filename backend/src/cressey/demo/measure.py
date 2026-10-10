@@ -17,6 +17,7 @@ import copy
 import json
 import statistics
 import sys
+import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -38,7 +39,7 @@ from cressey.core.eventlog import EventLog
 from cressey.core.floor import check
 from cressey.core.judge import Answers, Question
 from cressey.core.models import Mandate, Run, RunIn, Thresholds
-from cressey.core.preflight import CUT, QUESTIONS, assess
+from cressey.core.preflight import CUT, QUESTIONS, assess_for
 from cressey.core.proxy import load_policy
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
@@ -50,6 +51,7 @@ from cressey.core.triangle import (
     report_check,
     views,
 )
+from cressey.demo.tools import demo_tools
 from cressey.guide.clients import decision_auth
 from cressey.guide.corpus import DATA
 from cressey.settings import Settings
@@ -638,14 +640,19 @@ class PreflightReport(TypedDict):
 
 
 async def measure_preflight(judge: MeasuringJudge | FakeJudge) -> PreflightReport:
-    """The pre-run assessment through core.preflight.assess, so it is what Cressey sends:
+    """The pre-run assessment through core.preflight.assess_for, so it is what Cressey sends:
     each factor's answer against our labels (high = yes) at the cut."""
-    tools = {name: rule.kind for name, rule in runs_policy.tools.items()}
     scored: dict[str, list[tuple[str, str, float]]] = {k: [] for k in QUESTIONS}
     unanswered: list[str] = []
     rows: list[dict[str, JsonValue]] = []
-    for case in load_preflight():
-        p = await assess(case.task, case.mandate, tools, judge)
+    with tempfile.TemporaryDirectory() as tmp:
+        # The tools as the agent sees them, names and descriptions, as the app sends them.
+        server = demo_tools(Path(tmp))
+        found = [
+            (case, await assess_for(server, judge, case.task, case.mandate))
+            for case in load_preflight()
+        ]
+    for case, p in found:
         if p is None:
             unanswered.append(case.id)
             continue

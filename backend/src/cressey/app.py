@@ -12,7 +12,7 @@ from cressey.core.api import router as core_router
 from cressey.core.eventlog import EventLog
 from cressey.core.incidents import Incidents
 from cressey.core.judge import JevJudge, Judge
-from cressey.core.preflight import assess
+from cressey.core.preflight import assess_for
 from cressey.core.proxy import MCP_PATH, Guard, build_mcp, load_policy
 from cressey.core.runs import Runs
 from cressey.demo.agent import load_sessions
@@ -42,9 +42,9 @@ def create_app(
     given = judge
     policy = load_policy(DATA / "policy.yaml")
     judge = judge or JevJudge.from_settings(s)
-    # The task assessed before the run, against the tools the agent can call.
-    tools = {name: rule.kind for name, rule in policy.tools.items()}
-    assess_task = partial(assess, tools=tools, judge=judge)
+    upstream = demo_tools(demo)
+    # The task assessed before the run, against the tools as the agent sees them.
+    assess_task = partial(assess_for, upstream, judge)
     incidents = Incidents(
         runs,
         make_guide,
@@ -55,7 +55,7 @@ def create_app(
     guard = Guard(
         runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds, s.holds
     )
-    mcp = build_mcp(guard, demo_tools(demo))
+    mcp = build_mcp(guard, upstream)
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s
     app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check

@@ -167,3 +167,20 @@ async def test_a_replayed_runs_fix_is_not_assessed():
     incident = Incidents(runs, guide, assess_task=assess_task).open(run, call, "haute")
     await until(lambda: all(g.status != "pending" for g in incident.guides))
     assert asked == []
+
+
+async def test_the_assessment_sees_each_tool_as_the_agent_does(tmp_path):
+    """The tools the agent can call, with their names and descriptions (the spec): from
+    kinds alone, Jev missed that write_file can change the tests (grader 5/12)."""
+    judge = TaskJudge()
+    with serve(create_app(settings(tmp_path), fake_guide, judge)) as base:
+        r = await api(base, "POST", "/api/runs", json={"task": TASK})
+        for _ in range(200):
+            if (await api(base, "GET", f"/api/runs/{r.json()['id']}")).json()[
+                "preflight"
+            ]:
+                break
+            await asyncio.sleep(0.01)
+    [state] = judge.states
+    assert state["tools"]["write_file"] == "Write a file of the workspace."
+    assert state["tools"]["run_tests"] == "Run the test suite."
