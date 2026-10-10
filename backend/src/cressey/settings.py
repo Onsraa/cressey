@@ -13,6 +13,12 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     typesafe_api_key: SecretStr | None = None
     web_dir: Path = Field(Path("web"), validation_alias="CRESSEY_WEB_DIR")
+    rewrite_model: str = "gpt-5.4-mini"
+    writer_model: str = "gpt-5.5"  # S6: 23/23 verified quotes vs 19/21 for gpt-5.4-mini
+    embedding_model: str = "text-embedding-3-small"
+    relevance_min: float = (
+        0.4  # S6 calibration: keeps 51/55 expected passages, 16/185 others
+    )
 
     @field_validator("openai_api_key", "typesafe_api_key", mode="before")
     @classmethod
