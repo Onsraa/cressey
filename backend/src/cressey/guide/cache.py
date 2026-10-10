@@ -1,6 +1,7 @@
 """Record-and-replay cache for every model call, so the demo survives a network outage.
 
-live: call, store nothing · record: call and store · replay: cache only, never the network
+live: call, store nothing · record: call and store, except a call already recorded,
+which gets its first answer · replay: cache only, never the network
 fallback: call; if the model is unavailable, serve the stored answer
 replay-first: the stored answer when there is one, the network only on a miss (the stage)
 """
@@ -98,9 +99,11 @@ class Cached:
 
         if self.mode == "replay":
             return stored()
+        # record too: a run and its Observateur run ask the same, and a replay can give only
+        # one answer to both, so the recording keeps the first.
+        if self.mode in ("replay-first", "record") and path.exists():
+            return stored()
         if self.mode == "replay-first":
-            if path.exists():
-                return stored()
             log.warning("not recorded, asking live: %s.%s", self.adapter, method)
         try:
             out = live()

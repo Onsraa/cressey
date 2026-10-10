@@ -154,9 +154,10 @@ class JevJudge:
         recorded: Answers | None = (
             json.loads(path.read_text()) if path.exists() else None
         )
+        # record too: a state asked twice in one recording replays one answer, the first.
+        if recorded is not None and self.mode in ("replay", "replay-first", "record"):
+            return recorded
         if self.mode in ("replay", "replay-first"):
-            if recorded is not None:
-                return recorded
             # On stage a miss means the state changed after recording: say which field.
             log.error(
                 "judge: no recorded answer %s (%s)", path.name, _fingerprints(state)

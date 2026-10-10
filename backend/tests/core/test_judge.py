@@ -60,6 +60,18 @@ async def test_recorded_answers_replay_without_the_network(tmp_path):
     assert offline.calls == 0
 
 
+async def test_record_keeps_the_first_answer_to_a_repeated_state(tmp_path):
+    """The same state asked twice in one recording replays one answer: the first."""
+    model = Model(0.3)
+    recorder = JevJudge(model, "record", tmp_path, MODEL)
+    first = await recorder.answers(STATE, QUESTIONS)
+    model.answer = 0.9  # a live model can answer differently the second time
+    assert await recorder.answers(STATE, QUESTIONS) == first == {"weakens": 0.3}
+    assert model.calls == 1
+    replay = JevJudge(Model(None), "replay", tmp_path, MODEL)
+    assert await replay.answers(STATE, QUESTIONS) == {"weakens": 0.3}
+
+
 async def test_another_question_is_never_served_from_the_record(tmp_path):
     await JevJudge(Model(0.3), "record", tmp_path, MODEL).answers(STATE, QUESTIONS)
     other = {"weakens": Noul(instructions="Is this action needed for the task?")}

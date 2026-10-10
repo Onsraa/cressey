@@ -47,7 +47,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `typesafe_api_key` | `TYPESAFE_API_KEY` | none. An empty value counts as missing. Jev is the triangle's decision model |
 | `decider_url` | `CRESSEY_DECIDER_URL` | none: Jev's API. A URL, such as the local `strands-decider serve` on port 8100, switches the triangle's decision model to that server |
 | `web_dir` | `CRESSEY_WEB_DIR` | `web` |
-| `model_mode` | `CRESSEY_MODEL_MODE` | `live` (`live`, `record`, `replay`, `fallback` or `replay-first`). `replay-first`, for the stage: the recorded answer when there is one, live only on a miss, logged. In `replay`, a judge miss says « réponse enregistrée absente » and logs a hash of each state field |
+| `model_mode` | `CRESSEY_MODEL_MODE` | `live` (`live`, `record`, `replay`, `fallback` or `replay-first`). `replay-first`, for the stage: the recorded answer when there is one, live only on a miss, logged. `record` keeps the first answer to a call it already recorded: a run and its Observateur run open the same incident, and a replay can give only one answer to both. In `replay`, a judge miss says « réponse enregistrée absente » and logs a hash of each state field |
 | `cache_dir` | `CRESSEY_CACHE_DIR` | `data/cache` |
 | `rewrite_model` | — | `gpt-5.4-mini`; on Bedrock `us.openai.gpt-5.6-sol` |
 | `writer_model` | — | `gpt-5.5`; on Bedrock `us.openai.gpt-5.5` |

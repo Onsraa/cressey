@@ -18,6 +18,29 @@ class CountingRew(Rew):
         return super().rewrite_incident(incident)
 
 
+class ChangingRew(Rew):
+    """Answers differently each time it is asked, as a live model can."""
+
+    def __init__(self):
+        super().__init__()
+        self.calls = 0
+
+    def rewrite_incident(self, incident):
+        self.calls += 1
+        return (f"fr{self.calls}", f"en{self.calls}")
+
+
+def test_record_keeps_the_first_answer_to_a_repeated_call(tmp_path):
+    """A run and its Observateur run open the same incident: a replay can give only one
+    answer to both, so the recording keeps the first and gives it to both."""
+    inner = ChangingRew()
+    recorder = Cached(inner, "rewriter", "m", "v1", "record", tmp_path)
+    first, again = recorder.rewrite_incident(INC), recorder.rewrite_incident(INC)
+    assert first == again == ("fr1", "en1") and inner.calls == 1
+    replay = Cached(Rew(fail=True), "rewriter", "m", "v1", "replay", tmp_path)
+    assert replay.rewrite_incident(INC) == ("fr1", "en1")
+
+
 def test_replay_hit_returns_recorded_answer(tmp_path):
     Cached(Rew(), "rewriter", "m", "v1", "record", tmp_path).rewrite_incident(INC)
     assert Cached(
