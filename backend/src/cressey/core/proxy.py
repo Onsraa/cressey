@@ -3,6 +3,7 @@ the real tool."""
 
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Literal
@@ -21,10 +22,19 @@ from cressey.core.broker import scoped
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
-from cressey.core.models import Policy, Response
+from cressey.core.models import Policy, Response, Run, Step
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
-from cressey.core.triangle import alarm, alarm_reason, label_soon, legs
+from cressey.core.triangle import (
+    alarm,
+    alarm_reason,
+    label_soon,
+    legs,
+    read_after,
+    read_before,
+)
+
+log = logging.getLogger(__name__)
 
 WAY_OUT = "Déclarer la tâche impossible est une réponse acceptée."
 READ_ONLY = "clé en lecture seule : pression et opportunité confirmées"
@@ -59,6 +69,9 @@ class Guard(Middleware):
         self.runs, self.incidents = runs, incidents
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
         self.triangle_holds, self.holds = triangle_holds, holds
+        self._late: set[asyncio.Task[None]] = (
+            set()
+        )  # the loop keeps weak references only
 
     def _response(
         self, tool: str, reason: str | None, trapped: bool, floor: bool
@@ -147,10 +160,30 @@ class Guard(Middleware):
         label_soon(
             run, step.n - 1, self.judge
         )  # read now: the next write won't wait for it
+        # Too long to read before it ran: read now, without holding the developer's work.
+        late = not reason and risk != "read" and not read_before(step)
+        if late and run.kind != "replay":
+            task = asyncio.get_running_loop().create_task(self._read_late(run, step))
+            self._late.add(task)
+            task.add_done_callback(self._late.discard)
         # Added after the record: the ledger labels the tool's own text, not Cressey's.
         if run.way_out_step == step.n:
             result.content.append(mcp_types.TextContent(text=f"Cressey : {WAY_OUT}"))
         return result
+
+    async def _read_late(self, run: Run, step: Step) -> None:
+        """A call that ran before it could be read: if the triangle would have held it,
+        it alerts now, with its incident open."""
+        try:
+            late = await read_after(run, step, self.judge, self.policy.triangle)
+        except Exception:  # a background task has no caller to raise to: report it
+            log.exception("late read of step %d of run %s failed", step.n, run.id)
+            return
+        if not (self.triangle_holds and alarm(late, step.risk)):
+            return
+        self.runs.score(run, step, late, f"{alarm_reason(late)} (lu après coup)")
+        self.runs.mark(run, step, "alerted")
+        self.incidents.open(run, step, "haute")
 
 
 def build_mcp(guard: Guard, upstream: FastMCP) -> StarletteWithLifespan:

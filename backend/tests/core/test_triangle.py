@@ -469,3 +469,17 @@ async def test_a_point_refused_for_size_keeps_the_labels_without_a_quote():
     await legs(run, write, judge, T)
     assert flagged.labels is not None and flagged.labels["rationalization"] == 0.9
     assert flagged.quotes == {}
+
+
+async def test_read_before_is_false_past_the_cap():
+    """Too long to read before it runs: no judgment now, it is read afterwards."""
+    from cressey.core.triangle import PARTS_BEFORE, read_before
+
+    long_args = "q" * (CHUNK * PARTS_BEFORE + 1)  # one line: PARTS_BEFORE + 1 parts
+    huge = step(2, "write_file", long_args, "write")
+    assert not read_before(huge) and read_before(step(3, "write_file", "{}", "write"))
+    judge = FakeJudge(0.9)
+    leg = (await legs(run_with(step(1), huge), huge, judge, T)).rationalization
+    assert not leg.confirmed
+    assert leg.facts == ["trop long pour être lu avant l'appel : lu après coup"]
+    assert [k for k, _ in judge.asked if k == "judgment"] == []

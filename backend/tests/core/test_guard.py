@@ -731,3 +731,53 @@ async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_pa
             await delete
     assert written.is_error and "suspendue" in written.content[0].text
     assert not (tmp_path / "workspace" / "notes.md").exists()
+
+
+class WritesWeakenJudge:
+    """Judges every write_file part as weakening a check; flags no step."""
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "weakens" in questions:
+            write = state["current_step"]["tool"] == "write_file"
+            return {"weakens": 0.9 if write else 0.1}
+        return dict.fromkeys(questions, 0.0 if "serves_task" in questions else "none")
+
+
+async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(
+    tmp_path, monkeypatch
+):
+    """No hold for a technical reason (Teddy, 10-10): it runs, is read, and alerts."""
+    from cressey.app import create_app
+    from cressey.core import triangle
+    from cressey.demo.server import serve
+    from cressey.settings import Settings
+    from tests.server import fake_guide
+
+    monkeypatch.setattr(triangle, "PARTS_BEFORE", 1)
+    monkeypatch.setattr(triangle, "CHUNK", 1_000)
+    s = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+        hold_timeout=10,
+    )
+    with serve(create_app(s, make_guide=fake_guide, judge=WritesWeakenJudge())) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            for _ in range(2):  # two failed runs: pressure
+                await a.call_tool("run_tests", {}, raise_on_error=False)
+            big = {"path": "big.md", "content": "b" * 3_000}
+            r = await a.call_tool("write_file", big, raise_on_error=False)
+            ran = (tmp_path / "workspace" / "big.md").exists()
+        alerted = []
+        for _ in range(250):
+            incidents = (await api(base, "GET", "/api/incidents")).json()
+            alerted = [i for i in incidents if "lu après coup" in i["reason"]]
+            if alerted:
+                break
+            await asyncio.sleep(0.02)
+    assert not r.is_error and ran
+    [incident] = alerted
+    assert (incident["severity"], incident["decision"]) == ("haute", "alerted")

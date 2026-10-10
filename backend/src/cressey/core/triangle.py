@@ -99,6 +99,10 @@ SAID = 5_000  # the agent's newest words shown with a step: one full message (Te
 # A part Jev refuses for its size is halved until it fits; one this short that still doesn't
 # means the rest of the state is too big, and splitting further would only read noise.
 MIN_PART = 1_000
+# A call longer than this many parts is not read before it runs: it goes through and is read
+# afterwards (no hold for a technical reason, Teddy 10-10). With two views, 40 requests at
+# once: half of Jev's 80 per second.
+PARTS_BEFORE = 20
 SENTENCE = re.compile(r"(?<=[.!?])\s+|\n+")
 
 
@@ -200,6 +204,11 @@ def _chunks(text: str) -> list[str]:
 def _args_parts(s: Step) -> list[str]:
     """The call's arguments cut like a result: each part is read whole; at least one."""
     return _chunks(s.args)
+
+
+def read_before(step: Step) -> bool:
+    """Short enough to be read whole before the call runs."""
+    return len(_args_parts(step)) <= PARTS_BEFORE
 
 
 def _pieces(text: str) -> list[str]:
@@ -427,9 +436,19 @@ def judgment_state(
     }
 
 
-async def _rationalization(run: Run, call: Step, judge: Judge, t: Thresholds) -> Leg:
+async def _rationalization(
+    run: Run, call: Step, judge: Judge, t: Thresholds, everything: bool = False
+) -> Leg:
+    """The judgment on a write. Before the call runs, one too long to read whole isn't
+    judged: `everything` reads it afterwards, every part."""
     if call.risk == "read":
         return Leg(score=0.0, confirmed=False, facts=[])
+    if not everything and not read_before(call):
+        return Leg(
+            score=0.0,
+            confirmed=False,
+            facts=["trop long pour être lu avant l'appel : lu après coup"],
+        )
     await _read(run, _before(run, call.n), judge)
     earlier = _before(run, call.n)
     shown = await _redacted_off_loop(run, earlier[-1:])
@@ -522,6 +541,15 @@ async def legs(run: Run, call: Step, judge: Judge, t: Thresholds) -> Legs:
         pressure=pressure(run, call, t),
         opportunity=opportunity(run, call),
         rationalization=await _rationalization(run, call, judge, t),
+    )
+
+
+async def read_after(run: Run, call: Step, judge: Judge, t: Thresholds) -> Legs:
+    """The triangle for a call that ran before it could be read: every part, now."""
+    return Legs(
+        pressure=pressure(run, call, t),
+        opportunity=opportunity(run, call),
+        rationalization=await _rationalization(run, call, judge, t, everything=True),
     )
 
 
