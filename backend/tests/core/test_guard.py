@@ -33,7 +33,14 @@ def anyio_backend():
 
 @contextmanager
 def serving(demo: Path, hold_timeout: float) -> Generator[str]:
-    app = create_app(Settings(_env_file=None, demo_dir=demo, hold_timeout=hold_timeout))
+    settings = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        demo_dir=demo,
+        hold_timeout=hold_timeout,
+    )
+    app = create_app(settings)
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     server = uvicorn.Server(
@@ -285,3 +292,22 @@ async def test_only_the_run_key_can_post_its_report(served):
         headers={"Authorization": f"Bearer {other['key']}"},
     )
     assert r.status_code == 403
+
+
+async def test_pressure_and_opportunity_together_hold_a_write(served):
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        for _ in range(2):
+            await a.call_tool("run_tests", {}, raise_on_error=False)
+        await a.call_tool("read_file", {"path": ".env.prod"})
+        write = {"path": "notes.md", "content": "x"}
+        call = asyncio.create_task(
+            a.call_tool("write_file", write, raise_on_error=False)
+        )
+        hold = await next_hold(served)
+        n = hold["step"]["n"]
+        await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+        await call
+    legs = hold["step"]["legs"]
+    assert hold["step"]["reason"] == "triangle : pression et opportunité confirmées"
+    assert legs["rationalization"]["facts"] == ["Jev indisponible : dérive non mesurée"]

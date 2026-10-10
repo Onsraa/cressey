@@ -19,13 +19,39 @@ class ToolRule(BaseModel):
     arg: str | None = None  # the argument holding the SQL or the recipients
 
 
+class Thresholds(BaseModel):
+    """When observed facts confirm a leg (policy.yaml, `triangle`)."""
+
+    failures: int = 2  # failed calls that confirm pressure
+    repeats: int = 2  # identical calls repeated that confirm pressure
+    drift: float = 0.5  # risk-weighted drift that confirms rationalization
+    summary_steps: int = 8  # recent actions Jev sees
+    deadline_words: list[str] = []
+    # S2: run_tests on a typo fix scored 0.15 "needed", so drift is weighted by risk.
+    weights: dict[Risk, float] = {"read": 0.0, "write": 0.5, "destructive": 1.0}
+
+
 class Policy(BaseModel):
     tools: dict[str, ToolRule]
+    triangle: Thresholds = Field(default_factory=Thresholds)
 
 
 class Mandate(BaseModel):
     may_destroy: list[str] = []  # tables the task may delete from or drop
     may_send_to: list[str] = []  # addresses, or "@domain"
+    may_read_secrets: list[str] = []  # names of the secrets the task needs
+
+
+class Leg(BaseModel):
+    score: float  # 0 to 1, for the gauge
+    confirmed: bool  # facts observed by code confirm it
+    facts: list[str]
+
+
+class Legs(BaseModel):
+    pressure: Leg
+    opportunity: Leg
+    rationalization: Leg
 
 
 class RunIn(BaseModel):
@@ -53,6 +79,7 @@ class Step(BaseModel):
     secrets: list[Secret] = []  # found in what the call returned; names, never values
     held_until: str | None = None
     decided_at: str | None = None
+    legs: Legs | None = None  # the triangle when this call came in
     # Kept in memory for tracing, never served.
     raw_args: dict[str, JsonValue] = Field(default_factory=dict, exclude=True)
     result: str = Field("", exclude=True)

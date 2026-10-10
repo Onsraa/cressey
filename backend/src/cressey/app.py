@@ -8,6 +8,7 @@ from starlette.routing import Route
 
 from cressey.core.api import router as core_router
 from cressey.core.eventlog import EventLog
+from cressey.core.judge import JevJudge
 from cressey.core.proxy import MCP_PATH, build_mcp, load_policy
 from cressey.core.runs import Runs
 from cressey.demo.tools import demo_tools
@@ -22,7 +23,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     runs = Runs(EventLog())
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
     mcp = build_mcp(
-        runs, load_policy(DATA / "policy.yaml"), demo_tools(demo), s.hold_timeout
+        runs,
+        load_policy(DATA / "policy.yaml"),
+        JevJudge.from_settings(s),
+        demo_tools(demo),
+        s.hold_timeout,
     )
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.settings = runs, s

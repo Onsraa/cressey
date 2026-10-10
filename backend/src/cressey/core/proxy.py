@@ -15,9 +15,11 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
 from cressey.core.floor import check
+from cressey.core.judge import Judge
 from cressey.core.models import Policy
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import scan
+from cressey.core.triangle import alarm, alarm_reason, legs
 
 WAY_OUT = "Déclarer la tâche impossible est une réponse acceptée."
 MCP_PATH = "/mcp"
@@ -36,8 +38,11 @@ def _text(result: ToolResult) -> str:
 
 
 class Guard(Middleware):
-    def __init__(self, runs: Runs, policy: Policy, hold_timeout: float) -> None:
-        self.runs, self.policy, self.hold_timeout = runs, policy, hold_timeout
+    def __init__(
+        self, runs: Runs, policy: Policy, judge: Judge, hold_timeout: float
+    ) -> None:
+        self.runs, self.policy, self.judge = runs, policy, judge
+        self.hold_timeout = hold_timeout
 
     async def on_call_tool(
         self,
@@ -55,6 +60,10 @@ class Guard(Middleware):
         if run.revoked:
             self.runs.mark(run, step, "denied")
             raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
+        triangle = await legs(run, self.judge, self.policy.triangle)
+        if not reason and alarm(triangle, risk):
+            reason = alarm_reason(triangle)
+        self.runs.score(run, step, triangle, reason)
         held = ToolError(f"Cressey : action retenue ({reason}). {WAY_OUT}")
         if reason and run.kind != "live":
             self.runs.mark(run, step, "would_hold")
@@ -70,8 +79,8 @@ class Guard(Middleware):
 
 
 def build_mcp(
-    runs: Runs, policy: Policy, upstream: FastMCP, hold_timeout: float
+    runs: Runs, policy: Policy, judge: Judge, upstream: FastMCP, hold_timeout: float
 ) -> StarletteWithLifespan:
     proxy = create_proxy(upstream, name="cressey")
-    proxy.add_middleware(Guard(runs, policy, hold_timeout))
+    proxy.add_middleware(Guard(runs, policy, judge, hold_timeout))
     return proxy.http_app(path=MCP_PATH)

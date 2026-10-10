@@ -87,7 +87,7 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Guides and « Pourquoi ? » | `GET /api/guides/{id}`, `POST /api/guides/{id}/why`. The backend creates the guides when an incident fires; the dashboard never calls `POST /api/guides` | exists |
 | Secret redaction | the secrets `core/secret_scan.py` finds in what the agent read, replaced in steps, holds and traces before they are served | exists: served `args` and the report carry `[secret:<fingerprint>]`; each step's `secrets` gives name, kind, fingerprint and line |
 | Hold countdown and decision time | a deadline and a decision time on `Hold` | exists: `held_until` and `decided_at` on the step |
-| Gauges and leg chart | each step's leg scores, confirmation and facts | to add, with triangle scoring |
+| Gauges and leg chart | each step's leg scores, confirmation and facts | exists: `legs` on each step (`pressure`, `opportunity`, `rationalization`, each with `score`, `confirmed`, `facts`) |
 | Run kind, mode, end, what Cressey sees | per run | exists: `kind` (`control` is the Observateur mode), `ended_at`, `visibility` |
 | Agent report | the scripted agent posts its final report, which also ends the run | exists: `POST /api/runs/{id}/report` with the run key |
 | Incidents, fixes, replay, control run | incident endpoints, with a guide status and id per owner | to add |

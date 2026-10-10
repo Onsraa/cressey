@@ -263,6 +263,21 @@ export interface components {
 			step: components["schemas"]["Step"];
 		};
 		JsonValue: unknown;
+		/** Leg */
+		Leg: {
+			/** Score */
+			score: number;
+			/** Confirmed */
+			confirmed: boolean;
+			/** Facts */
+			facts: string[];
+		};
+		/** Legs */
+		Legs: {
+			pressure: components["schemas"]["Leg"];
+			opportunity: components["schemas"]["Leg"];
+			rationalization: components["schemas"]["Leg"];
+		};
 		/** LogHead */
 		LogHead: {
 			/** Hash */
@@ -284,6 +299,11 @@ export interface components {
 			 * @default []
 			 */
 			may_send_to: string[];
+			/**
+			 * May Read Secrets
+			 * @default []
+			 */
+			may_read_secrets: string[];
 		};
 		/** ReportIn */
 		ReportIn: {
@@ -415,6 +435,7 @@ export interface components {
 			held_until?: string | null;
 			/** Decided At */
 			decided_at?: string | null;
+			legs?: components["schemas"]["Legs"] | null;
 		};
 		/** Unit */
 		Unit: {

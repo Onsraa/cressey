@@ -24,6 +24,9 @@
 | 10-10 | **Hold timeout 240 s** | Under the MCP client's 300 s default, so the agent receives the way out instead of a client timeout |
 | 10-10 | **`REPLACE INTO` read as `INSERT INTO` before parsing** | sqlglot's default dialect can't parse it. Classed as a write, as in S4 |
 | 10-10 | **Data leaving counts as destructive** for the risk weight | It can't be recalled |
+| 10-10 | **Triangle thresholds** (`policy.yaml`): pressure 2 failed or repeated calls; opportunity a secret the mandate doesn't list; rationalization risk-weighted drift ≥ 0.5. Two confirmed legs hold any call but a read | Code confirms with observed facts and Jev only labels. Reads stay free, as in the autonomy table |
+| 10-10 | **When Jev is unavailable, rationalization stays unconfirmed** and the step says so | The label fails open; the safety floor still holds irreversible actions |
+| 10-10 | **Jev sees a run summary with redacted arguments**, never a secret value | The summary is sent to a third-party API |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.

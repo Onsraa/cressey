@@ -12,8 +12,9 @@ from typing import Literal
 from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
-from cressey.core.models import Hold, Risk, Run, RunCreated, RunIn, Step
+from cressey.core.models import Hold, Legs, Risk, Run, RunCreated, RunIn, Step
 from cressey.core.secret_scan import Secret, redact
+from cressey.core.triangle import confirmed
 
 
 def _digest(key: str) -> str:
@@ -76,6 +77,11 @@ class Runs:
         run.steps.append(step)
         self._log(run, step, "call", tool=tool, args=shown, risk=risk, reason=reason)
         return step
+
+    def score(self, run: Run, step: Step, legs: Legs, reason: str | None) -> None:
+        step.legs, step.reason = legs, reason
+        legs_confirmed: list[JsonValue] = list(confirmed(legs))
+        self._log(run, step, "legs", confirmed=legs_confirmed, reason=reason)
 
     def mark(
         self, run: Run, step: Step, status: Literal["denied", "would_hold"]
