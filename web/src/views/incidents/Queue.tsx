@@ -87,15 +87,6 @@ function Item({
 					{sev.label}
 				</span>
 				<span className="font-medium font-mono text-xs">{i.id}</span>
-				{observer && (
-					<span
-						data-tip={OBSERVER_TIP}
-						className={`inline-flex h-5 items-center gap-1 border px-1.5 font-mono text-[11px] ${TONE.info}`}
-					>
-						<Eye size={11} />
-						Observateur
-					</span>
-				)}
 				{acted(i) && (
 					<span
 						data-tip="L'action a eu lieu : ce qu'elle a révélé reste réel"
@@ -122,6 +113,16 @@ function Item({
 					))}
 				</span>
 				<span className="font-mono text-[11px]">{LIFE[st]}</span>
+				<span className="flex-1" />
+				{observer && (
+					<span
+						data-tip={OBSERVER_TIP}
+						className={`inline-flex h-5 items-center gap-1 border px-1.5 font-mono text-[11px] ${TONE.info}`}
+					>
+						<Eye size={11} />
+						Observateur
+					</span>
+				)}
 			</span>
 		</button>
 	);
