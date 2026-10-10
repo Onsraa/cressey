@@ -3,7 +3,8 @@ report check, calibrated on labelled synthetic runs, plus an attack on the judge
 per-call latency and cost.
 
 We measure through Cressey's own state builders, so we measure what Cressey actually
-sends: runs are built with `Runs`, scored with `core.triangle.legs` and `report_check`.
+sends: runs are built with `Runs`, scored with `core.triangle.legs` and
+`core.report_audit.report_check`.
 The labelled sets are ours (`data/eval/decision-writes.json`, `decision-reports.json`);
 we wrote the labels.
 
@@ -32,14 +33,13 @@ from cressey.core.floor import check
 from cressey.core.judge import Answers, Question
 from cressey.core.models import Mandate, Run, RunIn, Thresholds
 from cressey.core.proxy import load_policy
+from cressey.core.report_audit import claim_questions, claims, report_check
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
 from cressey.core.triangle import (
     JUDGMENT,
     LABELS,
-    REPORT,
     legs,
-    report_check,
     views,
 )
 from cressey.guide.clients import decision_auth
@@ -95,7 +95,7 @@ def _qtype(
     questions: Mapping[str, Question],
 ) -> Literal["label", "point", "judgment", "report"]:
     keys = set(questions)
-    if "contradicted" in keys:
+    if any(k.endswith("~r") for k in keys):  # the claim-by-claim report audit
         return "report"
     if "weakens" in keys:
         return "judgment"
@@ -151,12 +151,20 @@ class FakeJudge:
         bad = any(
             w in blob for w in ("DELETE", "DROP", "skip", "prestataire", "nécessaire")
         )
-        if "contradicted" in questions:
-            return {
-                "contradicted": 0.9
-                if "passent" in blob or "green" in blob.lower()
-                else 0.1
-            }
+        if isinstance(said := state.get("claims"), dict):
+            out: Answers = {}
+            for q in questions:
+                claim = str(said[q.split("~")[0].split(":")[0]])
+                lie = "passent" in claim or "green" in claim.lower()
+                verdict = {"contradicted": 0.9, "supported": 0.1}
+                out[q] = (
+                    0.0
+                    if q.endswith(":asserts")
+                    else verdict
+                    if lie
+                    else {"supported": 0.9, "contradicted": 0.1}
+                )
+            return out
         if "weakens" in questions:
             return {"weakens": 0.9 if bad else 0.1}
         if "serves_task" in questions:
@@ -230,9 +238,11 @@ async def judge_report(
 ) -> float:
     runs = Runs(EventLog())
     run = build_run(runs, case, judge_final=True)
+    for s in run.steps:  # the triangle's judgment on each write, as in a real run
+        if s.risk != "read":
+            runs.score(run, s, await legs(run, s, judge, t), None)
     runs.end(run, case.report)
-    leg = await report_check(run, judge, t)
-    return leg.score
+    return (await report_check(run, judge, t)).leg.score
 
 
 # ---- metrics -------------------------------------------------------------------------
@@ -422,7 +432,8 @@ async def latency_probe(
 ) -> dict[str, object]:
     """Clean per-call latency: issue label/judgment/report calls one at a time (no concurrent
     dispatch), n times each, on representative states. Tokens come from the API's usage."""
-    from cressey.core.triangle import NOTE, judgment_state, report_state
+    from cressey.core.report_audit import report_state
+    from cressey.core.triangle import NOTE, judgment_state
 
     write = build_run(Runs(EventLog()), cases["w_demo_delete"], judge_final=False)
     # A representative ledger window (what _label sends for one step).
@@ -448,11 +459,12 @@ async def latency_probe(
     rruns = Runs(EventLog())
     rrun = build_run(rruns, reports["r_key_clear"], judge_final=True)
     rruns.end(rrun, reports["r_key_clear"].report)
-    rep_state = report_state(rrun, t)
+    said = claims(reports["r_key_clear"].report)
+    rep_state: dict[str, JsonValue] = {**report_state(rrun, t), "claims": dict(said)}
     probes = {
         "label": (label_state, LABELS),
         "judgment": (judge_state, JUDGMENT),
-        "report": (rep_state, REPORT),
+        "report": (rep_state, claim_questions(list(said))),
     }
     out: dict[str, object] = {}
     for name, (state, questions) in probes.items():

@@ -62,6 +62,16 @@ def top(answer: Answer) -> str | None:
     return answer if isinstance(answer, str) else None
 
 
+def dist(answer: Answer) -> dict[str, float]:
+    """A Choice's probability per option. A recording made before 10-10 holds the picked
+    option alone: it counts as certain."""
+    if isinstance(answer, dict):
+        return answer
+    if isinstance(answer, str):
+        return {answer: 1.0}
+    raise TypeError(f"a Choice's probabilities were expected, got {answer!r}")
+
+
 class NotRecorded(Exception):
     """Replay mode, and no recorded answer for this state: the decision can't be replayed."""
 

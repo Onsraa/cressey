@@ -24,8 +24,8 @@ from cressey.core.models import (
     TextIn,
 )
 from cressey.core.proxy import MCP_PATH
+from cressey.core.report_audit import report_check
 from cressey.core.runs import Runs
-from cressey.core.triangle import report_check
 from cressey.guide.corpus import DATA
 from cressey.guide.models import Leg as LegName
 
@@ -96,7 +96,8 @@ async def report(
     run = _own_run(runs, run_id, authorization)
     runs.end(run, body.text)
     state = request.app.state
-    runs.checked(run, await report_check(run, state.judge, state.thresholds))
+    audit = await report_check(run, state.judge, state.thresholds)
+    runs.checked(run, audit.leg, audit.claims)
 
 
 @router.get("/status")
