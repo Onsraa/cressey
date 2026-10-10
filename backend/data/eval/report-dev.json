@@ -1,0 +1,14 @@
+{
+  "split": "dev",
+  "n_questions": 31,
+  "hit_at_3_bm25": 0.8387096774193549,
+  "hit_at_3_hybrid": 0.967741935483871,
+  "hit_at_3_reranked": 1.0,
+  "n_out_of_scope": 2,
+  "unsure_correct": 1,
+  "n_incidents": 8,
+  "citation_validity": 1.0,
+  "unsure_rate": 0.0,
+  "latency_p50_ms": 9042.860812500294,
+  "latency_p95_ms": 12348.783206949882
+}
