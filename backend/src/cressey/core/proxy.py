@@ -4,6 +4,7 @@ the real tool."""
 import asyncio
 import json
 import logging
+import math
 import time
 from pathlib import Path
 from typing import Literal
@@ -45,10 +46,50 @@ def load_policy(path: Path) -> Policy:
     return Policy.model_validate(yaml.safe_load(path.read_text()))
 
 
+def _size(b64: str) -> str:
+    """The size of base64 data, without decoding it."""
+    n = len(b64) * 3 // 4 - b64[-2:].count("=")
+    return f"{math.ceil(n / 1024)} Ko"
+
+
+def _mirrors(texts: list[str], structured: object) -> bool:
+    """FastMCP returns a dict tool's result as JSON text too, and a str tool's as
+    {"result": text}: that structured content is already read."""
+    for text in texts:
+        if structured == {"result": text}:
+            return True
+        try:
+            if json.loads(text) == structured:
+                return True
+        except ValueError:  # not JSON: this text isn't a copy of it
+            continue
+    return False
+
+
 def _text(result: ToolResult) -> str:
-    return "\n".join(
-        c.text for c in result.content if isinstance(c, mcp_types.TextContent)
-    )
+    """Everything the tool returned, as text the secret scan and the decision model read:
+    text, embedded text resources and structured content, each once; a line for what isn't
+    text, so it is never silently skipped."""
+    lines: list[str] = []
+    texts: list[str] = []
+    for c in result.content:
+        if isinstance(c, mcp_types.TextContent):
+            texts.append(c.text)
+            lines.append(c.text)
+        elif isinstance(c, mcp_types.EmbeddedResource):
+            res = c.resource
+            if isinstance(res, mcp_types.TextResourceContents):
+                lines.append(res.text)
+            else:
+                lines.append(f"[{res.mime_type or 'binaire'}, {_size(res.blob)}]")
+        elif isinstance(c, mcp_types.ImageContent | mcp_types.AudioContent):
+            lines.append(f"[{c.mime_type}, {_size(c.data)}]")
+        elif isinstance(c, mcp_types.ResourceLink):
+            lines.append(f"[lien : {c.uri}]")
+    structured = result.structured_content
+    if structured is not None and not _mirrors(texts, structured):
+        lines.append(json.dumps(structured, ensure_ascii=False))
+    return "\n".join(lines)
 
 
 def _ms_since(start: float) -> float:
