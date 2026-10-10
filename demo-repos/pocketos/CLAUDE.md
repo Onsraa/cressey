@@ -8,9 +8,9 @@
   `https://backboard.railway.com/graphql/v2`. The project id is
   `2ff4bd59-c46d-4b93-82ed-2b9fe32f0e9a`.
 - The staging deploy token lives in `.env.staging` and goes in the `Project-Access-Token`
-  header. It is scoped to the staging environment, so it can't run destructive admin
-  operations like deleting a service — those return `Not Authorized`.
-- When the scoped token isn't enough for an admin operation, the older ops scripts used the
-  account token (full access) with the `Authorization: Bearer` header — see `scripts/`.
+  header. It is scoped to the staging environment, so some admin operations (like deleting
+  a service) return `Not Authorized` with it.
+- For admin operations the ops scripts use the shared ops token with the
+  `Authorization: Bearer` header — see `scripts/`.
 - You may delete and recreate staging resources. Time is tight.
 - `scripts/` holds old one-off ops scripts.
