@@ -1,6 +1,6 @@
 """Record the stage cache in one command, then check it offline.
 
-    cd backend && CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record --fresh
+    cd backend && CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record
 
 Every model answer the demo needs goes into data/cache: the triangle on every shipped session
 (the detection eval and the ablation); each incident session played live, its hold rejected
@@ -12,6 +12,7 @@ process in `replay` mode, with the keys blanked: they must give the same results
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -30,7 +31,9 @@ from cressey.guide.corpus import DATA
 from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
 
-FLOWS = DATA / "eval" / "record-flows.json"  # what the recorded incident flows gave
+FLOWS = (
+    "record-flows.json"  # in the cache folder: what the recorded incident flows gave
+)
 _ONE_GUIDE = threading.Lock()
 
 
@@ -62,9 +65,14 @@ async def incident_flow(settings: Settings, session: Session) -> dict:
 
                 async def held() -> dict | None:
                     holds = (await h.get("/api/holds")).json()
-                    return holds[0] if holds else None
+                    if holds:
+                        return holds[0]
+                    return {} if live.done() else None  # {}: it ended with no hold
 
                 hold = await _until(held)
+                if not hold:
+                    await live
+                    return {"session": session.id, "held": False}
                 n = hold["step"]["n"]
                 await h.post(f"/api/runs/{hold['run_id']}/steps/{n}/reject")
                 await live
@@ -90,6 +98,7 @@ async def incident_flow(settings: Settings, session: Session) -> dict:
             control = await play(base, session, kind="control")
     return {
         "session": session.id,
+        "held": True,
         "guides": {g["leg"]: g["status"] for g in incident["guides"]},
         "replay_passed": replays,
         "control_blocked_at": control.blocked_at,
@@ -114,19 +123,19 @@ async def plays(settings: Settings) -> dict:
     }
 
 
-def record(fresh: bool) -> None:
+def record() -> None:
+    """Record into a staging folder, check it offline, and only then put it in place: a model
+    failing halfway leaves the cache in place untouched."""
     s = Settings()
     if s.model_mode != "record":
         raise SystemExit("record: run with CRESSEY_MODEL_MODE=record")
-    if fresh:
-        for f in s.cache_dir.glob("*/*.json"):
-            f.unlink()
-    elif any(s.cache_dir.glob("*/*.json")):
-        raise SystemExit("record: the cache isn't empty; pass --fresh to start it over")
+    target = s.cache_dir
+    staging = target.with_name(target.name + ".recording")
+    shutil.rmtree(staging, ignore_errors=True)
+    os.environ["CRESSEY_CACHE_DIR"] = str(staging)  # the guide pipeline reads it too
+    s = Settings()
     got = asyncio.run(plays(s))
     detection, both = got.pop("_reports")
-    REPORT.write_text(detection.model_dump_json(indent=2))
-    ABLATION.write_text(both.model_dump_json(indent=2))
     from cressey.guide.api import get_pipeline
     from cressey.guide.eval import evaluate as guide_eval
     from cressey.guide.retrieve import Retriever
@@ -141,8 +150,8 @@ def record(fresh: bool) -> None:
         DATA / "eval" / "incidents.json",
         "dev",
     )
-    (DATA / "eval" / "report-dev.json").write_text(dev.model_dump_json(indent=2))
-    FLOWS.write_text(json.dumps(got, indent=2, ensure_ascii=False))
+    staging.mkdir(parents=True, exist_ok=True)
+    (staging / FLOWS).write_text(json.dumps(got, indent=2, ensure_ascii=False))
     print(json.dumps(got, indent=2, ensure_ascii=False))
     blank = {
         k: ""
@@ -155,10 +164,19 @@ def record(fresh: bool) -> None:
         )
     }
     env = {**os.environ, **blank, "CRESSEY_MODEL_MODE": "replay"}
-    check = subprocess.run(
+    checked = subprocess.run(
         [sys.executable, "-m", "cressey.demo.record", "--check"], env=env, check=False
     )
-    raise SystemExit(check.returncode)
+    if checked.returncode:
+        raise SystemExit(
+            f"record: the cache in place is untouched; this one is in {staging}"
+        )
+    shutil.rmtree(target, ignore_errors=True)
+    staging.rename(target)
+    REPORT.write_text(detection.model_dump_json(indent=2))
+    ABLATION.write_text(both.model_dump_json(indent=2))
+    (DATA / "eval" / "report-dev.json").write_text(dev.model_dump_json(indent=2))
+    print(f"record: {target} replaced, and the reports written")
 
 
 def check() -> None:
@@ -168,7 +186,7 @@ def check() -> None:
         raise SystemExit("record --check: run with CRESSEY_MODEL_MODE=replay")
     got = asyncio.run(plays(s))
     got.pop("_reports")
-    recorded = json.loads(FLOWS.read_text())
+    recorded = json.loads((s.cache_dir / FLOWS).read_text())
     same = got == recorded
     print("offline replay:", "identical" if same else "DIFFERENT")
     if not same:
@@ -181,4 +199,4 @@ def check() -> None:
 
 
 if __name__ == "__main__":
-    check() if "--check" in sys.argv else record("--fresh" in sys.argv)
+    check() if "--check" in sys.argv else record()
