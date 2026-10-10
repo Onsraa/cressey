@@ -12,7 +12,15 @@ from collections.abc import Callable, Mapping, Sequence
 from pydantic import JsonValue
 from typesafe_sdk import Choice, Noul
 
-from cressey.core.judge import Answers, Judge, NotRecorded, Question, TooLarge
+from cressey.core.judge import (
+    Answers,
+    Judge,
+    NotRecorded,
+    Question,
+    TooLarge,
+    top,
+    yes,
+)
 from cressey.core.models import Leg, Legs, Risk, Run, Step, Thresholds
 from cressey.core.secret_scan import redact
 
@@ -289,7 +297,7 @@ async def _max_over_parts(
     pairs = await _answers_over_parts(judge, state_for, parts, questions)
     if pairs is None:
         return None
-    return {q: max(float(a[q]) for _, a in pairs) for q in questions}
+    return {q: max(yes(a[q]) for _, a in pairs) for q in questions}
 
 
 async def _label(run: Run, i: int, judge: Judge) -> None:
@@ -331,12 +339,12 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
         return
     windows = [((first, r), a) for r, a in by_result]
     windows += [((a, ""), got) for a, got in by_args]
-    s.labels = {name: max(float(a[name]) for _, a in windows) for name in LABELS}
+    s.labels = {name: max(yes(a[name]) for _, a in windows) for name in LABELS}
     flagged = [c for c, floor in FLOORS.items() if s.labels[c] >= floor]
     if not flagged:
         return
     (best_args, best_result), _ = max(
-        windows, key=lambda w: max(float(w[1][c]) for c in flagged)
+        windows, key=lambda w: max(yes(w[1][c]) for c in flagged)
     )
     parts = _parts(run, s, best_result, best_args)
     options = {k: k for k in parts} | {"none": "none"}
@@ -351,7 +359,8 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
     except NotRecorded:  # the judge logged it; the labels stay without a quote
         return
     if picked:
-        s.quotes = {c: _quote(parts, str(k)) for c, k in picked.items() if k in parts}
+        chosen = {c: top(a) for c, a in picked.items()}
+        s.quotes = {c: _quote(parts, k) for c, k in chosen.items() if k in parts}
 
 
 def _redacted(run: Run, steps: Sequence[Step]) -> dict[int, str]:
@@ -471,7 +480,7 @@ async def _judgment(
         _args_parts(call),
         JUDGMENT,
     )
-    return None if answer is None else float(answer["weakens"])
+    return None if answer is None else yes(answer["weakens"])
 
 
 async def views(
@@ -597,7 +606,7 @@ async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
             confirmed=False,
             facts=["modèle de décision indisponible : rapport non vérifié"],
         )
-    score = float(answer["contradicted"])
+    score = yes(answer["contradicted"])
     facts = [f"rapport contredit par le journal : {score:.2f}"]
     return Leg(score=score, confirmed=score >= t.report, facts=facts)
 

@@ -63,7 +63,7 @@ class FakeJudge:
                 state["current_step"]["step"], {}
             )
         self.asked.append(("point", state))
-        return {q: "m1" if "m1" in state["parts"] else "none" for q in questions}
+        return {q: {"m1" if "m1" in state["parts"] else "none": 1.0} for q in questions}
 
     def labelled(self) -> list[int]:
         return [s["current_step"]["step"] for kind, s in self.asked if kind == "label"]

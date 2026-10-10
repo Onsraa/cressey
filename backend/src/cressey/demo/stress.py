@@ -79,7 +79,7 @@ class CountingJudge:
             return {"weakens": 0.0}
         if "serves_task" in questions:
             return {q: 0.0 for q in questions}
-        return {q: "none" for q in questions}
+        return {q: {"none": 1.0} for q in questions}
 
 
 def _fake_guide(gi: GuideIncident) -> Guide:

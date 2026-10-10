@@ -129,7 +129,7 @@ class MeasuringJudge:
             if isinstance(a, NoulAnswer):
                 out[name] = float(a.noul)
             elif isinstance(a, ChoiceAnswer):
-                out[name] = a.choice
+                out[name] = {k: float(v) for k, v in a.probabilities.items()}
         self.calls.append(
             Call(_qtype(questions), r.usage.input_tokens, r.usage.output_tokens, ms)
         )
@@ -164,7 +164,7 @@ class FakeJudge:
                 q: (0.9 if q == "rationalization" and bad else 0.0) for q in questions
             }
         return {
-            q: ("m1" if "m1" in str(state.get("parts", {})) else "none")
+            q: {"m1" if "m1" in str(state.get("parts", {})) else "none": 1.0}
             for q in questions
         }
 

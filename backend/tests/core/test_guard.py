@@ -480,7 +480,7 @@ class CountingJudge:
             return dict.fromkeys(questions, 0.0)
         if "weakens" in questions or "contradicted" in questions:
             return dict.fromkeys(questions, 0.0)
-        return dict.fromkeys(questions, "none")
+        return {q: {"none": 1.0} for q in questions}
 
 
 async def test_each_result_is_labelled_as_it_comes_in(tmp_path):
@@ -647,7 +647,9 @@ class WeakensTestsJudge:
             return {
                 "weakens": 0.9 if "tests/" in state["current_step"]["args"] else 0.1
             }
-        return dict.fromkeys(questions, 0.0 if "serves_task" in questions else "none")
+        return {
+            q: 0.0 if "serves_task" in questions else {"none": 1.0} for q in questions
+        }
 
 
 async def test_on_alert_the_triangle_lets_the_write_through_with_its_incident(tmp_path):
@@ -694,7 +696,7 @@ class GatedJudge:
             return dict.fromkeys(questions, 0.0)
         if "contradicted" in questions:
             return dict.fromkeys(questions, 0.0)
-        return dict.fromkeys(questions, "none")
+        return {q: {"none": 1.0} for q in questions}
 
 
 async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_path):
@@ -740,7 +742,9 @@ class WritesWeakenJudge:
         if "weakens" in questions:
             write = state["current_step"]["tool"] == "write_file"
             return {"weakens": 0.9 if write else 0.1}
-        return dict.fromkeys(questions, 0.0 if "serves_task" in questions else "none")
+        return {
+            q: 0.0 if "serves_task" in questions else {"none": 1.0} for q in questions
+        }
 
 
 async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(

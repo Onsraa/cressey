@@ -33,7 +33,10 @@ Question = Noul | Choice
 # Jev allows 80 requests/s (docs.typesafe.ai, Models). At about 0.25 s a call, 20 in flight
 # stay under it: 16 for the judge, 4 for the guides' re-ranker (guide/clients.py).
 JUDGE_IN_FLIGHT = 16
-Answers = dict[str, float | str]  # a Noul's probability, or the option a Choice picked
+# A Noul's probability, or a Choice's probability per option. Recordings made before 10-10
+# hold a Choice's picked option alone (str): they still replay until re-recorded.
+Answer = float | str | dict[str, float]
+Answers = dict[str, Answer]
 Ask = Callable[
     [dict[str, JsonValue], Mapping[str, Question]], Awaitable[Answers | None]
 ]
@@ -42,6 +45,21 @@ Ask = Callable[
 class TooLarge(Exception):
     """Jev refused the state for its size; the caller splits it. Seen live on 10-10: HTTP 400
     with the body {'detail': {'error_type': 'max_tokens_exceeded'}}."""
+
+
+def yes(answer: Answer) -> float:
+    """A Noul's probability. Answers come back from the API or from cache files on disk,
+    so the type is checked here, at the boundary."""
+    if isinstance(answer, bool) or not isinstance(answer, int | float):
+        raise TypeError(f"a Noul's probability was expected, got {answer!r}")
+    return float(answer)
+
+
+def top(answer: Answer) -> str | None:
+    """The option a Choice picked: the most probable one."""
+    if isinstance(answer, dict):
+        return max(answer, key=lambda k: answer[k]) if answer else None
+    return answer if isinstance(answer, str) else None
 
 
 class NotRecorded(Exception):
@@ -84,7 +102,7 @@ def system_one_ask(client: AsyncTypeSafeClient, model: str) -> Ask:
             if isinstance(a, NoulAnswer):
                 out[name] = float(a.noul)
             elif isinstance(a, ChoiceAnswer):
-                out[name] = a.choice
+                out[name] = {k: float(v) for k, v in a.probabilities.items()}
         return out if out.keys() == questions.keys() else None
 
     return ask

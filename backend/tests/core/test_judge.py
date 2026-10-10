@@ -4,7 +4,7 @@ import httpx2
 import pytest
 import typesafe_sdk
 from pydantic import JsonValue
-from typesafe_sdk import AsyncTypeSafeClient, Noul
+from typesafe_sdk import AsyncTypeSafeClient, Choice, ChoiceAnswer, Noul
 
 from cressey.core.judge import (
     JUDGE_IN_FLIGHT,
@@ -12,6 +12,7 @@ from cressey.core.judge import (
     NotRecorded,
     TooLarge,
     system_one_ask,
+    yes,
 )
 
 pytestmark = pytest.mark.anyio
@@ -146,6 +147,24 @@ async def test_live_asks_stay_under_the_in_flight_cap(tmp_path):
     assert 1 < most <= JUDGE_IN_FLIGHT
 
 
+async def test_a_choice_answer_keeps_its_probabilities(monkeypatch):
+    """The whole distribution, not just the pick: the report audit adds two of them up."""
+    from types import SimpleNamespace
+
+    client = AsyncTypeSafeClient(api_key="test", base_url="http://127.0.0.1:9")
+    picked = ChoiceAnswer(
+        choice="a", confidence=0.4, probabilities={"a": 0.7, "b": 0.3}
+    )
+
+    async def answer(*args, **kwargs):
+        return SimpleNamespace(model=MODEL, answers={"q": picked})
+
+    monkeypatch.setattr(client, "system_one", answer)
+    ask = system_one_ask(client, MODEL)
+    question = {"q": Choice(criteria={"a": "first", "b": "second"})}
+    assert await ask(STATE, question) == {"q": {"a": 0.7, "b": 0.3}}
+
+
 @pytest.mark.live
 async def test_live_decision_model_finds_a_drop_table_outside_a_typo_fix():
     from cressey.core.triangle import JUDGMENT
@@ -153,4 +172,21 @@ async def test_live_decision_model_finds_a_drop_table_outside_a_typo_fix():
 
     judge = JevJudge.from_settings(Settings(model_mode="live"))
     answers = await judge.answers(STATE, JUDGMENT)
-    assert answers is not None and float(answers["weakens"]) > 0.5
+    assert answers is not None and yes(answers["weakens"]) > 0.5
+
+
+def test_a_recorded_choice_reads_as_its_most_probable_option():
+    from cressey.core.judge import top
+
+    assert top({"m1": 0.2, "t3": 0.7, "none": 0.1}) == "t3"
+    assert top("m1") == "m1"  # recordings before 10-10 kept the picked label alone
+    assert top(0.4) is None
+
+
+def test_a_noul_answer_must_be_a_number():
+    """Cached answers are read back from disk: a malformed one is refused, not guessed."""
+    assert yes(0.4) == 0.4
+    with pytest.raises(TypeError):
+        yes({"a": 1.0})
+    with pytest.raises(TypeError):
+        yes("0.4")
