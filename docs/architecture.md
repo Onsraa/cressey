@@ -64,6 +64,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends. 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
+| GET | `/api/eval` | — | 200 the reports in `backend/data/eval/`, each with `kind` (`guides` or `detection`), `split`, `file`, `date` and the report as written |
 | GET | `/api/status` | — | 200 `{"mode": "guard", "model_mode", "mcp_path", "log": {"hash", "count", "intact"}}` |
 | any | `/mcp` | MCP over streamable HTTP, `Authorization: Bearer <run key>` | the proxied tools |
 

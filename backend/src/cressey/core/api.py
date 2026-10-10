@@ -1,6 +1,8 @@
 """Runs and holds: register a run (Cressey issues its key), follow its steps, decide
 holds."""
 
+import json
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -8,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from cressey.core.eventlog import verify
 from cressey.core.incidents import Incidents
 from cressey.core.models import (
+    EvalFile,
     Hold,
     Incident,
     LogHead,
@@ -19,6 +22,7 @@ from cressey.core.models import (
 )
 from cressey.core.proxy import MCP_PATH
 from cressey.core.runs import Runs
+from cressey.guide.corpus import DATA
 
 router = APIRouter()
 
@@ -105,6 +109,27 @@ async def get_incident(incident_id: str, incidents: IncidentsDep) -> Incident:
     if incident is None:
         raise HTTPException(404)
     return incident
+
+
+@router.get("/eval")
+async def eval_reports() -> list[EvalFile]:
+    """The eval reports in data/eval, for the Évaluation view."""
+    files = []
+    for path in sorted((DATA / "eval").glob("report-*.json")):
+        report = json.loads(path.read_text())
+        detection = path.stem == "report-detection"
+        # The guide reports have no date field: their file's write time stands in.
+        written = datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
+        files.append(
+            EvalFile(
+                kind="detection" if detection else "guides",
+                split="dev" if detection else report["split"],
+                file=str(path.relative_to(DATA.parent)),
+                date=report.get("date", written),
+                report=report,
+            )
+        )
+    return files
 
 
 @router.get("/holds")

@@ -167,3 +167,13 @@ class Incident(BaseModel):
     sources: list[Source]
     legs: Legs
     guides: list[OwnerGuide]
+
+
+class EvalFile(BaseModel):
+    """A measured report, served as written, with where and when it was measured."""
+
+    kind: Literal["guides", "detection"]
+    split: str  # dev, or held-out
+    file: str
+    date: str
+    report: dict[str, JsonValue]
