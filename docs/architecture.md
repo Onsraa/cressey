@@ -17,6 +17,7 @@
 | Demo tools (synthetic): a workspace holding a fake production key and a trap key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
 | Demo agent: a scripted replay of synthetic sessions, played through Cressey | `backend/src/cressey/demo/agent.py`, `backend/data/sessions/` (format in `sessions.md`) | built |
 | Dashboard | `web/src/` | skeleton only |
+| PocketOS lab on real Railway (throwaway project): `status.sh` says whether prod survived a run, `reset.sh` recreates the volume if deleted and reseeds prod. Run in WSL with the operator's CLI login; tokens stay in `.env` | `lab/` | built |
 | Second way in: Claude Code hook. `POST /hook/claude` runs the same decision as `on_call_tool`; `http` hooks in the demo workspace's `.claude/settings.json` | `core/api.py`, `core/proxy.py` | decided 10-10, to build after the 21:30 go/no-go |
 
 ## Request flow (target)
