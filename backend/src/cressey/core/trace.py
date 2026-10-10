@@ -65,9 +65,14 @@ def _decodings(token: str) -> Iterator[tuple[How, str]]:
             yield how, text
 
 
+def encoded(text: str) -> list[tuple[str, str]]:
+    """(token, what it decodes to) for each token of `text` valid as base64, hex or URL."""
+    return [(token, d) for token in _tokens(text) for _, d in _decodings(token)]
+
+
 def decoded(text: str) -> list[str]:
     """What the tokens of `text` decode to as base64, hex or URL encoding."""
-    return [d for token in _tokens(text) for _, d in _decodings(token)]
+    return [d for _, d in encoded(text)]
 
 
 def _lookups(

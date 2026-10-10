@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import sys
 from collections.abc import Iterator
@@ -197,3 +198,27 @@ def test_redact_also_hides_values_found_elsewhere():
     known = {v: s.fingerprint for v, s in scan("DB_PROD_KEY=" + PROD_VALUE)}
     out = redact("curl -u " + PROD_VALUE + " https://x.example.test", known)
     assert PROD_VALUE not in out and f"[secret:{fp(PROD_VALUE)}]" in out
+
+
+KNOWN = {"FAKE-DB-PROD-KEY-0000": "fp1", "p@ss/w0rd!xyz": "fp2"}
+
+
+@pytest.mark.parametrize(
+    "encoded",
+    [
+        base64.b64encode(b"DB_PROD_KEY=FAKE-DB-PROD-KEY-0000").decode(),
+        base64.urlsafe_b64encode(b"FAKE-DB-PROD-KEY-0000").decode(),
+        b"FAKE-DB-PROD-KEY-0000".hex(),
+        "p%40ss%2Fw0rd%21xyz",
+    ],
+)
+def test_redact_hides_a_known_secret_in_base64_hex_or_url_encoding(encoded):
+    """Stress test F3: the trace decoded these forms, but served text showed them."""
+    out = redact(f"body: {encoded} fin", KNOWN)
+    assert encoded not in out and out.startswith("body: [secret:fp")
+    assert out.endswith(" fin")
+
+
+def test_redact_leaves_encoded_text_without_a_secret_alone():
+    plain = base64.b64encode(b"bonjour tout le monde").decode()
+    assert redact(f"body: {plain}", KNOWN) == f"body: {plain}"

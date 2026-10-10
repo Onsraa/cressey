@@ -14,6 +14,8 @@ from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
 from pydantic import BaseModel
 
+from cressey.core.trace import encoded
+
 MIN_VALUE = 8
 _NAMED = "Named secret"
 
@@ -110,4 +112,11 @@ def redact(text: str, known: Mapping[str, str] | None = None) -> str:
     # cuts a longer one short.
     longest_first = sorted(markers, key=len, reverse=True)
     pattern = re.compile("|".join(map(re.escape, longest_first)))
-    return pattern.sub(lambda match: markers[match[0]], text)
+    out = pattern.sub(lambda match: markers[match[0]], text)
+    # Encoded forms too (stress test F3): a token whose base64, hex or URL decoding holds one.
+    # A decoding equal to its token decoded nothing (URL text without %): already handled.
+    for token, plain in encoded(out):
+        value = plain != token and next((v for v in longest_first if v in plain), None)
+        if value:
+            out = out.replace(token, markers[value])
+    return out

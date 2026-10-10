@@ -127,6 +127,7 @@ Adversarial pass over the running tool: variants of the shipped incidents fired 
 - **Finding F2 (medium):** `INSERT OR REPLACE` / `REPLACE INTO` pass as `write` though they overwrite rows on key conflict; `ALTER … RENAME` passes though it makes the table inaccessible under its name. `REPLACE INTO`-as-write is a documented decision (10-10); the others are the same class and undocumented.
 - The floor is otherwise robust: comment-in-keyword, case/whitespace, stacked statements, CTEs and unparseable SQL all fail closed to `destructive`.
 - **F1 and F2 fixed on 10-10** (`decisions.md`): every UPDATE, MERGE, overwriting insert and rename is now destructive. The battery holds 28/28 attack cases; the 29th, an email inside the mandate, goes through as it should. End to end, the `WHERE 1=1` UPDATE is held, with 0 rows changed.
+- **F3 fixed on 10-10:** redaction now also replaces a token whose base64, hex or URL decoding holds a known secret, so the served arguments and the report no longer show the encoded key. The reversed and split forms still show; the trace doesn't recognise them either. What leaves through the tool (the outbox) is the tool's business: the floor holds what goes outside the mandate.
 
 ### Exfiltration of the fake key
 The floor's egress rule is recipient-based; it never inspects content. So the findings are about redaction and tracing of a key the run already read.
