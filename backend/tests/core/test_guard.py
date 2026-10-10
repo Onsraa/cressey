@@ -310,3 +310,18 @@ async def test_a_protected_path_is_held_on_read_before_the_tool_runs(served):
     assert r.is_error and "FAKE-DB-PROD-KEY" not in r.content[0].text
     [step] = await steps(served, run)
     assert (step["status"], step["secrets"]) == ("rejected", [])
+
+
+async def test_the_fleet_signal_is_served(served):
+    for _ in range(3):
+        run = await new_run(served)
+        async with agent(served, run["key"]) as a:
+            call = asyncio.create_task(
+                a.call_tool("run_sql", DELETE, raise_on_error=False)
+            )
+            n = (await next_hold(served))["step"]["n"]
+            await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+            await call
+    [signal] = (await api(served, "GET", "/api/fleet")).json()
+    assert signal["target"] == "run_sql | SQL destructeur hors mandat : users"
+    assert len(signal["runs"]) == 3

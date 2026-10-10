@@ -189,3 +189,57 @@ async def test_a_leg_left_unconfirmed_gets_no_fix():
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
     incident = Incidents(runs, guide).open(run, call, "critique")
     assert [f.leg for f in incident.fixes] == ["opportunity"]
+
+
+def held_by_floor(
+    runs: Runs, reason: str = "SQL destructeur hors mandat : users"
+) -> tuple[Run, Step]:
+    """A new run whose DELETE the floor held."""
+    run, call = demo_run(runs, Legs(pressure=OFF, opportunity=OFF, rationalization=OFF))
+    call.reason = reason
+    return run, call
+
+
+async def test_runs_going_after_the_same_target_raise_a_fleet_signal():
+    """Hugging Face / METR: hundreds of agents hit the same target; one run looks normal."""
+    from cressey.core.models import Fleet
+
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide, fleet=Fleet(runs=3, window_minutes=15))
+    first, second, third = (
+        incidents.open(*held_by_floor(runs), "critique") for _ in range(3)
+    )
+    [signal] = incidents.fleet()
+    assert signal.target == "run_sql | SQL destructeur hors mandat : users"
+    assert signal.runs == [first.run_id, second.run_id, third.run_id]
+    assert [e.kind for e in runs.log.events].count("fleet_signal") == 1
+
+
+async def test_one_run_held_again_and_again_is_not_a_fleet():
+    from cressey.core.models import Fleet
+
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide, fleet=Fleet(runs=3, window_minutes=15))
+    run, call = held_by_floor(runs)
+    for _ in range(3):
+        incidents.open(run, call, "critique")
+    incidents.open(
+        *held_by_floor(runs, "envoi hors mandat : x@prestataire.example"), "critique"
+    )
+    assert incidents.fleet() == []
+
+
+async def test_holds_older_than_the_window_dont_count():
+    from datetime import UTC, datetime, timedelta
+
+    from cressey.core.models import Fleet
+
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide, fleet=Fleet(runs=2, window_minutes=15))
+    incidents.clock = lambda: datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
+    incidents.open(*held_by_floor(runs), "critique")
+    incidents.clock = lambda: (
+        datetime(2026, 10, 10, 12, 0, tzinfo=UTC) + timedelta(minutes=16)
+    )
+    incidents.open(*held_by_floor(runs), "critique")
+    assert incidents.fleet() == []

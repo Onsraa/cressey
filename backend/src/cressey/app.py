@@ -38,12 +38,13 @@ def create_app(
         return create_app(s.model_copy(update={"demo_dir": folder}), make_guide, given)
 
     given = judge
+    policy = load_policy(DATA / "policy.yaml")
     incidents = Incidents(
         runs,
         make_guide,
         lambda fixes, task: replay(fresh, fixes, task, load_sessions()),
+        policy.fleet,
     )
-    policy = load_policy(DATA / "policy.yaml")
     judge = judge or JevJudge.from_settings(s)
     guard = Guard(runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds)
     mcp = build_mcp(guard, demo_tools(demo))

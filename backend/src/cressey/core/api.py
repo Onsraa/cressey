@@ -11,6 +11,7 @@ from cressey.core.eventlog import verify
 from cressey.core.incidents import Incidents
 from cressey.core.models import (
     EvalFile,
+    FleetSignal,
     Hold,
     Incident,
     LogHead,
@@ -120,6 +121,12 @@ async def get_incident(incident_id: str, incidents: IncidentsDep) -> Incident:
     if incident is None:
         raise HTTPException(404)
     return incident
+
+
+@router.get("/fleet")
+async def fleet(incidents: IncidentsDep) -> list[FleetSignal]:
+    """Runs held for the same target outside their mandate: a signal across runs."""
+    return incidents.fleet()
 
 
 @router.post("/incidents/{incident_id}/fixes/{leg}/approve", status_code=204)

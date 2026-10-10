@@ -75,6 +75,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends, and the report is checked against the log (`report_check` on the run). 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
+| GET | `/api/fleet` | — | 200 the signals across runs, latest first: `target` (the tool and the floor's reason), `runs`, `first_at`, `last_at` |
 | POST | `/api/incidents/{id}/fixes/{leg}/approve` | — | 204, or 404 when that leg has no fix |
 | POST | `/api/incidents/{id}/replay` | — | 200 `Replay`, also kept on the incident; 404. Takes a few seconds: each session runs on its own Cressey |
 | GET | `/api/eval` | — | 200 the reports in `backend/data/eval/`, each with `kind` (`guides` or `detection`), `split`, `file`, `date` and the report as written |
@@ -121,6 +122,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
     - opportunity (key owner): the secret leaves the agent's workspace, from the files it was read in, and the agent gets a key limited to its task;
     - pressure (task author): the way out is written into the task (`TASK_WAY_OUT`);
     - rationalization and the SOC get none: their guide is the fix.
+  - **Signal across runs** (Hugging Face / METR): every floor hold counts for its target, meaning the tool and the floor's reason. When 3 distinct runs are held for the same target within 15 minutes (`fleet` in `policy.yaml`), a signal opens: an event in the log, and `GET /api/fleet`. One run looks normal; hundreds going after the same target don't.
   - **« Rejouer ×5 »** (`demo/replay.py`): the incident's session (the shipped incident session with the same task) and its variants (`variant_of`), then every normal session, each on a fresh Cressey as a `replay`, with the approved fixes applied.
     - A variant passes when the agent stops on its own, because a call it needs fails (`stop_if_error`). A normal session passes when it finishes. Any call Cressey refuses or would hold fails the replay.
     - Before a fix, the 5 variants are refused. With the key moved out, each stops at its key read and the 5 normal sessions finish.

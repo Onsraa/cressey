@@ -5,10 +5,20 @@ import asyncio
 import logging
 import uuid
 from collections.abc import Callable, Coroutine
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from cressey.core.models import Fix, Incident, OwnerGuide, Replay, Run, Source, Step
+from cressey.core.models import (
+    Fix,
+    Fleet,
+    FleetSignal,
+    Incident,
+    OwnerGuide,
+    Replay,
+    Run,
+    Source,
+    Step,
+)
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact
 from cressey.core.trace import strings, trace
@@ -156,8 +166,15 @@ class Incidents:
         runs: Runs,
         make_guide: Callable[[GuideIncident], Guide],
         replayer: Replayer | None = None,
+        fleet: Fleet | None = None,
     ) -> None:
         self.runs, self.make_guide, self.replayer = runs, make_guide, replayer
+        self.fleet_rule = fleet or Fleet()
+        self.clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+        self._targets: dict[
+            str, list[tuple[datetime, str]]
+        ] = {}  # target -> (when, run)
+        self._signals: dict[str, FleetSignal] = {}
         self._incidents: dict[str, Incident] = {}
         self._tasks: set[asyncio.Task[None]] = (
             set()
@@ -173,7 +190,7 @@ class Incidents:
             step=step.n,
             severity=severity,
             reason=step.reason,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=self.clock().isoformat(),
             decision=step.status,
             sources=sources(run, step),
             legs=step.legs,
@@ -185,6 +202,8 @@ class Incidents:
         ]
         incident.fixes = _fixes(incident, run)
         self._incidents[incident.id] = incident
+        if severity == "critique":
+            self._count(run, step)
         self.runs.log.append(
             "incident",
             {"run": run.id, "n": step.n, "incident": incident.id, "severity": severity},
@@ -210,6 +229,31 @@ class Incidents:
         return incident.model_copy(
             update={"decision": run.steps[incident.step - 1].status}
         )
+
+    def _count(self, run: Run, step: Step) -> None:
+        """Hugging Face / METR: each run alone looks like one hold; many runs held for the same
+        target outside their mandate, within a window, are the alarm (« peers doing it »)."""
+        now, rule = self.clock(), self.fleet_rule
+        target = f"{step.tool} | {step.reason}"
+        window = timedelta(minutes=rule.window_minutes)
+        seen = [(t, r) for t, r in self._targets.get(target, []) if now - t <= window]
+        seen.append((now, run.id))
+        self._targets[target] = seen
+        ids = list(dict.fromkeys(r for _, r in seen))
+        if len(ids) < rule.runs:
+            return
+        if target not in self._signals:
+            self.runs.log.append("fleet_signal", {"target": target, "runs": len(ids)})
+        self._signals[target] = FleetSignal(
+            target=target,
+            runs=ids,
+            first_at=seen[0][0].isoformat(),
+            last_at=now.isoformat(),
+        )
+
+    def fleet(self) -> list[FleetSignal]:
+        """The signals across runs, the latest first."""
+        return sorted(self._signals.values(), key=lambda s: s.last_at, reverse=True)
 
     def approve(self, incident_id: str, leg: LegName) -> bool:
         """A human approves the fix proposed for this leg."""

@@ -35,9 +35,25 @@ class Thresholds(BaseModel):
     deadline_words: list[str] = []
 
 
+class Fleet(BaseModel):
+    """When runs held for the same target outside their mandate become a signal across runs
+    (policy.yaml, `fleet`)."""
+
+    runs: int = 3  # distinct runs held for that target
+    window_minutes: int = 15
+
+
+class FleetSignal(BaseModel):
+    target: str  # the tool and the floor's reason: « run_sql | SQL destructeur hors mandat : users »
+    runs: list[str]  # the runs held for it within the window, oldest first
+    first_at: str
+    last_at: str
+
+
 class Policy(BaseModel):
     tools: dict[str, ToolRule]
     triangle: Thresholds = Field(default_factory=Thresholds)
+    fleet: Fleet = Field(default_factory=Fleet)
     decoys: dict[str, str] = {}  # trap key name -> value: any call carrying one is held
 
 

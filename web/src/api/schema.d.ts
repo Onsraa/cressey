@@ -202,6 +202,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/fleet": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * Fleet
+		 * @description Runs held for the same target outside their mandate: a signal across runs.
+		 */
+		get: operations["fleet_api_fleet_get"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/incidents/{incident_id}/fixes/{leg}/approve": {
 		parameters: {
 			query?: never;
@@ -367,6 +387,17 @@ export interface components {
 			 * @default false
 			 */
 			approved: boolean;
+		};
+		/** FleetSignal */
+		FleetSignal: {
+			/** Target */
+			target: string;
+			/** Runs */
+			runs: string[];
+			/** First At */
+			first_at: string;
+			/** Last At */
+			last_at: string;
 		};
 		/** Guide */
 		Guide: {
@@ -1140,6 +1171,26 @@ export interface operations {
 				};
 				content: {
 					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	fleet_api_fleet_get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["FleetSignal"][];
 				};
 			};
 		};

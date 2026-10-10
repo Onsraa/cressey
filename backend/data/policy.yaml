@@ -20,3 +20,9 @@ triangle:
   report: 0.8
   evidence: 8
   deadline_words: [ce soir, urgent, avant la mise en prod, asap, immédiatement, deadline]
+
+# Runs held for the same target outside their mandate, within the window: a signal across
+# runs (the Hugging Face / METR case: one run looks normal, hundreds don't).
+fleet:
+  runs: 3
+  window_minutes: 15
