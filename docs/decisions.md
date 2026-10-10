@@ -32,6 +32,11 @@
 | 10-10 | **Guide summaries are one root-cause sentence per leg**, built by code | With raw fact lists the task author got « je ne sais pas »; with the sentence all three guides came back sourced |
 | 10-10 | **« Rejouer ×5 » plays five attack variants**: DELETE, DROP TABLE, UPDATE without WHERE, the key emailed in clear, then base64-encoded | The agent is scripted, so five identical replays would prove nothing. Five variants show the detection holds against variations |
 | 10-10 | **The detection eval plays each session on a fresh Cressey, as a replay** | No session sees another's changes, and nothing waits for a human |
+| 10-10 | **No pivot; re-center the pitch:** « Lasso, Zenity et AgentCore jugent l'action. Cressey traite les conditions qui la produisent. » Drift stays a label, not a selling point | The 14:00 review (`positioning-and-risks.md`): every detection piece exists elsewhere, and drift is Lasso's headline. What's ours: the agent's state (pressure), fixes routed to each leg's owner, fixes to the task itself |
+| 10-10 | **Strands Decider 2B replaces Jev** as the decision model, for both the triangle's label and the guides' re-ranking (`StrandsAgents/strands-decider-2B-qwen3.5-v1-2610`, Apache 2.0, served locally) | Runs on our machines: no data leaves, no per-call fee, works offline on stage. From AWS Strands Labs, which fits the AWS partnership. Its server speaks `/v1/systemone`, like Jev. Cost: the 0.4 and 0.5 thresholds must be set again (its yes/no answer isn't a probability), the eval re-run, the cache re-recorded |
+| 10-10 | **Focus for the remaining hours:** the ablation; acting on pressure (way out plus a shorter leash, without a human); trap keys; a scenario only the triangle catches; measuring the decision model | Each one answers a risk in `positioning-and-risks.md`. Order and estimates are in `runsheet.md` |
+| 10-10 | **Removed from the pitch:** « personne ne combine… », « notre couche est sous les pare-feux de prompt », « aucun changement dans l'agent » for the key broker, and « 5/5 » as proof of a fix | False (Lasso works at the same layer), or unproven: a scripted replay passes by construction |
+| 10-10 | **« Rejouer ×5 » is presented as « test de régression de la politique »** | The five variants test how much the floor covers, not how a real agent behaves |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
@@ -39,6 +44,9 @@
 - Held-out evaluation set: needs someone outside the team.
 - `GITGUARDIAN_API_KEY` repo secret: needed for the secret scan in CI.
 - Bedrock switch: test `text_format` through Bedrock, choose the embedding model (Cohere Embed Multilingual v3 is the candidate), re-record the cache, re-run the eval. Then the AWS deploy.
-- Whether the run summary improves Jev's scores over the action alone: measure on the labelled set.
+- Whether the run summary improves the decision model's scores over the action alone: measure on the labelled set.
+- **Live model in the loop** for the measurements (gpt-5.4-mini driving `demo/tools.py` through the proxy, 10 runs without Cressey and 10 with it; the scripted replay stays for the stage). Proposed on 10-10, not decided.
+- Strands Decider: check whether `typesafe-sdk` can talk to `strands-decider serve` through its base URL, or whether we need our own small client. Its server's `choice` and `score` answers aren't documented.
+- Strands Decider on AWS: no managed service. It runs wherever the package runs (EC2 with a GPU, or a Mac with MLX for the stage).
 - The API, approval included, has no authentication: localhost demo only.
 - Incidents aren't merged by root cause yet: two holds for the same cause give two incidents.

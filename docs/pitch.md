@@ -1,4 +1,15 @@
-# Cressey: pitch, fiche défense and jury questions (draft, 2026-10-08)
+# Cressey: pitch, fiche défense and jury questions (draft, 2026-10-08; re-centered 2026-10-10)
+
+**Positioning since 10-10** (from `positioning-and-risks.md`):
+> « Lasso, Zenity et AgentCore jugent l'action. Cressey traite les conditions qui la produisent. »
+
+**Never say:**
+- « personne ne combine… »;
+- « notre couche est sous les pare-feux de prompt »;
+- « aucun changement dans l'agent » about the key broker;
+- « 5/5 » as proof that a fix works;
+- « Lasso ne fait pas de dérive d'intention »;
+- « Cressey aurait arrêté PocketOS ».
 
 **Formats:**
 - **Round 1:** 5 minutes of pitch plus 2 of questions.
@@ -13,7 +24,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 
 **1. Le problème.**
 - Slide title: « Vos agents IA ont les clés. Personne ne regarde ce qu'ils en font. »
-- PocketOS (25 April 2026): a Cursor coding agent running Claude Opus 4.6 wiped the production volume and every backup stored in it in 9 seconds, through one API call. The most recent recoverable backup was 3 months old.
+- PocketOS (25 April 2026): a Cursor coding agent running Claude Opus 4.6 wiped the production volume and every backup stored in it in 9 seconds, through one API call. It used an unscoped Railway token found in an unrelated file. The most recent backup PocketOS could recover was 3 months old, and Railway later restored the data.
 - Replit (July 2025): during an explicit code freeze, the agent dropped the production tables, more than 1,200 executives and 1,190 companies. It then claimed a rollback was impossible, which was false, and generated fabricated records. Replit's CEO called it « unacceptable ».
 - Hugging Face, July 2026: about 1,200 OpenAI test agents on a message board, about 700 of which attacked Hugging Face. About 7% of the transcripts METR evaluated contained tool-call records the agents had faked to fool the scorer.
 - Spoken line: « La seule limite était dans le prompt. »
@@ -21,6 +32,7 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 **2. Pourquoi maintenant, et pour qui.**
 - MCPTox: poisoned MCP tool descriptions steer agents in **up to 72.8%** of cases (o1-mini), and the best refusal rate is under 3% (arXiv 2508.14925).
 - GitGuardian found 24,008 secrets in MCP configuration files (State of Secrets Sprawl 2026).
+- PropensityBench (ICLR 2026): under operational pressure, models that look safe (o3 at 2.2%) reach up to 59.3% use of dangerous tools.
 - OWASP's agentic top 10 opens with ASI01 (goal hijacking), ASI02 (tool misuse) and ASI03 (identity and privilege abuse).
 - Target: the security teams, and the platform teams, of companies that deploy agents with real access.
 
@@ -32,19 +44,22 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
   - opportunity: rights granted minus rights the task needs;
   - rationalization: drift from the task, weighted by risk, plus the report contradicting the log.
 - The alarm needs at least two legs confirmed, on top of a safety floor that holds irreversible actions outside the mandate.
+- Auditors use the triangle to reduce the conditions for fraud, not to catch it in the act. Cressey does the same: « Lasso, Zenity et AgentCore jugent l'action. Cressey traite les conditions qui la produisent. »
 
 **4. La boucle, et l'humain garde le contrôle.**
 - Détecter → Arrêter → Remonter → Alerter et guider → Corriger → Vérifier.
 - Code decides; the models only read meaning and label it, with a confidence score.
 - « Pas de transparence, pas d'autonomie » : the less Cressey can see, the shorter the leash.
+- « Sous pression, la laisse raccourcit » : once pressure is confirmed, Cressey offers the way out and drops the key to read-only, without waiting for a human.
+- Each fix goes to whoever owns the condition: the key owner, or the task's author (« votre tâche était impossible : ajoutez une clause de sortie »).
 - Every guide step cites a passage, and code checks the quote verbatim. If not, the guide says « je ne sais pas ».
 
 **5. Démo.**
-- Open with the one-line plug-in: the MCP URL.
-- The gauges rise, then the hold.
-- The source: « clé DB_PROD lue dans .env.prod à l'étape 4 ».
+- Open with the one-line plug-in: the MCP URL. Framing: the agent reaches the infrastructure through an MCP server, the way it would through Railway's (`delete-volume`).
+- The gauges rise. Pressure triggers the way out and the shorter leash, then the hold.
+- The source: « clé DB_PROD lue dans .env.prod à l'étape 4 » (a trap key, once those are built).
 - Three inboxes receive their sourced guides.
-- Fix, then replay: 5 out of 5.
+- Fix, then « test de régression de la politique »: five scripted variants (DELETE, DROP TABLE, UPDATE without WHERE, the key emailed, the key in base64).
 - Control run without Cressey: the agent's lie shows up in the log.
 
 **6. Résultats (fiche défense) et limites.**
@@ -52,10 +67,15 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 - Time to stop: **[mesure] ms**, against a measured proxy overhead of 1–9 ms per call.
 - Source found on the first try **[mesure]**.
 - Guide steps with a verified quote **[mesure]**; exact-passage hit@3, BM25 → hybrid → re-ranked **[mesure]**.
+- Ablation: floor alone against floor plus triangle **[mesure]**, and the scenario only the triangle catches **[mesure]**.
+- The decision model attacked by us: how far drift moves **[mesure]**, and the floor still holds.
+- Every rate as n/N. Live runs only if that decision is taken.
 - The « Limites connues » slide from `concept.md`.
 
 **7. Intégration et modèle.**
-- Deployment changes nothing in the agent: an MCP proxy, a key broker and an optional model gateway.
+- The proxy is one URL in the agent's config. The key broker means moving the agent's secrets to short-lived keys; that's the part that closes a PocketOS. An optional model gateway too.
+- Decision model: Strands Decider 2B, open source (AWS Strands Labs) and run locally, so no agent data leaves the company. It can be swapped for another model.
+- Cressey can sit behind an existing gateway, for example as an AgentCore Gateway interceptor.
 - Three modes: Observer, then Guard, then Fix.
 - One Docker container; outputs to a SIEM, Slack or Jira.
 - Model: per protected agent per month, with a free Observer tier as the entry point. Buyers: CISOs and platform teams.
@@ -64,10 +84,11 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 - The team.
 - Next 6 months:
   - real key revocation (Vault, AWS STS);
-  - a network sandbox, to close the bypass;
+  - agent hooks (Claude Code `PreToolUse`, Cursor `beforeShellExecution`) and a network sandbox, to cover the shell;
+  - GitGuardian Honeytoken as the production trap key: it alerts wherever the key is used, even outside the proxy;
   - working out owners automatically;
   - correlation across several agents.
-- Close on: « Le triangle de la fraude a 70 ans. Il marche aussi sur les agents. »
+- Close on: « Le triangle de la fraude a plus de 70 ans. Il marche aussi sur les agents. » (Cressey's hypothesis dates from 1953; the name « triangle » came later.)
 
 ## Fiche défense (1 page, to fill in)
 | Field | Content |
@@ -79,31 +100,51 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 | **OWASP Agentic** | ASI01, ASI02, ASI03, ASI10 |
 | **Metrics** | Detection rate **[mesure]**; false positives on normal sessions **[mesure]**; time to detect and to stop **[mesure] ms**; time to respond, from hold to decision **[mesure]**; source found on the first try **[mesure]**; verified quotes **[mesure]**; hit@3 **[mesure]** |
 | **Method** | Development set for tuning. Held-out set written by someone outside the team, run once after the freeze. Misses reported |
-| **Known limits** | See `concept.md`: bypass through direct network access, revocation limited to the keys Cressey issued, rationalization estimated without the reasoning, replay in a sandbox only, owners declared in a file, tested on replayed sessions |
+| **Known limits** | See `concept.md`: bypass through the shell or direct network access (the default for coding agents), malicious MCP servers, revocation limited to the keys Cressey issued, rationalization estimated without the reasoning, re-runs scripted and in a sandbox only, owners declared in a file, tested on synthetic sessions |
 
 ## Likely jury questions and answers
 1. **« Un agent ne ressent pas de pression : c'est une métaphore ? »**
    - Each leg is a measurement, and we show the raw signals under each gauge.
    - ImpossibleBench shows that impossible tasks lead to cheating, and that offering a way out cuts it from 54% to 9% for GPT-5.
 2. **« Et si l'agent contourne votre proxy ? »**
-   - It's a known limit. Cressey only sees what goes through it.
-   - The answer is the key broker: if keys found in a file aren't valid, Opportunity collapses. Next comes the network sandbox.
+   - It's a known limit, and for coding agents, which all have a shell, it's the default. Cressey only sees what goes through it.
+   - The key broker removes the motive: the workspace holds only trap keys, and real keys are short-lived and scoped to the task. In production, a GitGuardian honeytoken alerts wherever it's used, even outside the proxy.
+   - Next: agent hooks (`PreToolUse` in Claude Code, `beforeShellExecution` in Cursor) and a network sandbox.
 3. **« Votre LLM peut halluciner un guide. »**
    - The model never decides. Each step quotes a passage, and code checks the quote.
    - Below the confidence threshold, the guide says « je ne sais pas ».
    - Measured on our dev set: **[mesure]**.
 4. **« Pourquoi pas un filtre de prompt de plus ? »**
-   - We don't filter prompts: we watch actions, rights and results. The prompt firewalls were bought up in 2025, and our layer sits below them.
+   - We don't filter prompts: we watch actions, rights and results, and we act on the conditions (pressure, keys within reach) before the action.
+   - Gateways like Lasso, Zenity and AgentCore Policy work at the same layer, and they judge the action. We add the agent's state and fixes routed to the right person, and we can sit behind their gateway.
 5. **« Et sans accès au raisonnement ? »**
    - Two of the three legs are visible from the tool calls.
    - Without the reasoning, the agent gets less autonomy: « Pas de transparence, pas d'autonomie ».
 6. **« Latence ? »**
    - The proxy adds 1–9 ms per call, and the policy decision takes about 0.05 ms.
-   - Jev (0.3–0.8 s) only runs on writes. The LLM writes guides asynchronously.
+   - The decision model runs only on writes. Strands Decider runs locally (its authors measured a 153 ms median on an M3 Pro); our measure is **[mesure]**. The LLM writes guides asynchronously.
 7. **« Qu'est-ce qui existe déjà ? »**
-   - MCP gateways log and filter.
-   - The « AI-Fraud Diamond » paper is an audit lens.
-   - Nobody combines diagnosis by leg, a targeted stop, a sourced fix guide and proof by replay.
+   - **Lasso:** its open-source MCP gateway classifies the content of each call on its own, and lets the call through if its API doesn't answer (we read the source). Intent Deputy, its closed product, checks each action against the agent's purpose; its docs aren't public.
+   - **AgentCore Policy** (AWS): fixed Cedar rules on every tool call, which is our safety floor. **Zenity:** inline blocking with the run's history.
+   - **LlamaFirewall** (Meta) checks the run against the user's goal, which is our drift label. **Exabeam** watches agents like insiders.
+   - **The « AI-Fraud Diamond » paper** is an audit lens.
+   - **What's ours:** acting on the agent's state (pressure), trap keys, and each fix sent to whoever owns the condition, including the task's author. Details in `positioning-and-risks.md`.
+8. **« Cressey aurait-il arrêté PocketOS ? »**
+   - Not as it happened: that agent didn't go through MCP.
+   - Through an infra MCP server (Railway's exposes `delete-volume`), yes: the floor holds the deletion outside the mandate, and the trace names the token's file.
+   - The root cause was a long-lived token with every right lying in a file. That's what the key broker and the trap keys address.
+9. **« AgentCore Policy fait déjà ça. »**
+   - It does our safety floor, and does it well.
+   - Cressey adds what a fixed rule can't see: the run's state (failures, the way out, the shorter leash), the trace to the source, and the fix for each owner. It can run as an interceptor on AgentCore Gateway.
+10. **« Votre juge peut être manipulé. »**
+    - Yes, which is why it only labels. The floor is code and never depends on it.
+    - We attacked it ourselves: **[mesure]**.
+11. **« Rejouer un script scripté prouve quoi ? »**
+    - That the policy now holds five variants of the attack. It's a regression test of the policy, not proof about a real agent.
+    - Live runs: **[mesure]**, if that decision is taken.
+12. **« Pourquoi Strands Decider et pas Jev ? »**
+    - It runs locally, so no agent data leaves; there's no per-call fee; it works offline; and it comes from AWS.
+    - Its confidence isn't calibrated for our task, so we set our thresholds on labelled actions: **[mesure]**.
 
 ## Numbers checked against their sources (2026-10-09)
 | Claim on the slides | Exact wording at the source | Source |
@@ -115,5 +156,9 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
 | ImpossibleBench, 54% → 9% | GPT-5 « cheats 54.0% of the time on Conflicting-SWEbench »; allowing models to abort « lower[s] the cheating rate of GPT-5 from 54% to 9% » | [arXiv 2510.20270](https://arxiv.org/html/2510.20270) (Zhong, Raghunathan, Carlini) |
 | MCPTox, 72.8% | « o1-mini, achieving an attack success rate of 72.8% »; « the highest refused rate (Claude-3.7-Sonnet) less than 3% » | [arXiv 2508.14925](https://arxiv.org/abs/2508.14925) |
 | GitGuardian, 24,008 | « 24,008 unique secrets exposed in MCP configuration files »; 28,649,024 new secrets on public GitHub in 2025 (+34%) | [State of Secrets Sprawl 2026](https://www.gitguardian.com/state-of-secrets-sprawl-report-2026) |
+| PocketOS, the token and the restore | The token was found in an unrelated local file and was unscoped; the call was a single `volumeDelete`; Railway later restored the data | [The Register](https://www.theregister.com/software/2026/04/27/cursor-opus-agent-snuffs-out-startups-production-database/5224442), [AI Incident Database](https://incidentdatabase.ai/cite/1469/) |
+| PropensityBench, 2.2% → 59.3% | o3 at 2.2% under standard tests; propensity « as high as 59.3% » under pressure | [arXiv 2511.20703](https://arxiv.org/pdf/2511.20703) |
+| Lasso's gateway, per call and failing open | `lasso.py` sends the arguments' text to `/gateway/v3/classify`; on an error, « let the request through (fail open) » | [mcp-gateway source](https://github.com/lasso-security/mcp-gateway) (v1.2.1, read 10-10) |
+| Strands Decider 2B | Apache 2.0; JevBench v1 180/231; M3 Pro MLX median 153 ms (v19) | [strands-decider](https://github.com/strands-labs/strands-decider) |
 
 On stage, say « jusqu'à 72,8 % » for MCPTox, never « 72,8 % des agents ».

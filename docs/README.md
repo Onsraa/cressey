@@ -6,7 +6,8 @@
 | `architecture.md` | Components and their status, request flow, settings, API, web, run commands, CI, deployment |
 | `guide-pipeline.md` | How a guide is built: steps, thresholds, « je ne sais pas » cases, corpus, model cache |
 | `dashboard.md` | The web interface: users, every feature by view, stretch goals, rules, the data each feature reads |
-| `evaluation.md` | Method and current dev results |
+| `positioning-and-risks.md` | The 10-10 review: positioning, prior art (Lasso checked against its source), which incidents fit, risks ranked, where to focus |
+| `evaluation.md` | Method, current results, and what still has to be measured |
 | `decisions.md` | Decisions with dates and reasons; open items |
 | `pitch.md` | 8-slide outline, fiche défense draft, jury questions, every number checked against its source |
 | `sessions.md` | The synthetic sessions the demo agent plays: format, demo tools, how to play one |

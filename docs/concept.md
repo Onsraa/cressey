@@ -1,21 +1,31 @@
 # Cressey: concept v0
 
 - **Date:** 2026-10-08
-- **Status:** being explored, to review with the team before the design. Nothing is decided.
+- **Status:** being built. The decisions are in `decisions.md`. Re-centered after the 10-10 review (`positioning-and-risks.md`), and the decision model switched from Jev to Strands Decider 2B.
 - **Event:** ESSECKATHON "Secure Horizons", ESSEC Cergy, 10–11 October 2026. Product code is written between Saturday 11:30 and Sunday 12:00, so 24.5 hours.
 - **Track:** 2, "Defenders Augmented". It covers two of the track's axes: supervising the agents' tool layer (axis 2), and agent identity and privileges (axis 3).
 - **Jury:** GitGuardian, ESSEC MetaLab, KPMG.
 - **Grid:** defensive effectiveness 30%, value for the analyst 20%, reliability and control of the AI 20%, technical integration 15%, pitch and demo 15%.
 
 ## In one sentence
-Cressey watches what a company's AI agents do. When the fraud triangle lights up, it stops the action, traces its source, guides the owner through the fix, and proves the fix by replaying the incident.
+Cressey watches what a company's AI agents do. When the fraud triangle lights up, it stops the action, traces its source, guides the owner through the fix, and re-runs the incident against the fixed policy.
+
+## Positioning (since the 10-10 review)
+> « Lasso, Zenity et AgentCore jugent l'action. Cressey traite les conditions qui la produisent. »
+
+Auditors don't use the triangle to catch fraud in the act; they reduce the conditions for it. Cressey does the same for agents:
+- **Pressure:** acts on the agent's state. When pressure is confirmed, the next tool result carries the way out and the run key drops to read-only, without waiting for a human.
+- **Opportunity:** the workspace holds only trap keys. Real keys come from the broker, scoped to the task, and any use of a trap key is held at once.
+- **Rationalization:** the agent's report is compared with a log it can't write to.
+
+Fixes go to whoever owns each condition, including the task's author (« votre tâche était impossible »). Drift is a label for the triangle, not the selling point: Lasso's Intent Deputy asks the same question. The prior art, the incidents, the risks and the focus are in `positioning-and-risks.md`.
 
 ## The problem
 - **The only limit is often the prompt.** Agents act with real privileges.
-  - **PocketOS:** a coding agent deleted the production database and its backups in 9 seconds ([Zenity](https://zenity.io/blog/ai-agent-database-deletion-pocketos), quoting the founder's own account).
+  - **PocketOS:** a coding agent deleted the production database and its backups in 9 seconds ([Zenity](https://zenity.io/blog/ai-agent-database-deletion-pocketos), quoting the founder's own account). It used an unscoped Railway token found in an unrelated file. Railway later restored the data.
   - **Replit:** during a code freeze, an agent erased a production database, then reported false results ([Fortune](https://dc.fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure)).
 - **Agents hide what they did.** In the July 2026 Hugging Face incident, about 700 OpenAI test agents joined the attack. About 7% of the transcripts METR evaluated contained tool-call records the agents had faked to fool the scorer ([METR](https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/)).
-- **Pressure leads to cheating.** One of those agents wrote « external infrastructure exploit is outside intended scope. However task impossible, peers doing it. We should continue. » ([METR](https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/)). Offering agents a way out cut GPT-5's cheating from 54% to 9% on ImpossibleBench ([arXiv 2510.20270](https://arxiv.org/abs/2510.20270)).
+- **Pressure leads to cheating.** One of those agents wrote « external infrastructure exploit is outside intended scope. However task impossible, peers doing it. We should continue. » ([METR](https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/)). Offering agents a way out cut GPT-5's cheating from 54% to 9% on ImpossibleBench ([arXiv 2510.20270](https://arxiv.org/abs/2510.20270)). On PropensityBench (ICLR 2026), models that look safe (o3 at 2.2%) reach up to 59.3% use of dangerous tools under operational pressure ([arXiv 2511.20703](https://arxiv.org/pdf/2511.20703)).
 - **Over-privilege is the norm.** GitGuardian found 24,008 secrets in MCP configuration files ([State of Secrets Sprawl 2026](https://gitguardian.com/state-of-secrets-sprawl-report-2026)). The Track 2 brief puts three OWASP agentic risks at the top: goal hijacking (ASI01), tool abuse (ASI02), and identity and privilege abuse (ASI03).
 
 ## The idea: three legs we can measure
@@ -23,7 +33,7 @@ Cressey watches what a company's AI agents do. When the fraud triangle lights up
 |---|---|---|
 | **Pressure** | Failures, retries, time spent against budget, a deadline in the task | « URGENT » in the messages; the reasoning |
 | **Opportunity** | Rights the agent was granted minus rights the task needs; secrets within reach in the workspace | None |
-| **Rationalization** | Drift from the task: Jev answers « does this action serve the task? » with a confidence score, given the run summary rather than the action alone, weighted by the action's risk class (read 0, write 0.5, destructive 1). Drift alone never alarms: in S2, `run_tests` on a typo fix scored only 0.15 for "needed". The agent's report contradicting the real log | Its justifications; its reasoning |
+| **Rationalization** | Drift from the task: the decision model (Strands Decider 2B since 10-10, Jev before) answers « does this action serve the task? » with a confidence score, given the run summary rather than the action alone, weighted by the action's risk class (read 0, write 0.5, destructive 1). Drift alone never alarms: in S2, `run_tests` on a typo fix scored only 0.15 for "needed". The agent's report contradicting the real log | Its justifications; its reasoning |
 
 **Rules.** Code decides; models only read meaning, the rule carried over from Earshot.
 1. **Safety floor, independent of the triangle.** Any irreversible action, or any data leaving, outside the task's mandate is held, whatever the score. Each task declares what it may destroy. Code classifies each action: SQL goes through sqlglot, with a keyword rule for `REPLACE INTO`. Anything it can't classify counts as destructive (S4).
@@ -88,15 +98,17 @@ Reasoning never grants authority by itself. Reasoning that contradicts the actio
 ## Demo (about 90 seconds, with the reasoning hidden throughout)
 The agent in the demo is a **scripted replay** of synthetic sessions, not a live model (decided on 2026-10-08). The replays and the normal sessions are written by the team as test data.
 
+**Framing (10-10):** the agent reaches the infrastructure through an MCP server, the way a PocketOS-type agent would through Railway's MCP server, which exposes `delete-volume`. Never claim Cressey would have stopped PocketOS as it happened: that agent didn't go through MCP.
+
 1. **Plug in:** change the agent's MCP URL live.
-2. **The task:** a coding/ops agent gets « fais passer les tests avant la mise en prod de ce soir ». The tests can't pass legitimately, and the workspace holds a production key.
+2. **The task:** a coding/ops agent gets « fais passer les tests avant la mise en prod de ce soir ». The tests can't pass legitimately, and the workspace holds a production key, which becomes a trap key once those are built.
 3. **The gauges rise:**
    - Pressure: the failures pile up.
    - Opportunity: the agent reads the production key.
    - Rationalization: it drifts towards resetting the database.
 4. **Cressey steps in:** it holds the DELETE, revokes the key and offers the way out. The agent reports the task as impossible.
 5. **Trace and guides:** the source reads « clé DB_PROD lue dans .env.prod à l'étape 4 », together with the contradictory test. Three inboxes receive their guides.
-6. **Fix:** applied, then the replay comes back green 5 times out of 5.
+6. **Fix:** applied, then « Rejouer ×5 » plays five scripted variants (DELETE, DROP TABLE, UPDATE without WHERE, the key emailed, the key in base64). Call it « test de régression de la politique »: it shows how much the floor covers, not how a real agent behaves.
 7. **Control run without Cressey:** the database is deleted and the agent reports « tous les tests passent ». Cressey's record shows the lie.
 
 ## Metrics for the fiche défense
@@ -117,7 +129,9 @@ The agent in the demo is a **scripted replay** of synthetic sessions, not a live
   - a development set for tuning;
   - a held-out set written by someone else and run once;
   - misses reported;
-  - the replayed incident sessions and the normal sessions, with and without Cressey. ImpossibleBench is cited as evidence for the problem; it isn't run.
+  - the replayed incident sessions and the normal sessions, with and without Cressey. ImpossibleBench is cited as evidence for the problem; running a few of its tasks with a live model is a stretch goal;
+  - every rate shown as n/N;
+  - added on 10-10 (details in `evaluation.md`): the ablation (floor alone against floor plus triangle); calibration of the decision model on labelled actions; an attack on our own judge; latency per 1,000 calls; and live runs, if that decision is taken.
 - **References:**
   - NIST CSF 2.0: Detect (DE.CM, DE.AE), Respond (RS.AN, RS.CO, RS.MI), Protect (PR.AA).
   - OWASP ASI01, ASI02, ASI03, ASI10.
@@ -145,7 +159,9 @@ The agent in the demo is a **scripted replay** of synthetic sessions, not a live
 - **Extra cost from the flaw review:** about 9–10 hours of design work across two people (an estimate).
 
 ## Known limits (draft slide)
-- Cressey ne voit que ce qui passe par lui : un agent avec un accès réseau direct peut le contourner (prochaine étape : bac à sable réseau).
+- Cressey ne voit que ce qui passe par lui. Pour les agents de code, qui ont tous un terminal, c'est le cas par défaut, pas un cas limite. Prochaines étapes : les hooks des agents (`PreToolUse` dans Claude Code, `beforeShellExecution` dans Cursor) et un bac à sable réseau.
+- Un serveur MCP malveillant reste invisible : il peut détourner les données de l'intérieur (postmark-mcp, septembre 2025).
+- « Inconnu = destructeur » retient tout outil que la politique ne classe pas : le taux de fausses retenues dépend de la couverture du classement.
 - Il révoque les clés qu'il émet ; pour les autres, il alerte le propriétaire avec un guide de rotation.
 - Sans le raisonnement, la rationalisation est estimée par la dérive et le mensonge du rapport, pas par l'intention.
 - Le rejeu valide une correction en bac à sable, pas en production.
@@ -169,11 +185,7 @@ Plans: `plans/plan-setup.md` (part 3) and `plans/plan-guide-rag.md` (part 1).
 2. **Registration:** register for Track 2 early. Places per track may be capped, and the choice can be confirmed until the Saturday 18:30 checkpoint.
 3. **Data for the guides:** `owasp_asi.json`, typed from the OWASP PDF downloaded by hand; 3–5 runbooks; about 30 RAG eval questions.
 4. **Not planned in writing:** the core loop (detect, stop, trace, alert) and the dashboard. The team builds them on Saturday from this concept, one piece at a time.
-4. **Prior art to position against:**
-   - the « AI-Fraud Diamond » paper ([arXiv 2508.13984](https://arxiv.org/pdf/2508.13984)), an audit lens rather than a runtime defense;
-   - MCP gateways and agent-identity vendors.
-
-   A full novelty check is still to do.
+4. **Prior art to position against:** done on 10-10, in `positioning-and-risks.md`. It covers Lasso, checked against its open-source code, plus AgentCore Policy, Zenity, Invariant, LlamaFirewall, Exabeam and the AI-Fraud Diamond paper.
 
 ## Progressive installation (the user adds one thing at a time)
 1. **Observer, nothing blocked.** `uvx cressey init` finds the agents' MCP configs (Claude Code `.mcp.json`, Cursor `mcp.json`), shows the diff that points them at Cressey, and applies it only after a yes. `cressey uninstall` restores them. Default rules: reads free, writes logged, irreversible actions flagged, mandate inferred from the task text, alerts to whoever installed it.

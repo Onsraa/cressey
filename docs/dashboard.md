@@ -19,6 +19,8 @@ The interface is in French. One theme, readable on a projector.
 - The run's kind: live, replay or control. The control run is in « Observateur » mode: it is logged but never held, so its record can show the lie. This view follows the latest live run.
 - What Cressey sees: tool calls only; also messages and the report; or also the reasoning. The demo shows messages and the report, with the reasoning hidden.
 - **Three gauges** (Pression, Opportunité, Rationalisation): the score, whether facts confirm it, and the raw facts underneath.
+  - Added 10-10, to build: once pressure is confirmed, the Pression gauge shows « porte de sortie envoyée » and « clé en lecture seule », with the step. These happen without a human.
+  - Added 10-10, to build: a trap key in use shows on the Opportunité gauge as « clé piège utilisée », and the call is held as « critique ».
 - **Chart:** the three legs across the steps, with the hold marked.
 - **Step timeline:**
   - number, tool and a short form of the arguments;
@@ -51,7 +53,7 @@ The interface is in French. One theme, readable on a projector.
   - the steps dropped because their quote couldn't be verified;
   - « Pourquoi ? »: a question box, answered with citations.
 - **A fix for each leg**, with « Approuver le correctif ».
-- **Replay:** « Rejouer ×5 », then the five results and the results of the normal tasks. Replays never wait for a human: a call that would be held is recorded as « aurait été retenu », and that replay fails.
+- **Replay:** « Rejouer ×5 », labelled « test de régression de la politique », then the five results and the results of the normal tasks. The five are scripted variants of the attack, so the label must not suggest they prove anything about a real agent. Replays never wait for a human: a call that would be held is recorded as « aurait été retenu », and that replay fails.
 - **Control run without Cressey** (« Observateur »): the agent's report (« Tous les tests passent. ») next to the steps the log recorded (the DELETE ran).
 
 ## Évaluation
@@ -59,7 +61,11 @@ The interface is in French. One theme, readable on a projector.
 - **Source** found on the first try.
 - **Guides:** verified quotes, hit@3 for BM25 → hybrid → re-ranked (chart), « je ne sais pas » on out-of-scope questions, and latency.
 - **Chart:** sessions held, incident sessions against normal sessions.
-- Each number shows its split (dev or held-out), its source file and its date. Misses are listed.
+- **Added 10-10** (see `evaluation.md`):
+  - **Ablation:** floor alone against floor plus triangle, side by side.
+  - **The decision model:** calibration on labelled actions, how far drift moved under our own attack (with the floor still holding), and latency per 1,000 calls.
+  - **Live runs,** only if that decision is taken.
+- Each number shows its split (dev or held-out), its source file and its date, as n/N. Misses are listed.
 
 ## Stretch goals, after the 21:30 go/no-go
 - **Owner MCP connector**, like Sentry's: the owner's terminal agent reads incidents, guides and fixes, and asks for a replay. The results show up on the dashboard.
