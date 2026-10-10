@@ -50,7 +50,7 @@ export function LiveView() {
 }
 
 function RunView({ run }: { run: Run }) {
-	const { focus, refresh } = useLive();
+	const { focus, refresh, focusMode } = useLive();
 	const all = rows(run);
 	// The call on hold, else the last one that was.
 	const held =
@@ -83,7 +83,8 @@ function RunView({ run }: { run: Run }) {
 	const row = all.find((r) => r.id === sel);
 	const decision = useDecision(run.id, pending?.n, refresh);
 
-	// R rejects, A approves (twice), T switches the centre view. App handles 1–4.
+	// R rejects, A approves (twice), T switches the centre view (not in focus mode, which
+	// shows the triangle only). App handles 1–4 and F.
 	useEffect(() => {
 		const key = (e: KeyboardEvent) => {
 			const t = e.target;
@@ -91,7 +92,8 @@ function RunView({ run }: { run: Run }) {
 				t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement;
 			if (typing || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
 			const k = e.key.toLowerCase();
-			if (k === "t") setCenter((c) => (c === "triangle" ? "time" : "triangle"));
+			if (k === "t" && !focusMode)
+				setCenter((c) => (c === "triangle" ? "time" : "triangle"));
 			else if (k === "r" && pending) decision.reject();
 			else if (k === "a" && pending) decision.approve();
 			else return;

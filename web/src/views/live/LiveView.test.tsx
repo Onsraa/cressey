@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as real from "@/api/live";
 import type { Incident, Legs, Run, Step } from "@/api/types";
+import { time } from "@/lib/labels";
 
 // The demo session as the backend serves it, held at #4 (data/sessions/demo-tests-impossibles).
 const NOW = Date.parse("2026-10-10T20:00:00Z");
@@ -127,6 +128,8 @@ const live = (runs: Run[], focus: real.Focus = {}): real.Live => ({
 	view: "live",
 	focus,
 	go: () => {},
+	focusMode: false,
+	toggleFocus: () => {},
 });
 mock.module("@/api/live", () => ({ ...real, useLive: () => state }));
 const { LiveView } = await import("./LiveView");
@@ -218,6 +221,53 @@ test("a link to a step selects it in the inspector", () => {
 	expect(out).toContain("secret · value never shown");
 	expect(out).toContain("Named secret · line 1");
 	expect(out).toContain("decision 0.8 ms");
+});
+
+test("focus mode: the task and the key in the header, the hold without its details", () => {
+	state = { ...live([demo({})]), focusMode: true };
+	const out = html();
+	const header = out.slice(0, out.indexOf("</header>"));
+	expect(header).toContain(
+		"Fais passer les tests avant la mise en prod de ce soir.",
+	);
+	expect(header).toContain("key suspended");
+	for (const s of [
+		"a1b2c3d4e5f6",
+		">live<",
+		"running",
+		time(at(-60)),
+		"mandate",
+		"What Cressey sees",
+	])
+		expect(header).not.toContain(s);
+	// The trace keeps the calls and the destructive chip, the hold its decision and its why.
+	for (const s of [
+		"run_sql",
+		"destructive",
+		"Reject",
+		"safe cancel in",
+		"SQL destructeur hors mandat : users",
+	])
+		expect(out).toContain(s);
+	for (const s of [
+		"agent text",
+		"1 fact from the log",
+		"How to read the triangle",
+		"Across steps",
+		"attempted",
+		"Suspended as soon as the call was held",
+		"Way out sent to the agent",
+		"STEP",
+	])
+		expect(out).not.toContain(s);
+});
+
+test("focus mode without a hold: a quiet inspector", () => {
+	state = {
+		...live([demo({ status: "allowed", held_until: null, reason: null })]),
+		focusMode: true,
+	};
+	expect(html()).toContain("Cressey is watching every call.");
 });
 
 test("waiting: the MCP URL to paste", () => {

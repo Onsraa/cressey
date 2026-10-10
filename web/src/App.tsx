@@ -3,6 +3,7 @@ import {
 	BellRing,
 	ChartColumn,
 	Cpu,
+	Focus,
 	Hash,
 	Inbox,
 	Keyboard,
@@ -34,7 +35,8 @@ const NAV: { k: View; label: string; Icon: LucideIcon }[] = [
 ];
 
 const SHORTCUTS =
-	"Shortcuts\n1–4: switch view\nR: reject the held call\nA: approve (twice)\nT: triangle or chart";
+	"Shortcuts\n1–4: switch view\nR: reject the held call\nA: approve (twice)\nT: triangle or chart\nF: focus mode";
+const FOCUS_TIP = "Focus mode: show only what matters for the demo (F)";
 
 export default function App() {
 	return (
@@ -46,7 +48,7 @@ export default function App() {
 
 function Shell() {
 	useTooltips();
-	const { view, go, holds } = useLive();
+	const { view, go, holds, toggleFocus } = useLive();
 	const [collapsed, setCollapsed] = useState(() => window.innerWidth < 1180);
 	const hold = holds[0];
 
@@ -56,6 +58,11 @@ function Shell() {
 			const typing =
 				t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement;
 			if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+			if (e.key.toLowerCase() === "f") {
+				e.preventDefault();
+				if (!e.repeat) toggleFocus();
+				return;
+			}
 			const to = NAV[Number(e.key) - 1];
 			if (!to) return;
 			e.preventDefault();
@@ -63,7 +70,7 @@ function Shell() {
 		};
 		window.addEventListener("keydown", key);
 		return () => window.removeEventListener("keydown", key);
-	}, [go]);
+	}, [go, toggleFocus]);
 
 	useEffect(() => {
 		document.title = hold ? `Held · ${hold.step.tool} · Cressey` : "Cressey";
@@ -94,7 +101,17 @@ function Sidebar({
 	collapsed: boolean;
 	toggle: () => void;
 }) {
-	const { view, go, holds, incidents, status, responses, offline } = useLive();
+	const {
+		view,
+		go,
+		holds,
+		incidents,
+		status,
+		responses,
+		offline,
+		focusMode,
+		toggleFocus,
+	} = useLive();
 	const open = !collapsed;
 	const pending = incidents.filter((i) => stage(i) < 3).length;
 	const alerting = onAlert(responses);
@@ -193,35 +210,50 @@ function Sidebar({
 						{open && "API unreachable"}
 					</div>
 				)}
-				{items.map(({ Icon, label, value, dot, tip }) => (
-					<div
-						key={label}
-						data-tip={tip}
-						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
-						tabIndex={0}
-						className="flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap px-2"
-					>
-						<Icon size={15} />
-						{open && (
-							<>
-								<span className="text-[12.5px] text-mute">{label}</span>
-								<span className="ml-auto inline-flex items-center gap-1.5 font-medium font-mono text-[11px]">
-									<span className="size-[7px]" style={{ background: dot }} />
-									{value}
-								</span>
-							</>
-						)}
-					</div>
-				))}
-				<div className={`flex gap-1 pt-1.5 ${open ? "flex-row" : "flex-col"}`}>
+				{!focusMode &&
+					items.map(({ Icon, label, value, dot, tip }) => (
+						<div
+							key={label}
+							data-tip={tip}
+							// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+							tabIndex={0}
+							className="flex h-8 items-center gap-2 overflow-hidden whitespace-nowrap px-2"
+						>
+							<Icon size={15} />
+							{open && (
+								<>
+									<span className="text-[12.5px] text-mute">{label}</span>
+									<span className="ml-auto inline-flex items-center gap-1.5 font-medium font-mono text-[11px]">
+										<span className="size-[7px]" style={{ background: dot }} />
+										{value}
+									</span>
+								</>
+							)}
+						</div>
+					))}
+				{!focusMode && (
 					<button
 						type="button"
 						aria-label="Keyboard shortcuts"
 						data-tip={SHORTCUTS}
-						className="btn h-8 min-w-8 flex-auto cursor-help px-1.5 text-[12.5px]"
+						className="btn mt-1.5 h-8 min-w-8 cursor-help px-1.5 text-[12.5px]"
 					>
 						<Keyboard size={15} />
 						{open && "Shortcuts"}
+					</button>
+				)}
+				{/* Last, so that it stays put while focus mode hides what is above it. */}
+				<div className={`flex gap-1 ${open ? "flex-row" : "flex-col"}`}>
+					<button
+						type="button"
+						aria-label="Focus mode"
+						aria-pressed={focusMode}
+						data-tip={FOCUS_TIP}
+						onClick={toggleFocus}
+						className={`btn h-8 min-w-8 flex-auto px-1.5 text-[12.5px] ${focusMode ? "btn-dark" : ""}`}
+					>
+						<Focus size={15} />
+						{open && "Focus"}
 					</button>
 					<button
 						type="button"

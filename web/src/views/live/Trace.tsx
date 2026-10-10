@@ -7,6 +7,7 @@ import {
 	TriangleAlert,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useLive } from "@/api/live";
 import type { Legs, Run, Step } from "@/api/types";
 import { LEGS, STATUS } from "@/lib/labels";
 import {
@@ -87,7 +88,10 @@ export function Trace({
 }
 
 function CallRow({ run, step }: { run: Run; step: Step }) {
+	const { focusMode } = useLive();
 	const secrets = carried(step);
+	// Focus mode keeps the one risk that tells the story: destructive.
+	const risky = focusMode ? step.risk === "destructive" : step.risk !== "read";
 	const args = argsText(run, step.args);
 	return (
 		<>
@@ -108,7 +112,7 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 							<KeyRound size={13} />
 						</span>
 					)}
-					{step.risk !== "read" && <RiskChip risk={step.risk} />}
+					{risky && <RiskChip risk={step.risk} />}
 					<span className="ml-auto inline-flex">
 						{step.status === "allowed" ? (
 							<span data-tip={STATUS.allowed.tip} className="text-ok-strong">
@@ -148,6 +152,7 @@ function TextRow({
 	run: Run;
 	row: Exclude<Row, { kind: "call" }>;
 }) {
+	const { focusMode } = useLive();
 	const report = row.kind === "report";
 	const check = report ? run.report_check : undefined;
 	const Icon = report ? FileText : MessageSquare;
@@ -161,7 +166,7 @@ function TextRow({
 					<span className="font-medium font-mono text-[12.5px]">
 						{report ? "final report" : "message"}
 					</span>
-					<AgentText />
+					{!focusMode && <AgentText />}
 					{check?.confirmed && (
 						<span
 							data-tip={[`score ${fmt(check.score)}`, ...check.facts].join(

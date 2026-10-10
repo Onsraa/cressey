@@ -21,8 +21,11 @@ export function Overview({
 	incident: Incident;
 	run?: Run;
 }) {
-	const { go } = useLive();
+	const { go, focusMode } = useLive();
 	const names = secretNames(run);
+	// Focus mode keeps the sentence, the one match and the way to the step.
+	const how = (s: Source) =>
+		focusMode ? HOW.filter((h) => h.k === s.how) : HOW;
 	return (
 		<div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] items-start gap-4">
 			<Box Icon={Search} title="SOURCE">
@@ -43,23 +46,27 @@ export function Overview({
 									{`${s.secret ?? unmask(s.value, names)} read ${where}at step ${s.step}`}
 								</span>
 								<dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3.5 gap-y-1.5 font-mono text-[12.5px]">
-									<dt className="text-[11px] text-mute-2">tool</dt>
-									<dd>{s.tool}</dd>
-									{path && (
+									{!focusMode && (
 										<>
-											<dt className="text-[11px] text-mute-2">file</dt>
-											<dd>{line ? `${path}, line ${line}` : path}</dd>
-										</>
-									)}
-									{!path && line !== undefined && (
-										<>
-											<dt className="text-[11px] text-mute-2">line</dt>
-											<dd>{line}</dd>
+											<dt className="text-[11px] text-mute-2">tool</dt>
+											<dd>{s.tool}</dd>
+											{path && (
+												<>
+													<dt className="text-[11px] text-mute-2">file</dt>
+													<dd>{line ? `${path}, line ${line}` : path}</dd>
+												</>
+											)}
+											{!path && line !== undefined && (
+												<>
+													<dt className="text-[11px] text-mute-2">line</dt>
+													<dd>{line}</dd>
+												</>
+											)}
 										</>
 									)}
 									<dt className="text-[11px] text-mute-2">match</dt>
 									<dd className="flex flex-wrap gap-[3px]">
-										{HOW.map((h) => {
+										{how(s).map((h) => {
 											const on = h.k === s.how;
 											return (
 												<span

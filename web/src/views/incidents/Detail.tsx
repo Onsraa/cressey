@@ -35,7 +35,7 @@ const isStatus = (s: string): s is StepStatus => Object.hasOwn(STATUS, s);
 const decision = (d: string) => (isStatus(d) ? STATUS[d].label : d);
 
 export function Detail({ incident: i }: { incident: Incident }) {
-	const { runs } = useLive();
+	const { runs, focusMode } = useLive();
 	const [tab, setTab] = useState<Tab>("overview");
 	const run = runs.find((r) => r.id === i.run_id);
 	// The same task in “Observer” mode: logged, never held.
@@ -56,22 +56,28 @@ export function Detail({ incident: i }: { incident: Incident }) {
 			<div className="flex flex-none flex-col gap-4 px-6 pt-[22px]">
 				<div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
 					<span className="font-medium">{i.id}</span>
-					<span className="text-mute-3">·</span>
-					<span className="text-mute">{i.run_id}</span>
-					<span className="text-mute-3">·</span>
-					<span className="mr-1.5 text-mute">
-						opened at {time(i.created_at)}
-					</span>
+					{!focusMode && (
+						<>
+							<span className="text-mute-3">·</span>
+							<span className="text-mute">{i.run_id}</span>
+							<span className="text-mute-3">·</span>
+							<span className="mr-1.5 text-mute">
+								opened at {time(i.created_at)}
+							</span>
+						</>
+					)}
 					<span className={`chip ${TONE[sev.tone]}`}>
 						<sev.Icon size={11} />
 						{sev.label}
 					</span>
-					<Tip tip="Decision on the held call" className="chip">
-						<Gavel size={11} />
-						{i.decision === "held"
-							? "awaiting a decision"
-							: decision(i.decision)}
-					</Tip>
+					{!focusMode && (
+						<Tip tip="Decision on the held call" className="chip">
+							<Gavel size={11} />
+							{i.decision === "held"
+								? "awaiting a decision"
+								: decision(i.decision)}
+						</Tip>
+					)}
 					{run?.kind === "control" && (
 						<Tip tip={OBSERVER_TIP} className={`chip ${TONE.info}`}>
 							<Eye size={11} />
@@ -132,6 +138,7 @@ export function Detail({ incident: i }: { incident: Incident }) {
 }
 
 function Lifecycle({ incident: i }: { incident: Incident }) {
+	const { focusMode } = useLive();
 	const st = stage(i);
 	const approved = i.fixes.filter((f) => f.approved).length;
 	const sub = [
@@ -172,9 +179,11 @@ function Lifecycle({ incident: i }: { incident: Incident }) {
 						>
 							{label}
 						</span>
-						<span className="truncate pr-2 font-mono text-[11px] text-mute-2">
-							{sub[k]}
-						</span>
+						{!focusMode && (
+							<span className="truncate pr-2 font-mono text-[11px] text-mute-2">
+								{sub[k]}
+							</span>
+						)}
 					</li>
 				);
 			})}

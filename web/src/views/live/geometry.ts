@@ -32,16 +32,34 @@ export function triangle(w: number, h: number): Tri {
 
 const KEYS: LegName[] = ["pressure", "opportunity", "rationalization"];
 
-// A call sits at the barycentre of the vertices, weighted by its three scores.
-export function place(t: Tri, legs: Legs): Pt {
+export type PerLeg = Record<LegName, number>;
+export const perLeg = (f: (k: LegName) => number): PerLeg => ({
+	pressure: f("pressure"),
+	opportunity: f("opportunity"),
+	rationalization: f("rationalization"),
+});
+
+// A call's weights: its three scores, normalised. All zero: equal weights, the centre.
+export function weights(legs: Legs): PerLeg {
 	const sum = KEYS.reduce((s, k) => s + legs[k].score, 0);
-	// All zero: equal weights, the centre.
-	const wt = (k: LegName) => (sum ? legs[k].score / sum : 1 / 3);
-	return {
-		x: KEYS.reduce((x, k) => x + wt(k) * t[k].x, 0),
-		y: KEYS.reduce((y, k) => y + wt(k) * t[k].y, 0),
-	};
+	return perLeg((k) => (sum ? legs[k].score / sum : 1 / 3));
 }
+
+// The barycentre of the vertices under those weights.
+export const at = (t: Tri, w: PerLeg): Pt => ({
+	x: KEYS.reduce((x, k) => x + w[k] * t[k].x, 0),
+	y: KEYS.reduce((y, k) => y + w[k] * t[k].y, 0),
+});
+
+// A call sits at the barycentre of the vertices, weighted by its three scores.
+export const place = (t: Tri, legs: Legs): Pt => at(t, weights(legs));
+
+export const cellRect = (q: number, r: number, span = 1) => ({
+	x: q * CELL,
+	y: r * CELL,
+	width: span * CELL - 1,
+	height: span * CELL - 1,
+});
 
 // The smallest barycentric coordinate of (x, y): ≥ 0 inside the triangle.
 function inside(t: Tri, x: number, y: number) {
@@ -143,5 +161,27 @@ export function edge(a: Pt, b: Pt, dashed: boolean) {
 		last = id;
 		if (!dashed || (q + r) % 2 === 0) out.push({ q, r });
 	}
+	return out;
+}
+
+const REACH = 5; // how far a landing pulse's front goes, in cells
+const WIDTH = 2; // half its thickness, in cells
+
+// The design's reactive landing, kept small: at age a (0 to 1), the cells lit by a ring of
+// heat leaving the point of a call that just landed, each with its band in a four-step ramp
+// (3 the hottest). The ring slows as it spreads, and cools away.
+export function pulse(p: Pt, a: number) {
+	const cq = p.x / CELL;
+	const cr = p.y / CELL;
+	const front = REACH * (1 - (1 - a) ** 3);
+	const out: { q: number; r: number; band: number }[] = [];
+	const R = REACH + WIDTH;
+	for (let r = Math.floor(cr) - R; r <= Math.floor(cr) + R; r++)
+		for (let q = Math.floor(cq) - R; q <= Math.floor(cq) + R; q++) {
+			const d = Math.hypot(q + 0.5 - cq, r + 0.5 - cr);
+			const v = (1 - a) * Math.max(0, 1 - Math.abs(d - front) / WIDTH);
+			const b = Math.min(3, Math.floor(v * 5) - 1);
+			if (b >= 0) out.push({ q, r, band: b });
+		}
 	return out;
 }
