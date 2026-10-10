@@ -1,0 +1,36 @@
+[project]
+name = "cressey"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Teddy", email = "102239127+Onsraa@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.143.0",
+    "pydantic>=2.14.0",
+    "pydantic-settings>=2.15.0",
+    "sse-starlette>=3.5.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+cressey = "cressey:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.13.1",
+    "pytest>=9.1.1",
+    "ruff>=0.17.0",
+    "ty>=0.0.86",
+]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not live'"
+markers = ["live: calls real APIs"]
+testpaths = ["tests"]
