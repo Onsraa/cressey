@@ -146,3 +146,19 @@ def test_email_inside_the_mandate_passes():
 )
 def test_email_outside_the_mandate_is_held(to):
     assert check(MAIL, {"to": to}, TEAM)[1] is not None
+
+
+FROZEN = Mandate(frozen=["tests", "ci/grader.py"])
+
+
+@pytest.mark.parametrize(
+    "path", ["tests/test_app.py", "./tests/../tests/conftest.py", "CI/Grader.py"]
+)
+def test_a_frozen_path_reads_but_its_write_is_held(path):
+    """ImpossibleBench: editing the tests was most of the cheating. No model is asked."""
+    assert check(READ, {"path": path}, FROZEN) == ("read", None)
+    assert check(WRITE, {"path": path}, FROZEN) == ("write", f"chemin gelé : {path}")
+
+
+def test_a_path_outside_the_frozen_ones_is_written_freely():
+    assert check(WRITE, {"path": "src/app.py"}, FROZEN) == ("write", None)

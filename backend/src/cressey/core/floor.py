@@ -75,15 +75,26 @@ def _may_send(address: str, mandate: Mandate) -> bool:
     )
 
 
-def _protected(path: JsonValue, mandate: Mandate) -> str | None:
-    """Why a read or write of a path the mandate protects is held, with no model asked (the
-    Hugging Face / METR read floor). Case and `..` can't step around it."""
-    if not mandate.protected or not isinstance(path, str):
+def _under(path: str, globs: list[str]) -> bool:
+    """A name covers everything under it; globs work too."""
+    return any(
+        path == g or path.startswith(g + "/") or fnmatch.fnmatchcase(path, g)
+        for g in (g.strip("/").lower() for g in globs)
+    )
+
+
+def _guarded(path: JsonValue, mandate: Mandate, writing: bool) -> str | None:
+    """Why the floor holds a read or write of a path the mandate guards, with no model asked.
+    `protected` paths can be neither read nor written (the Hugging Face / METR read floor);
+    `frozen` ones read but never write (ImpossibleBench: the cheating edited the tests).
+    Case and `..` can't step around it."""
+    if not isinstance(path, str):
         return None
     p = posixpath.normpath(path.replace("\\", "/")).lstrip("/").lower()
-    for g in (g.strip("/").lower() for g in mandate.protected):
-        if p == g or p.startswith(g + "/") or fnmatch.fnmatchcase(p, g):
-            return f"chemin protégé : {path}"
+    if _under(p, mandate.protected):
+        return f"chemin protégé : {path}"
+    if writing and _under(p, mandate.frozen):
+        return f"chemin gelé : {path}"
     return None
 
 
@@ -96,7 +107,7 @@ def check(
     value = args.get(rule.arg) if rule.arg else None
     match rule.kind:
         case "read" | "write":
-            return rule.kind, _protected(value, mandate)
+            return rule.kind, _guarded(value, mandate, rule.kind == "write")
         case "destructive":
             return "destructive", "action irréversible"
         case "sql":

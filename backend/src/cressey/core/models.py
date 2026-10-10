@@ -75,6 +75,8 @@ class Mandate(BaseModel):
     # Paths the agent may neither read nor write: a scorer, other runs, secret stores.
     # A name protects everything under it; globs work too.
     protected: list[str] = []
+    # Paths the agent may read but not write: the tests, a grader.
+    frozen: list[str] = []
 
 
 class Leg(BaseModel):

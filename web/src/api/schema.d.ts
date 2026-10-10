@@ -540,6 +540,11 @@ export interface components {
 			 * @default []
 			 */
 			protected: string[];
+			/**
+			 * Frozen
+			 * @default []
+			 */
+			frozen: string[];
 		};
 		/** Message */
 		Message: {

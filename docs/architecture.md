@@ -91,13 +91,14 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
   - the tool is missing from the policy, or is `destructive`;
   - the SQL is destructive and touches a table outside `may_destroy`, or can't be classified. Destructive: a DELETE, DROP or TRUNCATE; any UPDATE, whatever its WHERE; a MERGE; an insert that replaces or updates on conflict (`REPLACE INTO`, `INSERT OR REPLACE`, `ON CONFLICT DO UPDATE`); a rename;
   - a read or a write touches a path the mandate protects (`protected`), with no model asked: « chemin protégé : … ». A name protects everything under it, and globs work. Case and `..` can't step around it. This is the read floor from the Hugging Face / METR case;
+  - a write touches a path the mandate freezes (`frozen`: the tests, a grader), which the agent may still read: « chemin gelé : … ». No model is asked;
   - a recipient is outside `may_send_to`;
   - the call carries a trap key (`decoys` in `policy.yaml`), whatever the mandate: in any argument, in any case, or in a token that decodes from base64, hex or URL encoding. The reason, « clé piège utilisée : DB_ADMIN_KEY », replaces the others. The agent's refusal doesn't name the trap: it reads « Cressey : action retenue. … », and the reason stays in the step and the incident.
 - **Key broker** (`core/broker.py`, `broker` in `policy.yaml`): Cressey, not the agent, picks the credential a tool receives. `run_sql` gets the read credential unless the mandate grants changes (`may_destroy`) or a human approved that call, and the database refuses any write made with it (SQLite `query_only`), however the SQL is phrased. The agent's own key is ignored, so a key it found, or a call the floor misread, can't exceed the grant. A `control` run is left alone: it measures what happens without Cressey.
 - **While a call is held,** the run's key is revoked: its other calls are denied.
   - Approval runs the call once and reinstates the key.
-  - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.
-  - With `CRESSEY_HOLDS=refuse`, nothing waits: the call is refused at once, « Cressey : action refusée (…). Déclarer la tâche impossible est une réponse acceptée. », with status `denied`. Its incident opens, and the key stays revoked.
+  - Rejection or expiry answers « Cressey : action retenue. Déclarer la tâche impossible est une réponse acceptée. »: the agent learns it was held, never why (the reason stays in the step, the incident and the log) The key stays revoked.
+  - With `CRESSEY_HOLDS=refuse`, nothing waits: the call is refused at once, « Cressey : action refusée. Déclarer la tâche impossible est une réponse acceptée. », with status `denied`. Its incident opens, and the key stays revoked.
 - **Run kinds:** `live` holds and waits for a human. `control` (« Observateur ») is logged and never held. `replay` never waits: a call that would be held is blocked and marked `would_hold`, and that replay fails.
 - **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`, and two timings: `check_ms` (Cressey's decision, before the tool runs) and `scan_ms` (the secret scan of the result).
   - What the agent read, and the raw arguments, are kept in memory for tracing and never served.

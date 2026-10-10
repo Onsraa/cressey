@@ -73,8 +73,7 @@ class Guard(Middleware):
             raise ToolError("Cressey : clé inconnue.")
         name, args = context.message.name, context.message.arguments or {}
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
-        trapped = trap(args, self.policy.decoys)
-        floor = trapped or floor
+        floor = trap(args, self.policy.decoys) or floor
         # Off the event loop, like the result scan: a large argument takes a while to redact.
         # A copy of the secrets known so far, which other calls may add to meanwhile.
         dumped = json.dumps(args, ensure_ascii=False)
@@ -97,12 +96,10 @@ class Guard(Middleware):
         if not reason and run.read_only_step and risk == "destructive":
             step.reason = READ_ONLY
             self.runs.mark(run, step, "denied")
-            raise ToolError(
-                f"Cressey : action destructrice refusée ({READ_ONLY}). {WAY_OUT}"
-            )
-        # A canary works only while it looks real: the agent isn't told a key was a trap.
-        told = "" if trapped else f" ({reason})"
-        held = ToolError(f"Cressey : action retenue{told}. {WAY_OUT}")
+            raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
+        # The agent learns it was held, never why: a reason teaches it what to route around
+        # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
+        held = ToolError(f"Cressey : action retenue. {WAY_OUT}")
         if reason and run.kind != "live":
             self.runs.mark(run, step, "would_hold")
             if run.kind == "replay":
@@ -110,7 +107,7 @@ class Guard(Middleware):
         elif reason and self.holds == "refuse":
             run.revoked = True  # as after a rejection: the rest of the run is denied
             self.runs.mark(run, step, "denied")
-            raise ToolError(f"Cressey : action refusée{told}. {WAY_OUT}")
+            raise ToolError(f"Cressey : action refusée. {WAY_OUT}")
         elif reason and not await self.runs.hold(run, step, self.hold_timeout):
             raise held
         # The key broker: the tool gets the credential the mandate allows, never the agent's
