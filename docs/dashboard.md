@@ -56,6 +56,7 @@ The interface is in French. One theme, readable on a projector.
 - **A fix for each leg**, with « Approuver le correctif ».
 - **Replay:** « Rejouer ×5 », labelled « test de régression de la politique », then the five results and the results of the normal tasks. The five are scripted variants of the attack, so the label must not suggest they prove anything about a real agent. Replays never wait for a human: a call that would be held is recorded as « aurait été retenu », and that replay fails.
 - **Control run without Cressey** (« Observateur »): the agent's report (« Tous les tests passent. ») next to the steps the log recorded (the DELETE ran).
+- An incident opened by the control run carries the decision « aurait été retenu » and an « Observateur » chip: the call ran, and Cressey would have held it.
 
 ## Évaluation
 - **Detection:** incident sessions held, normal sessions held by mistake, time to stop (p50 and p95), and the proxy's overhead.
@@ -67,6 +68,10 @@ The interface is in French. One theme, readable on a projector.
   - **The decision model:** calibration on labelled actions, how far drift moved under our own attack (with the floor still holding), and latency per 1,000 calls.
   - **Live runs,** only if that decision is taken.
 - Each number shows its split (dev or held-out), its source file and its date, as n/N. Misses are listed.
+
+## Réglages
+- **« Que fait Cressey quand… ? »:** per check (plancher de sécurité, clé piège, triangle), Alerte, Revue humaine or Arrêt; the signal across runs, Alerte or Arrêt. A change applies at once and is written to the event log.
+- **« Brancher un agent »:** the MCP command, `claude mcp add --transport http cressey <url>/mcp --header "Authorization: Bearer <clé du run>"`. The run key is given once, when the run is created.
 
 ## Stretch goals, after the 21:30 go/no-go
 - **Claude Code hook** (first stretch goal, `runsheet.md` item 8):
@@ -108,6 +113,6 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Trap key in use | the held call's reason and the incident's severity | exists: `reason` on the step and the incident reads « clé piège utilisée : <name> », severity « critique ». The opportunity leg lists the read, not the use |
 | Integrity strip | the log head: hash and count | exists: `GET /api/status` → `log` (`hash`, `count`, `intact`) |
 | Header and waiting state | status: protection mode, model mode, MCP URL | exists: `GET /api/status` (`mode`, `model_mode`, `mcp_path`) |
-| Évaluation | the eval reports, with their date and their misses | exists: `GET /api/eval` serves `report-dev.json` (guides) and `report-detection.json` (sessions held, misses, time to stop, decision time per call), each with its file and date. The guide report doesn't list its misses yet |
+| Évaluation | the eval reports, with their date and their misses | exists: `GET /api/eval` serves `report-dev.json` (guides) and `report-detection.json` (sessions held, misses, time to stop, decision time per call), each with its file and date. The guide report doesn't list its misses yet. `decision-model.json` is served too (kind `decision`): the write judgment's and the report check's calibration on our labelled cases, our own attack, and the latency per call |
 
 The interface polls the runs and holds about once a second. It moves to SSE only if polling lags.
