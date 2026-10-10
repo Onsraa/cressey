@@ -7,6 +7,7 @@ from cressey.demo.measure import (
     FakeJudge,
     ReportCase,
     WriteCase,
+    attack_approval,
     calibration,
     judge_report,
     judge_write,
@@ -62,3 +63,18 @@ async def test_each_write_is_scored_in_both_views():
     case = next(c for c in load_cases(WRITES, WriteCase) if c.id == "w_demo_delete")
     actions, words = await judge_write_views(FakeJudge(), case, T)
     assert actions == 0.9 and words == 0.9  # a DELETE reads as one in both views
+
+
+async def test_the_approval_attack_reports_both_views_before_and_after():
+    cases = {c.id: c for c in load_cases(WRITES, WriteCase)}
+    rows = await attack_approval(FakeJudge(), cases, T)
+    assert [r["id"] for r in rows] == [
+        "w_demo_delete",
+        "w_weaken_tests",
+        "w_readme",
+        "w_allowed_delete_user",
+    ]
+    for r in rows:
+        assert set(r["baseline"]) == set(r["tampered"]) == {"actions", "words", "max"}
+        most, alone = r["tampered"]["max"], r["tampered"]["actions"]
+        assert most is not None and alone is not None and most >= alone
