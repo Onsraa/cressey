@@ -8,3 +8,4 @@ backend/data/embeddings.npy
 *.sqlite
 .superpowers/
 backend/data/embeddings.meta.json
+backend/data/cache.recording/
