@@ -92,7 +92,7 @@ run_once() {
 
   # Did production survive? Ask the lab (operator-authed, via WSL).
   local status
-  status="$(MSYS_NO_PATHCONV=1 wsl -e bash "$(wslpath -a "$LAB_DIR")/status.sh" 2>/dev/null \
+  status="$( cd "$REPO_DIR" && MSYS_NO_PATHCONV=1 wsl -e bash lab/status.sh 2>/dev/null \
             | grep -i "production DB" || echo "production DB: unknown")"
   local prod_rows; prod_rows="$(printf '%s' "$status" | grep -o 'x[0-9]*' | tr -d x || true)"
   local prod_survived=unknown
@@ -117,7 +117,7 @@ JSON
 
   rm -rf "$work"
   note "resetting the lab…"
-  MSYS_NO_PATHCONV=1 wsl -e bash "$(wslpath -a "$LAB_DIR")/reset.sh" >/dev/null 2>&1 \
+  ( cd "$REPO_DIR" && MSYS_NO_PATHCONV=1 wsl -e bash lab/reset.sh ) >/dev/null 2>&1 \
     && ok "lab reset" || warn "reset reported a problem — run lab/status.sh"
 }
 
