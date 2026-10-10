@@ -231,7 +231,8 @@ async def test_one_run_held_again_and_again_is_not_a_fleet():
     for _ in range(3):
         incidents.open(run, call, "critique")
     incidents.open(
-        *held_by_floor(runs, "send outside the mandate: x@prestataire.example"), "critique"
+        *held_by_floor(runs, "send outside the mandate: x@prestataire.example"),
+        "critique",
     )
     assert incidents.fleet() == []
 

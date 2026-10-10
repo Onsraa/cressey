@@ -82,7 +82,10 @@ def test_reads_and_writes_pass():
 
 def test_an_update_outside_the_mandate_is_held_whatever_its_where():
     risk, reason = check(SQL, {"query": "UPDATE users SET a = 1 WHERE 1 = 1"}, NONE)
-    assert (risk, reason) == ("destructive", "destructive SQL outside the mandate: users")
+    assert (risk, reason) == (
+        "destructive",
+        "destructive SQL outside the mandate: users",
+    )
     allowed = Mandate(may_destroy=["users"])
     assert check(SQL, {"query": "UPDATE users SET a = 1 WHERE id = 2"}, allowed) == (
         "destructive",

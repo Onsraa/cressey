@@ -86,11 +86,7 @@ def _root_cause(
         )
         return summary, "task"
     if name == "opportunity":
-        used = (
-            f"It used it in {action}."
-            if secret
-            else f"Action held: {action}."
-        )
+        used = f"It used it in {action}." if secret else f"Action held: {action}."
         summary = f"A secret the task doesn't need was within the agent's reach: {facts}. {used}"
         where = (
             f"{secret.secret} read at step {secret.step} ({secret.tool} {secret.args})"

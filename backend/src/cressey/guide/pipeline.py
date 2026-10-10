@@ -23,12 +23,8 @@ from cressey.guide.quotes import verify_quote
 MSG_NO_SOURCE = (
     "I don't know: no reliable source covers this case. Ask the security team."
 )
-MSG_NO_STEP = (
-    "I don't know: no step could be sourced. Ask the security team."
-)
-MSG_UNAVAILABLE = (
-    "Guide unavailable: the models aren't answering. Sources found below."
-)
+MSG_NO_STEP = "I don't know: no step could be sourced. Ask the security team."
+MSG_UNAVAILABLE = "Guide unavailable: the models aren't answering. Sources found below."
 MAX_STEPS = 4
 
 
