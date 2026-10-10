@@ -43,10 +43,10 @@ cd web && bun run ci && bun run build
 |---|---|
 | Incident sessions held | 7 / 7 |
 | Normal sessions held by mistake | 0 / 6 |
-| Time to stop, p50 | 229 ms |
+| Time to stop, p50 | 231 ms |
 | Held only thanks to the triangle | 1 session the safety floor misses |
 | Guide steps with a verified quote | 100 % (8 incidents) |
-| Right passage in the top 3, re-ranked | 31 / 31 |
+| Right passage in the top 3, re-ranked | 30 / 31 |
 
 Source files and the method: [`docs/evaluation.md`](docs/evaluation.md). The held-out set hasn't been run yet.
 
