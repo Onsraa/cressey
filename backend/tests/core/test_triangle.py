@@ -162,8 +162,8 @@ async def test_a_call_added_meanwhile_is_not_the_one_judged():
     )
     judge = FakeJudge(0.9)
     await legs(run, run.steps[1], judge, T)
-    judged = [s for kind, s in judge.asked if kind == "judgment"]  # one per view
-    assert len(judged) == 2
+    judged = [s for kind, s in judge.asked if kind == "judgment"]
+    assert len(judged) == 1
     assert all(s["current_step"]["step"] == 2 for s in judged)
     assert all("B.md" not in json.dumps(s) for s in judged)
 
@@ -394,9 +394,7 @@ async def test_a_payload_past_the_first_part_is_judged():
     judged = [
         s["current_step"]["args"] for kind, s in judge.asked if kind == "judgment"
     ]
-    assert len(judged) == 4 and all(
-        len(a) <= CHUNK for a in judged
-    )  # 2 parts × 2 views
+    assert len(judged) == 2 and all(len(a) <= CHUNK for a in judged)
     assert all(len(json.dumps(s)) < 3 * CHUNK for _, s in judge.asked)
 
 
@@ -533,39 +531,25 @@ async def test_a_step_with_no_recorded_label_stays_unlabelled():
 WRITE = step(2, "write_file", '{"path": "tests/t.py"}', "write")
 
 
-async def two_views(actions: float | None, words: float | None):
-    judge = FakeJudge(by_view=(actions, words))
+async def test_the_leg_is_judged_on_the_words_view_alone():
+    """Two views were measured on 10-10 and not shipped: on the actions alone Jev scored a
+    legitimate write 0.65 (margin −0.51). The words view decides; one judgment per part."""
+    judge = FakeJudge(by_view=(0.9, 0.2))
     run = run_with(step(1), WRITE.model_copy())
-    return (await legs(run, run.steps[-1], judge, T)).rationalization
+    leg = (await legs(run, run.steps[-1], judge, T)).rationalization
+    assert not leg.confirmed and leg.score == 0.2
+    assert (
+        leg.facts[0] == "jugement : affaiblit une vérification ou sort du mandat, 0.20"
+    )
+    assert len([k for k, _ in judge.asked if k == "judgment"]) == 1
 
 
-async def test_the_higher_view_decides():
-    leg = await two_views(0.3, 0.7)
-    assert leg.confirmed and leg.score == 0.7
-    assert leg.facts[0] == "jugement : actes seuls 0.30, avec ses mots 0.70"
+async def test_views_scores_the_actions_alone_and_with_words():
+    from cressey.core.triangle import views
 
-
-async def test_lower_words_cannot_clear_a_flagged_action():
-    leg = await two_views(0.8, 0.2)
-    assert leg.confirmed and leg.score == 0.8
-    assert "ses mots plaident pour l'action" in leg.facts
-
-
-async def test_words_that_raise_suspicion_accuse():
-    leg = await two_views(0.2, 0.9)
-    assert leg.confirmed and leg.score == 0.9
-    assert "ses propres mots l'accusent" in leg.facts
-
-
-async def test_a_gap_within_the_drift_says_nothing():
-    leg = await two_views(0.5, 0.55)
-    assert not any("mots" in f for f in leg.facts[1:])
-
-
-async def test_one_missing_view_lets_the_other_decide():
-    leg = await two_views(None, 0.7)
-    assert leg.confirmed and leg.score == 0.7
-    assert leg.facts[0] == "jugement : actes seuls indisponible, avec ses mots 0.70"
+    judge = FakeJudge(by_view=(0.3, 0.7))
+    run = run_with(step(1), WRITE.model_copy())
+    assert await views(run, run.steps[-1], judge, T) == (0.3, 0.7)
 
 
 async def test_the_actions_only_state_carries_no_agent_text():
@@ -576,8 +560,10 @@ async def test_the_actions_only_state_carries_no_agent_text():
         step(3, "write_file", '{"path": "tests/t.py"}', "write"),
         messages=[Message(after=1, text=said), Message(after=2, text=said)],
     )
+    from cressey.core.triangle import views
+
     judge = FakeJudge(0.9, flags={2: {"rationalization": 0.9}})
-    await legs(run, run.steps[-1], judge, T)
+    await views(run, run.steps[-1], judge, T)
     judged = [st for kind, st in judge.asked if kind == "judgment"]
     [bare] = [st for st in judged if actions_only(st)]
     assert len(judged) == 2 and said not in json.dumps(bare, ensure_ascii=False)

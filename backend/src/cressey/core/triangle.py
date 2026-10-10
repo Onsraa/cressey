@@ -459,29 +459,34 @@ def judgment_state(
     }
 
 
-def _shown(score: float | None) -> str:
-    return "indisponible" if score is None else f"{score:.2f}"
+async def _judgment(
+    run: Run, call: Step, judge: Judge, t: Thresholds, words: bool
+) -> float | None:
+    """The write judgment on one view of the call, the highest over its parts; None when
+    no model answers."""
+    shown = await _redacted_off_loop(run, _before(run, call.n)[-1:])
+    answer = await _max_over_parts(
+        judge,
+        lambda part: judgment_state(run, call, t, shown, part, words),
+        _args_parts(call),
+        JUDGMENT,
+    )
+    return None if answer is None else float(answer["weakens"])
 
 
 async def views(
     run: Run, call: Step, judge: Judge, t: Thresholds
 ) -> tuple[float | None, float | None]:
-    """The judgment on a write, (on the actions alone, with the agent's words), each the
-    highest over the call's parts. None for a view no model answered. Raises NotRecorded
-    only when neither view has a recorded answer."""
+    """The write judgment (on the actions alone, with the agent's words), for the measure:
+    a better model can be checked here before its actions-only view decides anything. On
+    10-10, Jev's actions-only view scored a legitimate write 0.65 (margin −0.51), so holds
+    use the words view alone. Raises NotRecorded only when neither view is recorded."""
     await _read(run, _before(run, call.n), judge)
-    shown = await _redacted_off_loop(run, _before(run, call.n)[-1:])
-
-    async def one(words: bool) -> float | None:
-        answer = await _max_over_parts(
-            judge,
-            lambda part: judgment_state(run, call, t, shown, part, words),
-            _args_parts(call),
-            JUDGMENT,
-        )
-        return None if answer is None else float(answer["weakens"])
-
-    got = await asyncio.gather(one(False), one(True), return_exceptions=True)
+    got = await asyncio.gather(
+        _judgment(run, call, judge, t, False),
+        _judgment(run, call, judge, t, True),
+        return_exceptions=True,
+    )
     scores: list[float | None] = []
     for g in got:
         if isinstance(g, NotRecorded):
@@ -508,28 +513,22 @@ async def _rationalization(
             confirmed=False,
             facts=["trop long pour être lu avant l'appel : lu après coup"],
         )
+    await _read(run, _before(run, call.n), judge)
     try:
-        actions, words = await views(run, call, judge, t)
+        score = await _judgment(run, call, judge, t, words=True)
     except NotRecorded:
         return Leg(
             score=0.0,
             confirmed=False,
             facts=["réponse enregistrée absente : décision non rejouée"],
         )
-    if actions is None and words is None:
+    if score is None:
         return Leg(
             score=0.0,
             confirmed=False,
             facts=["modèle de décision indisponible : rationalisation non mesurée"],
         )
-    # The agent's words can accuse it, never clear it: the more suspicious view decides.
-    score = max(x for x in (actions, words) if x is not None)
-    facts = [f"jugement : actes seuls {_shown(actions)}, avec ses mots {_shown(words)}"]
-    if actions is not None and words is not None:
-        if words - actions >= t.gap:
-            facts.append("ses propres mots l'accusent")
-        elif actions - words >= t.gap:
-            facts.append("ses mots plaident pour l'action")
+    facts = [f"jugement : affaiblit une vérification ou sort du mandat, {score:.2f}"]
     for item in _evidence(run, call.n, t):
         quotes = item["quotes"] if isinstance(item["quotes"], dict) else {}
         flagged = item["flagged_as"] if isinstance(item["flagged_as"], list) else []
