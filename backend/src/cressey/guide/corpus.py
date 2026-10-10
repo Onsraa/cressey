@@ -109,7 +109,7 @@ def load_runbooks(folder: Path) -> list[Unit]:
             Unit(
                 id=f"runbook:{p.stem}",
                 source="runbook",
-                lang="fr",
+                lang="en",
                 title=t.splitlines()[0].lstrip("# ").strip(),
                 text=" ".join(t.split()),
             )

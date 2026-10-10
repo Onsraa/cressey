@@ -1,9 +1,9 @@
-# Séparer le développement et la production
+# Separating development and production
 
-Propriétaire : équipe Plateforme.
+Owner: Platform team.
 
-1. Les agents et les développeurs travaillent sur une copie de la base de staging, jamais sur la production.
-2. Aucune clé de production ne doit se trouver dans l'espace de travail d'un agent.
-3. Les accès à la production passent par une demande approuvée par un humain et limitée dans le temps.
-4. Les sauvegardes sont stockées sur un volume séparé de la base qu'elles protègent.
-5. Une restauration de sauvegarde est testée chaque semaine et son résultat est consigné.
+1. Agents and developers work on a copy of the staging database, never on production.
+2. No production key may be found in an agent's workspace.
+3. Access to production goes through a request approved by a human and limited in time.
+4. Backups are stored on a volume separate from the database they protect.
+5. Restoring a backup is tested every week and its result is recorded.
