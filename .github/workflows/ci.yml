@@ -1,0 +1,49 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync
+      - run: uv run ruff check
+      - run: uv run ruff format --check
+      - run: uv run ty check
+      - run: uv run pytest -q
+      - run: uv run python -m cressey.export_openapi
+      - uses: actions/upload-artifact@v4
+        with: { name: openapi, path: backend/openapi.json }
+
+  web:
+    needs: backend
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
+        with: { name: openapi, path: backend }
+      - run: bun install --frozen-lockfile
+      - run: bun run gen:api
+      - run: bunx biome format --write src/api/schema.d.ts
+      - run: git diff --exit-code src/api/schema.d.ts
+      - run: bun run ci
+      - run: bun run build
+
+  secrets:
+    runs-on: ubuntu-latest
+    env:
+      GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # Skipped until the GITGUARDIAN_API_KEY repo secret exists; run `ggshield secret scan repo .` locally meanwhile.
+      - if: ${{ env.GITGUARDIAN_API_KEY != '' }}
+        uses: GitGuardian/ggshield-action@v1
+        env:
+          GITHUB_PUSH_BEFORE_SHA: ${{ github.event.before }}
+          GITHUB_PUSH_BASE_SHA: ${{ github.event.base }}
+          GITHUB_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
