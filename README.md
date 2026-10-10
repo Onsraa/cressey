@@ -11,6 +11,8 @@ Cressey surveille ce que font les agents IA d'une entreprise. Quand le triangle 
 
 ESSECKATHON « Secure Horizons », Track 2 « Defenders Augmented ».
 
+Documentation détaillée : [`docs/`](docs/README.md).
+
 ## Le problème
 Les agents IA agissent avec de vrais droits, et la seule limite est souvent le prompt :
 - **PocketOS, avril 2026 :** un agent de code a supprimé le volume de production et toutes ses sauvegardes en 9 secondes.
@@ -85,8 +87,8 @@ docker compose up --build     # image unique : web + API sur :8000
 | Faux positifs (retenues sur sessions normales) | **[mesure]** |
 | Temps pour arrêter | **[mesure] ms**, avec un surcoût proxy mesuré de 1 à 9 ms par appel |
 | Source trouvée du premier coup | **[mesure]** |
-| Citations vérifiées dans les guides | **[mesure]** (jeu de dev : 23/23 avec gpt-5.5) |
-| hit@3 au passage exact, BM25 → hybride → reclassé | **[mesure]** (jeu de dev : 25 → 29 → 30 sur 30) |
+| Citations vérifiées dans les guides | 100 % sur le jeu de dev (8 incidents) |
+| hit@3 au passage exact, BM25 → hybride → reclassé | 26 → 30 → 31 sur 31 (jeu de dev) |
 
 **Méthode :**
 - un jeu de développement pour régler ;

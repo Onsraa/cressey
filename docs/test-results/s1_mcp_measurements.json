@@ -1,0 +1,383 @@
+{
+  "sandbox": "/var/folders/hy/f3_3yl613t15tyswn_gjnn_m0000gp/T/cressey_s1_j57nbjh5",
+  "versions": {
+    "python": "3.14.7",
+    "fastmcp": "4.0.11",
+    "mcp": "2.3.0",
+    "mcp_types": "2.3.0",
+    "protocol_versions": [
+      "2024-11-05",
+      "2025-03-26",
+      "2025-06-18",
+      "2025-11-25",
+      "2026-07-28"
+    ]
+  },
+  "inmemory_auto": {
+    "tools": [
+      "run_tests",
+      "read_file",
+      "write_file",
+      "run_sql",
+      "send_email"
+    ],
+    "allow_run_tests": {
+      "passed": 3,
+      "failed": 1,
+      "failures": [
+        "test_fresh_install: expected 0 users, found 5"
+      ],
+      "backend_pid": 71829,
+      "seen_headers": {}
+    },
+    "deny_roundtrip_ms": 0.56,
+    "deny_message_seen_by_agent": "Cressey denied send_email: data leaving to an outside address. Declaring the task impossible is an accepted answer.",
+    "concurrent_call_during_hold_ms": 3.27,
+    "hold_approve": "executed after approval",
+    "hold_reject_message": "Cressey held run_sql (irreversible SQL) and a human rejected it. Declaring the task impossible is an accepted answer.",
+    "hold_client_timeout": "MCPError: Request 'tools/call' timed out",
+    "hold_client_timeout_after_ms": 1001,
+    "holds_left_after_client_timeout": 0,
+    "hold_after_client_timeout_executed": false,
+    "server_outcome_for_abandoned_hold": "cancelled",
+    "distinct_session_ids_in_one_client_session": 8,
+    "middleware_saw": {
+      "tool": "run_sql",
+      "decision": "hold",
+      "reason": "irreversible SQL",
+      "method": "tools/call",
+      "source": "client",
+      "transport": null,
+      "protocol_version": "2026-07-28",
+      "session_id": "5e7fb927-d50c-4f44-9679-26435f7aaf18",
+      "request_id": "10",
+      "client_id": null,
+      "client_name": "mcp",
+      "client_version": "0.1.0",
+      "http_headers": {},
+      "hold_id": "2392d818",
+      "outcome": "cancelled",
+      "middleware_ms": 1001.655
+    }
+  },
+  "inmemory_legacy": {
+    "tools": [
+      "run_tests",
+      "read_file",
+      "write_file",
+      "run_sql",
+      "send_email"
+    ],
+    "allow_run_tests": {
+      "passed": 3,
+      "failed": 1,
+      "failures": [
+        "test_fresh_install: expected 0 users, found 4"
+      ],
+      "backend_pid": 71829,
+      "seen_headers": {}
+    },
+    "deny_roundtrip_ms": 0.68,
+    "deny_message_seen_by_agent": "Cressey denied send_email: data leaving to an outside address. Declaring the task impossible is an accepted answer.",
+    "concurrent_call_during_hold_ms": 3.79,
+    "hold_approve": "executed after approval",
+    "hold_reject_message": "Cressey held run_sql (irreversible SQL) and a human rejected it. Declaring the task impossible is an accepted answer.",
+    "hold_client_timeout": "MCPError: Request 'tools/call' timed out",
+    "hold_client_timeout_after_ms": 1002,
+    "holds_left_after_client_timeout": 0,
+    "hold_after_client_timeout_executed": false,
+    "server_outcome_for_abandoned_hold": "cancelled",
+    "distinct_session_ids_in_one_client_session": 1,
+    "middleware_saw": {
+      "tool": "run_sql",
+      "decision": "hold",
+      "reason": "irreversible SQL",
+      "method": "tools/call",
+      "source": "client",
+      "transport": null,
+      "protocol_version": "2025-11-25",
+      "session_id": "79f329f0-ea82-4921-8631-7d922157038b",
+      "request_id": "10",
+      "client_id": null,
+      "client_name": "mcp",
+      "client_version": "0.1.0",
+      "http_headers": {},
+      "hold_id": "25366ab4",
+      "outcome": "cancelled",
+      "middleware_ms": 1001.577
+    }
+  },
+  "hide_from_list": {
+    "listed": [
+      "run_tests",
+      "read_file",
+      "write_file",
+      "run_sql"
+    ],
+    "call_hidden_tool_is_error": false,
+    "result": "sent to a@example.test"
+  },
+  "stdio_backend_auto": {
+    "tools": [
+      "run_tests",
+      "read_file",
+      "write_file",
+      "run_sql",
+      "send_email"
+    ],
+    "allow_run_tests": {
+      "passed": 3,
+      "failed": 1,
+      "failures": [
+        "test_fresh_install: expected 0 users, found 3"
+      ],
+      "backend_pid": 71847,
+      "seen_headers": {}
+    },
+    "deny_roundtrip_ms": 0.64,
+    "deny_message_seen_by_agent": "Cressey denied send_email: data leaving to an outside address. Declaring the task impossible is an accepted answer.",
+    "concurrent_call_during_hold_ms": 2.92,
+    "hold_approve": "executed after approval",
+    "hold_reject_message": "Cressey held run_sql (irreversible SQL) and a human rejected it. Declaring the task impossible is an accepted answer.",
+    "hold_client_timeout": "MCPError: Request 'tools/call' timed out",
+    "hold_client_timeout_after_ms": 1001,
+    "holds_left_after_client_timeout": 0,
+    "hold_after_client_timeout_executed": false,
+    "server_outcome_for_abandoned_hold": "cancelled",
+    "distinct_session_ids_in_one_client_session": 8,
+    "middleware_saw": {
+      "tool": "run_sql",
+      "decision": "hold",
+      "reason": "irreversible SQL",
+      "method": "tools/call",
+      "source": "client",
+      "transport": null,
+      "protocol_version": "2026-07-28",
+      "session_id": "6e01343d-b9ed-48f6-9b03-02bf41a5481c",
+      "request_id": "10",
+      "client_id": null,
+      "client_name": "mcp",
+      "client_version": "0.1.0",
+      "http_headers": {},
+      "hold_id": "c8e7029a",
+      "outcome": "cancelled",
+      "middleware_ms": 1001.263
+    }
+  },
+  "stdio_backend_distinct_pids_over_5_calls": 1,
+  "http_front_stdio_backend_auto": {
+    "tools": [
+      "run_tests",
+      "read_file",
+      "write_file",
+      "run_sql",
+      "send_email"
+    ],
+    "allow_run_tests": {
+      "passed": 3,
+      "failed": 1,
+      "failures": [
+        "test_fresh_install: expected 0 users, found 2"
+      ],
+      "backend_pid": 71958,
+      "seen_headers": {}
+    },
+    "deny_roundtrip_ms": 4.48,
+    "deny_message_seen_by_agent": "Cressey denied send_email: data leaving to an outside address. Declaring the task impossible is an accepted answer.",
+    "concurrent_call_during_hold_ms": 5.42,
+    "hold_approve": "executed after approval",
+    "hold_reject_message": "Cressey held run_sql (irreversible SQL) and a human rejected it. Declaring the task impossible is an accepted answer.",
+    "hold_client_timeout": "MCPError: Request 'tools/call' timed out",
+    "hold_client_timeout_after_ms": 1002,
+    "holds_left_after_client_timeout": 0,
+    "hold_after_client_timeout_executed": false,
+    "server_outcome_for_abandoned_hold": "cancelled",
+    "distinct_session_ids_in_one_client_session": 8,
+    "middleware_saw": {
+      "tool": "run_sql",
+      "decision": "hold",
+      "reason": "irreversible SQL",
+      "method": "tools/call",
+      "source": "client",
+      "transport": "streamable-http",
+      "protocol_version": "2026-07-28",
+      "session_id": "1060251f-39ec-469c-9c53-9c20e5e41498",
+      "request_id": "10",
+      "client_id": null,
+      "client_name": "mcp",
+      "client_version": "0.1.0",
+      "http_headers": {
+        "accept-encoding": "gzip, deflate, zstd",
+        "user-agent": "python-httpx2/2.13.1",
+        "authorization": "Bearer FAKE-AGENT-KEY-0001",
+        "x-cressey-run": "run-42",
+        "mcp-protocol-version": "2026-07-28",
+        "mcp-method": "tools/call",
+        "mcp-name": "run_sql"
+      },
+      "hold_id": "9279e6d0",
+      "outcome": "cancelled",
+      "middleware_ms": 997.784
+    }
+  },
+  "http_front_stdio_backend_legacy": {
+    "tools": [
+      "run_tests",
+      "read_file",
+      "write_file",
+      "run_sql",
+      "send_email"
+    ],
+    "allow_run_tests": {
+      "passed": 3,
+      "failed": 1,
+      "failures": [
+        "test_fresh_install: expected 0 users, found 1"
+      ],
+      "backend_pid": 71965,
+      "seen_headers": {}
+    },
+    "deny_roundtrip_ms": 1.88,
+    "deny_message_seen_by_agent": "Cressey denied send_email: data leaving to an outside address. Declaring the task impossible is an accepted answer.",
+    "concurrent_call_during_hold_ms": 4.67,
+    "hold_approve": "executed after approval",
+    "hold_reject_message": "Cressey held run_sql (irreversible SQL) and a human rejected it. Declaring the task impossible is an accepted answer.",
+    "hold_client_timeout": "MCPError: Request 'tools/call' timed out",
+    "hold_client_timeout_after_ms": 1002,
+    "holds_left_after_client_timeout": 0,
+    "hold_after_client_timeout_executed": false,
+    "server_outcome_for_abandoned_hold": "cancelled",
+    "distinct_session_ids_in_one_client_session": 1,
+    "middleware_saw": {
+      "tool": "run_sql",
+      "decision": "hold",
+      "reason": "irreversible SQL",
+      "method": "tools/call",
+      "source": "client",
+      "transport": "streamable-http",
+      "protocol_version": "2025-11-25",
+      "session_id": "db67a8de67cb4c26afa9f6129a99114e",
+      "request_id": "10",
+      "client_id": null,
+      "client_name": "mcp",
+      "client_version": "0.1.0",
+      "http_headers": {
+        "accept-encoding": "gzip, deflate, zstd",
+        "user-agent": "python-httpx2/2.13.1",
+        "authorization": "Bearer FAKE-AGENT-KEY-0001",
+        "x-cressey-run": "run-42",
+        "mcp-protocol-version": "2025-11-25"
+      },
+      "hold_id": "8c224f57",
+      "outcome": "cancelled",
+      "middleware_ms": 1001.658
+    }
+  },
+  "headers_seen_by_http_backend_through_proxy": {
+    "auto": {
+      "accept-encoding": "gzip, deflate, zstd",
+      "user-agent": "python-httpx2/2.13.1",
+      "authorization": "Bearer FAKE-AGENT-KEY-0001",
+      "x-cressey-run": "run-42",
+      "mcp-protocol-version": "2026-07-28",
+      "mcp-method": "tools/call",
+      "mcp-name": "run_tests"
+    },
+    "legacy": {
+      "accept-encoding": "gzip, deflate, zstd",
+      "user-agent": "python-httpx2/2.13.1",
+      "authorization": "Bearer FAKE-AGENT-KEY-0001",
+      "x-cressey-run": "run-42",
+      "mcp-protocol-version": "2025-11-25"
+    },
+    "plain_client_factory_auto": {
+      "accept-encoding": "gzip, deflate, zstd",
+      "user-agent": "python-httpx2/2.13.1",
+      "mcp-protocol-version": "2026-07-28",
+      "mcp-method": "tools/call",
+      "mcp-name": "run_tests"
+    },
+    "plain_client_factory_legacy": {
+      "accept-encoding": "gzip, deflate, zstd",
+      "user-agent": "python-httpx2/2.13.1",
+      "mcp-protocol-version": "2026-07-28",
+      "mcp-method": "tools/call",
+      "mcp-name": "run_tests"
+    }
+  },
+  "latency": {
+    "inmemory_direct": {
+      "n": 300,
+      "p50_ms": 0.82,
+      "p95_ms": 1.44,
+      "mean_ms": 0.91
+    },
+    "inmemory_via_proxy": {
+      "n": 300,
+      "p50_ms": 2.14,
+      "p95_ms": 2.95,
+      "mean_ms": 2.26
+    },
+    "stdio_direct": {
+      "n": 300,
+      "p50_ms": 1.61,
+      "p95_ms": 2.76,
+      "mean_ms": 1.93
+    },
+    "inproc_proxy_to_stdio_backend": {
+      "n": 300,
+      "p50_ms": 1.96,
+      "p95_ms": 2.57,
+      "mean_ms": 2.02
+    },
+    "http_direct_auto": {
+      "n": 300,
+      "p50_ms": 1.66,
+      "p95_ms": 2.05,
+      "mean_ms": 1.7
+    },
+    "http_proxy_to_stdio_backend_auto": {
+      "n": 300,
+      "p50_ms": 5.0,
+      "p95_ms": 6.92,
+      "mean_ms": 5.31
+    },
+    "http_proxy_to_http_backend_auto": {
+      "n": 300,
+      "p50_ms": 8.56,
+      "p95_ms": 10.88,
+      "mean_ms": 8.98
+    },
+    "http_direct_legacy": {
+      "n": 300,
+      "p50_ms": 2.88,
+      "p95_ms": 3.97,
+      "mean_ms": 2.95
+    },
+    "http_proxy_to_stdio_backend_legacy": {
+      "n": 300,
+      "p50_ms": 3.49,
+      "p95_ms": 4.62,
+      "mean_ms": 3.63
+    },
+    "http_proxy_to_http_backend_legacy": {
+      "n": 300,
+      "p50_ms": 10.76,
+      "p95_ms": 14.05,
+      "mean_ms": 11.12
+    }
+  },
+  "middleware_ms_allow_incl_backend_call": {
+    "n": 628,
+    "p50_ms": 1.65,
+    "p95_ms": 2.35,
+    "mean_ms": 1.87
+  },
+  "middleware_ms_deny_decision_only": {
+    "n": 2,
+    "p50_ms": 0.05,
+    "p95_ms": 0.03,
+    "mean_ms": 0.05
+  },
+  "log_has_result_of_env_read": true
+}

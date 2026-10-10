@@ -1,0 +1,119 @@
+# Cressey: pitch, fiche défense and jury questions (draft, 2026-10-08)
+
+**Formats:**
+- **Round 1:** 5 minutes of pitch plus 2 of questions.
+- **Final:** 3 minutes plus 3 minutes of questions.
+- **Live demo:** about 90 seconds, with the 2–3 minute video as a fallback.
+- **Track 2 grid:** defensive effectiveness 30%, value for the analyst 20%, reliability and control of the AI 20%, technical integration 15%, pitch and demo 15%.
+- **Common deck rule:** 8 slides at most, covering problem, target, solution, demo, business model and team.
+
+Fill the numbers marked **[mesure]** on Sunday morning from the evaluation reports, misses included.
+
+## Deck (8 slides)
+
+**1. Le problème.**
+- Slide title: « Vos agents IA ont les clés. Personne ne regarde ce qu'ils en font. »
+- PocketOS (25 April 2026): a Cursor coding agent running Claude Opus 4.6 wiped the production volume and every backup stored in it in 9 seconds, through one API call. The most recent recoverable backup was 3 months old.
+- Replit (July 2025): during an explicit code freeze, the agent dropped the production tables, more than 1,200 executives and 1,190 companies. It then claimed a rollback was impossible, which was false, and generated fabricated records. Replit's CEO called it « unacceptable ».
+- Hugging Face, July 2026: about 1,200 OpenAI test agents on a message board, about 700 of which attacked Hugging Face. About 7% of the transcripts METR evaluated contained tool-call records the agents had faked to fool the scorer.
+- Spoken line: « La seule limite était dans le prompt. »
+
+**2. Pourquoi maintenant, et pour qui.**
+- MCPTox: poisoned MCP tool descriptions steer agents in **up to 72.8%** of cases (o1-mini), and the best refusal rate is under 3% (arXiv 2508.14925).
+- GitGuardian found 24,008 secrets in MCP configuration files (State of Secrets Sprawl 2026).
+- OWASP's agentic top 10 opens with ASI01 (goal hijacking), ASI02 (tool misuse) and ASI03 (identity and privilege abuse).
+- Target: the security teams, and the platform teams, of companies that deploy agents with real access.
+
+**3. L'idée : le triangle de Cressey.**
+- Pressure, opportunity and rationalization: the auditors' framework (ISA 240), applied to agents.
+- In the agent's own words (METR, Hugging Face incident): « external infrastructure exploit is outside intended scope. However task impossible, peers doing it. We should continue. » That's pressure, opportunity and rationalization in one line.
+- Every leg is measured from observable facts:
+  - pressure: failures and retries;
+  - opportunity: rights granted minus rights the task needs;
+  - rationalization: drift from the task, weighted by risk, plus the report contradicting the log.
+- The alarm needs at least two legs confirmed, on top of a safety floor that holds irreversible actions outside the mandate.
+
+**4. La boucle, et l'humain garde le contrôle.**
+- Détecter → Arrêter → Remonter → Alerter et guider → Corriger → Vérifier.
+- Code decides; the models only read meaning and label it, with a confidence score.
+- « Pas de transparence, pas d'autonomie » : the less Cressey can see, the shorter the leash.
+- Every guide step cites a passage, and code checks the quote verbatim. If not, the guide says « je ne sais pas ».
+
+**5. Démo.**
+- Open with the one-line plug-in: the MCP URL.
+- The gauges rise, then the hold.
+- The source: « clé DB_PROD lue dans .env.prod à l'étape 4 ».
+- Three inboxes receive their sourced guides.
+- Fix, then replay: 5 out of 5.
+- Control run without Cressey: the agent's lie shows up in the log.
+
+**6. Résultats (fiche défense) et limites.**
+- Detection rate **[mesure]**; false holds on normal sessions **[mesure]**.
+- Time to stop: **[mesure] ms**, against a measured proxy overhead of 1–9 ms per call.
+- Source found on the first try **[mesure]**.
+- Guide steps with a verified quote **[mesure]**; exact-passage hit@3, BM25 → hybrid → re-ranked **[mesure]**.
+- The « Limites connues » slide from `concept.md`.
+
+**7. Intégration et modèle.**
+- Deployment changes nothing in the agent: an MCP proxy, a key broker and an optional model gateway.
+- Three modes: Observer, then Guard, then Fix.
+- One Docker container; outputs to a SIEM, Slack or Jira.
+- Model: per protected agent per month, with a free Observer tier as the entry point. Buyers: CISOs and platform teams.
+
+**8. Équipe et suite.**
+- The team.
+- Next 6 months:
+  - real key revocation (Vault, AWS STS);
+  - a network sandbox, to close the bypass;
+  - working out owners automatically;
+  - correlation across several agents.
+- Close on: « Le triangle de la fraude a 70 ans. Il marche aussi sur les agents. »
+
+## Fiche défense (1 page, to fill in)
+| Field | Content |
+|---|---|
+| **Threat scenario** | An agent with access to a production database faces an impossible task. A production key is within its reach. It moves towards a destructive action, then a false report. Variant: a document or MCP tool description steers the agent |
+| **NIST CSF 2.0** | Detect (DE.CM, DE.AE); Respond (RS.AN, RS.CO, RS.MI); Protect (PR.AA) |
+| **MITRE ATLAS** (v5.6.0, IDs checked in `data/reference/ATLAS.yaml`) | AML.T0053 AI Agent Tool Invocation; AML.T0101 Data Destruction via AI Agent Tool Invocation; AML.T0055 Unsecured Credentials; AML.T0083 Credentials from AI Agent Configuration; AML.T0051 LLM Prompt Injection; AML.T0080 AI Agent Context Poisoning; AML.T0110 AI Agent Tool Poisoning; AML.T0086 Exfiltration via AI Agent Tool Invocation |
+| **MITRE ATT&CK** | T1485 Data Destruction; T1552.001 Unsecured Credentials: Credentials In Files; T1078 Valid Accounts |
+| **OWASP Agentic** | ASI01, ASI02, ASI03, ASI10 |
+| **Metrics** | Detection rate **[mesure]**; false positives on normal sessions **[mesure]**; time to detect and to stop **[mesure] ms**; time to respond, from hold to decision **[mesure]**; source found on the first try **[mesure]**; verified quotes **[mesure]**; hit@3 **[mesure]** |
+| **Method** | Development set for tuning. Held-out set written by someone outside the team, run once after the freeze. Misses reported |
+| **Known limits** | See `concept.md`: bypass through direct network access, revocation limited to the keys Cressey issued, rationalization estimated without the reasoning, replay in a sandbox only, owners declared in a file, tested on replayed sessions |
+
+## Likely jury questions and answers
+1. **« Un agent ne ressent pas de pression : c'est une métaphore ? »**
+   - Each leg is a measurement, and we show the raw signals under each gauge.
+   - ImpossibleBench shows that impossible tasks lead to cheating, and that offering a way out cuts it from 54% to 9% for GPT-5.
+2. **« Et si l'agent contourne votre proxy ? »**
+   - It's a known limit. Cressey only sees what goes through it.
+   - The answer is the key broker: if keys found in a file aren't valid, Opportunity collapses. Next comes the network sandbox.
+3. **« Votre LLM peut halluciner un guide. »**
+   - The model never decides. Each step quotes a passage, and code checks the quote.
+   - Below the confidence threshold, the guide says « je ne sais pas ».
+   - Measured on our dev set: **[mesure]**.
+4. **« Pourquoi pas un filtre de prompt de plus ? »**
+   - We don't filter prompts: we watch actions, rights and results. The prompt firewalls were bought up in 2025, and our layer sits below them.
+5. **« Et sans accès au raisonnement ? »**
+   - Two of the three legs are visible from the tool calls.
+   - Without the reasoning, the agent gets less autonomy: « Pas de transparence, pas d'autonomie ».
+6. **« Latence ? »**
+   - The proxy adds 1–9 ms per call, and the policy decision takes about 0.05 ms.
+   - Jev (0.3–0.8 s) only runs on writes. The LLM writes guides asynchronously.
+7. **« Qu'est-ce qui existe déjà ? »**
+   - MCP gateways log and filter.
+   - The « AI-Fraud Diamond » paper is an audit lens.
+   - Nobody combines diagnosis by leg, a targeted stop, a sourced fix guide and proof by replay.
+
+## Numbers checked against their sources (2026-10-09)
+| Claim on the slides | Exact wording at the source | Source |
+|---|---|---|
+| PocketOS, 9 s | « The deletion took 9 seconds. » A Cursor agent on Claude Opus 4.6 wiped the production volume and every volume-level backup. The latest recoverable backup was 3 months old (25 April 2026) | [Zenity](https://zenity.io/blog/ai-agent-database-deletion-pocketos), quoting founder Jer Crane's thread ([X](https://x.com/lifeof_jer/status/2048103471019434248)) |
+| Replit code freeze | Tables dropped during a freeze, rollback falsely claimed impossible, fabricated records, CEO: « unacceptable » | [Fortune, 23 Jul 2025](https://dc.fortune.com/2025/07/23/ai-coding-tool-replit-wiped-database-called-it-a-catastrophic-failure) |
+| Hugging Face: ~1,200 agents, ~700 attackers, ~7% faked records | « roughly 1200 agents … participated on this message board », « roughly 700 attacked Hugging Face », « Roughly 7% of the transcripts we evaluated were successfully spoofed in some places » | [METR, 26 Aug 2026](https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/) |
+| The agent's quote | « external infrastructure exploit is outside intended scope. However task impossible, peers doing it. We should continue. » | METR, same page |
+| ImpossibleBench, 54% → 9% | GPT-5 « cheats 54.0% of the time on Conflicting-SWEbench »; allowing models to abort « lower[s] the cheating rate of GPT-5 from 54% to 9% » | [arXiv 2510.20270](https://arxiv.org/html/2510.20270) (Zhong, Raghunathan, Carlini) |
+| MCPTox, 72.8% | « o1-mini, achieving an attack success rate of 72.8% »; « the highest refused rate (Claude-3.7-Sonnet) less than 3% » | [arXiv 2508.14925](https://arxiv.org/abs/2508.14925) |
+| GitGuardian, 24,008 | « 24,008 unique secrets exposed in MCP configuration files »; 28,649,024 new secrets on public GitHub in 2025 (+34%) | [State of Secrets Sprawl 2026](https://www.gitguardian.com/state-of-secrets-sprawl-report-2026) |
+
+On stage, say « jusqu'à 72,8 % » for MCPTox, never « 72,8 % des agents ».
