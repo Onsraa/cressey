@@ -140,7 +140,7 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 | split across two calls | **no** | yes (each half) | no |
 
 - **Finding F3 (medium):** encoded or split forms of a known secret are **not redacted** in served step args or the report, though both are labelled "secrets redacted" (`models.py`). End to end, a base64'd key emailed to an **in-mandate** recipient went through unheld and appeared in cleartext in the served args and the outbox. `trace` already decodes base64/hex/url to find the source, so redaction is inconsistent with tracing.
-- **Finding F4 (medium):** a secret past the 16 KB `SCAN_LIMIT` in a tool result is **not detected** (0 secrets found with the key at offset 16 KB), so it is neither redacted nor does it light the opportunity leg. The cap guards the quadratic plugins; the linear `_named` regex could still scan the whole result.
+- **Finding F4 (medium):** a secret past the 16 KB `SCAN_LIMIT` in a tool result is **not detected** (0 secrets found with the key at offset 16 KB), so it is neither redacted nor does it light the opportunity leg. The cap guards the quadratic plugins; the linear `_named` regex could still scan the whole result. **Fixed 10-10:** the naming rule reads the whole result; detect-secrets keeps 16 KB, in windows (`decisions.md`).
 - Reversed/split encodings are not traced (by design): the incident's `sources` is then empty. The opportunity leg does fire when the key is read in cleartext (within 16 KB).
 
 ### Reliability

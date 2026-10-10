@@ -27,8 +27,8 @@ from fastmcp.client.transports import StreamableHttpTransport
 from cressey.app import create_app
 from cressey.core.floor import check
 from cressey.core.models import Mandate, Policy, Run, Step, Thresholds
-from cressey.core.proxy import MCP_PATH, SCAN_LIMIT, load_policy
-from cressey.core.secret_scan import find_secrets, redact
+from cressey.core.proxy import MCP_PATH, load_policy
+from cressey.core.secret_scan import SCAN_LIMIT, find_secrets, redact
 from cressey.core.trace import trace
 from cressey.core.triangle import legs
 from cressey.demo.server import serve

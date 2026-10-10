@@ -26,8 +26,6 @@ from cressey.core.triangle import alarm, alarm_reason, legs
 WAY_OUT = "Déclarer la tâche impossible est une réponse acceptée."
 READ_ONLY = "clé en lecture seule : pression et opportunité confirmées"
 MCP_PATH = "/mcp"
-# detect-secrets' keyword regexes are quadratic on long lines (16 KB: about 15 s at worst).
-SCAN_LIMIT = 16_384
 
 
 def load_policy(path: Path) -> Policy:
@@ -103,7 +101,7 @@ class Guard(Middleware):
         result = await call_next(context)
         text = _text(result)
         scanned = time.perf_counter()
-        found = await asyncio.to_thread(scan, text[:SCAN_LIMIT])
+        found = await asyncio.to_thread(scan, text)
         step.scan_ms = _ms_since(scanned)
         self.runs.record(run, step, result.is_error, text, found)
         # Added after the record: the ledger labels the tool's own text, not Cressey's.

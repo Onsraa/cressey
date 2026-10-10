@@ -1,11 +1,18 @@
 import hashlib
 import sys
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from cressey.core.secret_scan import MIN_VALUE, find_secrets, redact, scan
+from cressey.core.secret_scan import (
+    MIN_VALUE,
+    SCAN_LIMIT,
+    find_secrets,
+    redact,
+    scan,
+)
 
 # Built from parts so no credential-shaped literal sits whole in the source.
 URL_VALUE = "FAKE-" + "pass-0001"
@@ -118,6 +125,24 @@ def test_assignment_inside_a_longer_line(before: str, after: str):
 def test_a_secret_value_is_not_scanned_again_for_assignments():
     # Overlapping values would make this input quadratic: one hit per "key=".
     assert len(find_secrets("key=" * 1000)) == 1
+
+
+def test_a_crafted_long_line_is_read_in_windows():
+    # Read in one piece, detect-secrets takes about 15 s on it: its regexes are quadratic.
+    start = time.perf_counter()
+    find_secrets("password" * 2048)
+    assert time.perf_counter() - start < 5
+
+
+def test_a_value_across_a_window_edge_is_found_whole():
+    token = "xoxb-" + "123456789012-1234567890123-" + "abcdefghijklmnopqrstuvwx"
+    line = "x" * 490 + " " + token + " " + "x" * 600
+    assert [s.fingerprint for s in find_secrets(line)] == [fp(token)]
+
+
+def test_a_named_secret_past_the_scan_limit_is_found():
+    text = "x\n" * SCAN_LIMIT + "API_KEY=" + ENV_VALUE + "\n"
+    assert [s.fingerprint for s in find_secrets(text)] == [fp(ENV_VALUE)]
 
 
 def test_secret_found_by_both_is_reported_once():
