@@ -37,6 +37,7 @@
 | 10-10 | **Focus for the remaining hours:** the ablation; acting on pressure (way out plus a shorter leash, without a human); trap keys; a scenario only the triangle catches; measuring the decision model | Each one answers a risk in `positioning-and-risks.md`. Order and estimates are in `runsheet.md` |
 | 10-10 | **Removed from the pitch:** « personne ne combine… », « notre couche est sous les pare-feux de prompt », « aucun changement dans l'agent » for the key broker, and « 5/5 » as proof of a fix | False (Lasso works at the same layer), or unproven: a scripted replay passes by construction |
 | 10-10 | **« Rejouer ×5 » is presented as « test de régression de la politique »** | The five variants test how much the floor covers, not how a real agent behaves |
+| 10-10 | **Sentry parked**: no Sentry issue per incident, and no fix by developers through the Sentry MCP, for now. Revisit after the 21:30 go/no-go if the core loop is green, in place of the Slack webhook | Core loop first: Sentry only carries an incident once Cressey has made one. Our incidents aren't code errors (a key, a task, a tool description), and a coding agent reading them through the Sentry MCP would receive untrusted agent text and a key's trail. If it comes back: one redacted issue per root cause, routed by ownership rules; Cressey keeps the guides and the replay |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
