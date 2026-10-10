@@ -115,7 +115,7 @@ Status as of 2026-10-10 14:00.
 | M3 | **Holds tire the approver,** and they go to a SOC analyst who can't judge a developer's file edit. The autonomy table sends every write to a human when only tool calls are visible | Open. Hold only on alarms, report holds per 100 normal runs, and let the way out and the shorter leash cut holds |
 | M4 | **The evaluation sets are ours:** dev sets tuned by the team, and sessions written by the team | Open. Always show n/N, plus the held-out set, live runs and public data |
 | M5 | **The decision model can be swayed:** agent text goes into the run summary | The floor never depends on the model. Show it: attack our own judge and measure (`evaluation.md`) |
-| M6 | **The decision model's confidence isn't calibrated for us.** Jev stays the decision model (10-10); its 0.4 and 0.5 thresholds were set on a few cases (S6, S9) | Open. Re-set the 0.4 and 0.5 thresholds on about 30 labelled actions |
+| M6 | **The decision model's confidence isn't calibrated for us.** Jev stays the decision model (10-10); its 0.4 and 0.5 thresholds were set on a few cases (S6, S9) | **Measured 10-10** (`evaluation.md`, « Decision model »), labels ours: the **0.5** write-judgment threshold holds — 30/30 on 30 labelled actions, margin +0.31 (every « yes » ≥ 0.66, every « no » ≤ 0.35), ECE 0.12. The **0.8** report check is high-precision, low-recall (precision 5/5, recall 5/10, margin −0.35): keep it as a backstop that flags, never holds. The **0.4** is the re-ranker's, calibrated separately (« Re-ranker »). Don't move the thresholds on this n; widen the labelled set before any change |
 
 ### Minor
 - **The key broker isn't one URL.** It's what actually closes the PocketOS case, and it means migrating how secrets are managed.
