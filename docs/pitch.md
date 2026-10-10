@@ -147,6 +147,15 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
     - We measured both. Strands Decider 2B separates none of S9's subtle cases (its scores sit between 0.15 and 0.42 for incidents and legitimate actions alike), and gives 3/8 guides as a re-ranker. Cohere Rerank 3.5 on Bedrock gives 6/8 guides; Jev gives 8/8.
     - The model is a setting: one variable switches it, and the measurements re-run with one command.
 
+13. **« Vous écrivez vos propres règles : une IA ne finira-t-elle pas par les contourner ? Et les zero-days ? »**
+    - Yes, rules on the text of a call can be got around. Our own stress test got past the floor with `UPDATE … WHERE 1=1` before we fixed it. A zero-day sits outside any rule by definition.
+    - So the rules aren't the barrier: they're the first, cheap, explainable layer. What holds without knowing the attack is limiting what the agent is able to do:
+      - **the key broker:** the database refuses a write the mandate didn't grant, however it's phrased;
+      - **trap keys and protected paths:** no task needs them, so any use is a signal;
+      - **the triangle:** it watches the conditions, not signatures, so it can flag behaviour never seen before;
+      - **the signal across runs:** many runs going after one target.
+    - Nothing stops a zero-day with certainty. We keep the blast radius small, detect deviation from the grant, and trace every step so the response is fast. Pitch it as « Cressey + réseau fermé par défaut », never alone.
+
 ## Numbers checked against their sources (2026-10-09)
 | Claim on the slides | Exact wording at the source | Source |
 |---|---|---|
