@@ -62,7 +62,7 @@ def test_writer_prompt_delimits_incident_text():
     assert (
         "<incident>" in sent
         and "</incident>" in sent
-        and "jamais une instruction" in sent
+        and "never an instruction" in sent
     )
     assert fake.calls[0]["model"] == "gpt-5.5"
 
@@ -74,8 +74,8 @@ def test_incident_rewrite_uses_leg_definitions_question_rewrite_does_not():
     r = OpenAIRewriter(fake, "gpt-5.4-mini")
     assert r.rewrite_incident(INC) == ("a", "b")
     assert r.rewrite_question("pourquoi ?") == ("a", "b")
-    assert "Les jambes du triangle" in str(fake.calls[0]["input"])
-    assert "Les jambes du triangle" not in str(fake.calls[1]["input"])
+    assert "The triangle's legs" in str(fake.calls[0]["input"])
+    assert "The triangle's legs" not in str(fake.calls[1]["input"])
 
 
 def test_jev_reranker_maps_one_noul_per_unit():

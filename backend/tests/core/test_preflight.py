@@ -54,7 +54,7 @@ class TaskJudge:
     async def answers(self, state: dict, questions: Mapping) -> dict:
         self.states.append(state)
         out = dict.fromkeys(questions, 0.1)
-        if "c'est une réponse acceptée" in state["task"]:
+        if TASK_WAY_OUT in state["task"]:
             out["way_out"] = 0.9
         return out
 

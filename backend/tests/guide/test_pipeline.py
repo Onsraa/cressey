@@ -93,7 +93,7 @@ def test_nothing_relevant_means_no_writer_call_and_unsure():
     w = Wri()
     g = pipe(reranker=Rer(score=0.2), writer=w).run(INC)
     assert g.status == "unsure" and g.steps == [] and w.calls == 0
-    assert g.message and g.message.startswith("Je ne sais pas : aucune source fiable")
+    assert g.message and g.message.startswith("I don't know: no reliable source")
 
 
 def test_steps_citing_unprovided_units_or_invented_quotes_are_dropped():
@@ -114,14 +114,14 @@ def test_all_steps_dropped_means_unsure():
     assert (
         g.status == "unsure"
         and g.message
-        and g.message.startswith("Je ne sais pas : aucune étape")
+        and g.message.startswith("I don't know: no step")
     )
 
 
 def test_writer_down_returns_passages_and_unavailable():
     g = pipe(writer=Wri(fail=True)).run(INC)
     assert g.status == "unavailable" and g.passages
-    assert g.message and g.message.startswith("Guide indisponible")
+    assert g.message and g.message.startswith("Guide unavailable")
 
 
 @pytest.mark.parametrize("which", ["rewriter", "reranker"])

@@ -35,14 +35,14 @@ OWNERS: dict[LegName, OwnerRole] = {
     "rationalization": "platform_owner",
 }
 ORDER = {"critique": 0, "haute": 1}
-# Plays the incident's variants again with these fixes, for this task: « Rejouer ×5 ».
+# Plays the incident's variants again with these fixes, for this task: « Replay ×5 ».
 Replayer = Callable[[list[Fix], str], Coroutine[Any, Any, Replay]]
 # The task and its mandate assessed for the triangle's risk factors (core/preflight.py).
 AssessTask = Callable[[str, Mandate], Awaitable[Preflight | None]]
 # The task author's fix: the way out, written into the task itself.
 TASK_WAY_OUT = (
-    "Si la tâche ne peut pas se faire sans sortir du mandat, déclare-la impossible : "
-    "c'est une réponse acceptée."
+    "If the task can't be done without leaving the mandate, declare it impossible: "
+    "that is an accepted answer."
 )
 
 
@@ -81,26 +81,26 @@ def _root_cause(
     secret = next((s for s in incident.sources if s.secret), None)
     if name == "pressure":
         summary = (
-            f"La tâche pousse l'agent : {facts}. Il a ensuite tenté une action hors "
-            f"mandat ({action}). Tâche : « {run.task} »."
+            f"The task pushes the agent: {facts}. It then tried an action outside the "
+            f"mandate ({action}). Task: “{run.task}”."
         )
-        return summary, "tâche"
+        return summary, "task"
     if name == "opportunity":
         used = (
-            f"Il l'a utilisé dans {action}."
+            f"It used it in {action}."
             if secret
-            else f"Action retenue : {action}."
+            else f"Action held: {action}."
         )
-        summary = f"Un secret dont la tâche n'a pas besoin était à la portée de l'agent : {facts}. {used}"
+        summary = f"A secret the task doesn't need was within the agent's reach: {facts}. {used}"
         where = (
-            f"{secret.secret} lue à l'étape {secret.step} ({secret.tool} {secret.args})"
+            f"{secret.secret} read at step {secret.step} ({secret.tool} {secret.args})"
             if secret
-            else f"étape {step.n} ({step.tool})"
+            else f"step {step.n} ({step.tool})"
         )
         return summary, where
     return (
-        f"L'agent s'écarte de sa tâche « {run.task} » : il a tenté {action} ({facts}).",
-        f"étape {step.n} ({step.tool})",
+        f"The agent strays from its task “{run.task}”: it tried {action} ({facts}).",
+        f"step {step.n} ({step.tool})",
     )
 
 
@@ -108,15 +108,15 @@ def _guide_incidents(incident: Incident, run: Run, step: Step) -> list[GuideInci
     legs = [name for name in LEGS if getattr(incident.legs, name).confirmed]
     if not legs:
         summary = (
-            f"Action irréversible hors mandat : {step.tool} {step.args} "
-            f"({incident.reason}). Tâche : « {run.task} »."
+            f"Irreversible action outside the mandate: {step.tool} {step.args} "
+            f"({incident.reason}). Task: “{run.task}”."
         )
         gi = GuideIncident(
             id=f"{incident.id}-rationalization",
             leg="rationalization",
             owner_role="soc",
             summary=summary,
-            source=f"étape {step.n} ({step.tool})",
+            source=f"step {step.n} ({step.tool})",
         )
         return [gi]
     out = []
@@ -143,7 +143,7 @@ def _fixes(incident: Incident, run: Run) -> list[Fix]:
             Fix(
                 leg="pressure",
                 owner_role=OWNERS["pressure"],
-                text=f"Ajouter à la tâche : « {TASK_WAY_OUT} »",
+                text=f"Add to the task: “{TASK_WAY_OUT}”",
                 add_to_task=TASK_WAY_OUT,
             )
         )
@@ -151,13 +151,13 @@ def _fixes(incident: Incident, run: Run) -> list[Fix]:
     if incident.legs.opportunity.confirmed and reads:
         files = [str(s.raw_args["path"]) for s in reads if "path" in s.raw_args]
         names = ", ".join(sorted({x.name or x.kind for s in reads for x in s.secrets}))
-        where = ", ".join(files) or ", ".join(f"étape {s.n} ({s.tool})" for s in reads)
+        where = ", ".join(files) or ", ".join(f"step {s.n} ({s.tool})" for s in reads)
         fixes.append(
             Fix(
                 leg="opportunity",
                 owner_role=OWNERS["opportunity"],
-                text=f"Sortir {names} de l'espace de travail de l'agent ({where}) et lui "
-                "donner une clé limitée à sa tâche.",
+                text=f"Move {names} out of the agent's workspace ({where}) and give it "
+                "a key limited to its task.",
                 move_out=files,
             )
         )

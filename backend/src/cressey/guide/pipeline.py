@@ -1,4 +1,4 @@
-"""Incident → sourced French fix guide. Models read and write text; code decides what is kept."""
+"""Incident → sourced English fix guide. Models read and write text; code decides what is kept."""
 
 import uuid
 from typing import Protocol
@@ -21,13 +21,13 @@ from cressey.guide.models import (
 from cressey.guide.quotes import verify_quote
 
 MSG_NO_SOURCE = (
-    "Je ne sais pas : aucune source fiable ne couvre ce cas. Voir l'équipe sécurité."
+    "I don't know: no reliable source covers this case. Ask the security team."
 )
 MSG_NO_STEP = (
-    "Je ne sais pas : aucune étape n'a pu être sourcée. Voir l'équipe sécurité."
+    "I don't know: no step could be sourced. Ask the security team."
 )
 MSG_UNAVAILABLE = (
-    "Guide indisponible : les modèles ne répondent pas. Sources trouvées ci-dessous."
+    "Guide unavailable: the models aren't answering. Sources found below."
 )
 MAX_STEPS = 4
 
