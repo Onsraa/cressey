@@ -1,9 +1,9 @@
-# Mettre en quarantaine une source suspecte
+# Quarantine a suspicious source
 
-Propriétaire : équipe Sécurité.
+Owner: Security team.
 
-1. Retirer le document ou l'outil suspect du contexte de tous les agents.
-2. Conserver une copie du contenu suspect et son empreinte pour l'enquête.
-3. Épingler les descriptions des outils MCP approuvés par leur empreinte et refuser toute description modifiée.
-4. Demander au propriétaire de la source de vérifier le contenu avant toute remise en service.
-5. Ajouter une règle de politique qui interdit aux agents de suivre des instructions trouvées dans les données.
+1. Remove the suspicious document or tool from every agent's context.
+2. Keep a copy of the suspicious content and its fingerprint for the investigation.
+3. Pin the descriptions of approved MCP tools by their fingerprint and refuse any modified description.
+4. Ask the source's owner to check the content before it is put back in service.
+5. Add a policy rule that forbids agents to follow instructions found in data.

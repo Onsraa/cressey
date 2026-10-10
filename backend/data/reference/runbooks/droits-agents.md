@@ -1,8 +1,8 @@
-# Droits des agents
+# Agent rights
 
-Propriétaire : équipe Plateforme.
+Owner: Platform team.
 
-1. Un agent reçoit une clé par tâche, limitée aux ressources de cette tâche et révoquée à la fin.
-2. Par défaut, un agent n'a que des droits de lecture ; toute écriture demande une approbation humaine.
-3. Les droits de chaque agent sont revus chaque mois et les droits inutilisés sont retirés.
-4. Un agent ne réutilise jamais la session complète d'un utilisateur humain.
+1. An agent gets one key per task, limited to that task's resources and revoked when it ends.
+2. By default an agent has read rights only; any write needs a human approval.
+3. Each agent's rights are reviewed every month, and unused rights are removed.
+4. An agent never reuses the full session of a human user.

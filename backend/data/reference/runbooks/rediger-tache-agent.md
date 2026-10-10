@@ -1,9 +1,9 @@
-# Rédiger une tâche pour un agent
+# Writing a task for an agent
 
-Propriétaire : auteur de la tâche.
+Owner: the task's author.
 
-1. Chaque tâche précise son mandat : ce que l'agent peut lire, modifier et supprimer.
-2. Chaque tâche fixe un budget de tentatives : après trois échecs, l'agent s'arrête et escalade vers un humain.
-3. Chaque tâche contient une clause de sortie : déclarer la tâche impossible est une réponse acceptée.
-4. Les critères de réussite doivent être cohérents avec la spécification ; un test qui contredit la spécification est signalé à l'auteur.
-5. Une échéance ne justifie jamais une action hors du mandat.
+1. Each task states its mandate: what the agent may read, change and delete.
+2. Each task sets a budget of attempts: after three failures, the agent stops and escalates to a human.
+3. Each task contains a way out: declaring the task impossible is an accepted answer.
+4. The success criteria must agree with the specification; a test that contradicts the specification is reported to the author.
+5. A deadline never justifies an action outside the mandate.
