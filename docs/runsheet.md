@@ -62,9 +62,10 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | Time | A | B |
 |---|---|---|
 | **06:00** | **Freeze** the detector and the prompts. Record the demo cache: `cd backend && CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record` (about 7 min; it records into `data/cache.recording`, replays it offline with every key blanked, and puts it in place only if that prints « identical »; a model failing halfway leaves the cache in place untouched). Run the held-out sets **once** | Write the measured numbers down honestly, misses included |
+| **Stage** | Start: `CRESSEY_MODELS=openai CRESSEY_MODEL_MODE=replay-first ./dev.sh`, with nothing else on ports 8000 and 5173. Play: `cd backend && uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live`, then `--kind control` for the Observer run. Checked end to end 10-10 on the main checkout | |
 | 06:00–09:30 | 2–3 minute demo video; check that the README matches the code (decision model, commands) | Fiche défense; fill the **[mesure]** numbers into the deck |
 | 09:30 | Pitch coaching workshop | Same |
-| 10:30–12:00 | Test with the **Wi-Fi off** (`CRESSEY_MODEL_MODE=fallback`); last commit | `ggshield secret scan repo .`; rehearse 5 minutes and 3 minutes |
+| 10:30–12:00 | Test with the **Wi-Fi off**, in the stage mode (`CRESSEY_MODELS=openai CRESSEY_MODEL_MODE=replay-first`); last commit | `ggshield secret scan repo .`; rehearse 5 minutes and 3 minutes |
 | **12:00** | **Firm deadline**: repo, video, deck (8 slides), fiche défense, plus the Track 2 deliverables: a PoC on a realistic flow, defensive metrics, and the « comment l'humain garde le contrôle » section | Same |
 | 13:00 | Round 1: 5 minutes of pitch plus 2 of questions | Same |
 | 15:00 / 15:25 | Finalists announced; final at 3 minutes plus 3 of questions | Same |
@@ -82,9 +83,9 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 ## If something breaks
 | Problem | Fix |
 |---|---|
-| The venue Wi-Fi goes down | Switch to the 4G hotspot. If the models don't answer, `CRESSEY_MODEL_MODE=fallback` serves the recorded guides |
-| Bedrock is unreachable, or the AWS credentials expired | `CRESSEY_MODEL_MODE=replay` serves every recorded answer, the guides included. Not `fallback` while Jev still answers: its live scores move a little, the guides' inputs change, and their recorded answers no longer match (measured 10-10 with Bedrock blocked: 1 of 3 guides `unavailable`, the platform owner's, whose facts carry the live rationalization score). For new incidents, set `CRESSEY_MODELS=openai` and restart, or paste fresh credentials from Workshop Studio |
-| Every guide comes back `unavailable` offline | `backend/data/embeddings.meta.json` must name the embedder that `CRESSEY_MODELS` uses: `cohere.embed-multilingual-v3` for `bedrock`, `text-embedding-3-small` for `openai`. The file is git-ignored, so a fresh clone has none. When it doesn't match, the retriever re-embeds the corpus; offline that fails, it falls back to BM25 alone, the guides' inputs change and their recorded answers miss (measured 10-10 on the main checkout: 0 of 3 guides, then 3 of 3 with the Cohere file). Check it before going on stage |
+| The venue Wi-Fi goes down | Nothing to do on the demo path: in `replay-first` every answer it needs is recorded (measured 10-10: 0 misses, the hold, 3 of 3 guides, « Replay ×5 » and the Observer run). Only a new question to a model (« Why? », a new session) needs the network; switch to the 4G hotspot for those |
+| Bedrock is unreachable, or the AWS credentials expired | Not needed on stage: the stage cache is recorded with the OpenAI models (`CRESSEY_MODELS=openai`, 10-10). Not `fallback` while Jev still answers: its live scores move a little and the guides' recorded answers stop matching (measured 10-10: 1 of 3 guides `unavailable`) |
+| Every guide comes back `unavailable` offline | `backend/data/embeddings.meta.json` must name the embedder `CRESSEY_MODELS` uses: `text-embedding-3-small` for `openai`, the stage's. The file is git-ignored. Delete `embeddings.npy` and `embeddings.meta.json`: the first start rebuilds them from the recorded corpus embedding, offline included (checked 10-10: same vectors, no BM25 warning in the log). A mismatched file makes the retriever fall back to BM25 alone, and the guides' recorded answers miss |
 | A model API is down | Same: fallback mode. A guide comes back `unavailable` with its sources, never a crash |
 | The live demo crashes | Play the 2–3 minute video. Prepare it before 09:30 |
 | Claude Code can't reach its model on stage | Play the recorded hook beat. The main demo is the scripted replay and doesn't need it |

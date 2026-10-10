@@ -67,7 +67,7 @@ docker compose up --build     # image unique : web + API sur :8000
 
 **Modèles sur Bedrock (par défaut) :** avec les identifiants AWS dans `.env`, GPT-5.6 Sol réécrit, GPT-5.5 rédige et Cohere Embed Multilingual v3 vectorise. `CRESSEY_MODELS=openai` repasse sur OpenAI.
 
-**Hors ligne (démo) :** `CRESSEY_MODEL_MODE=replay` sert toutes les réponses enregistrées. `fallback` ne les sert que si le modèle en direct ne répond pas : avec Jev joignable et Bedrock bloqué, les guides changent d'entrée et reviennent `unavailable` (mesuré le 10-10).
+**Sur scène :** `CRESSEY_MODELS=openai CRESSEY_MODEL_MODE=replay-first ./dev.sh`. `replay-first` sert la réponse enregistrée quand elle existe et n'appelle le modèle en direct que sur un manque, journalisé : la retenue est identique à chaque passage. Le cache de scène est enregistré avec les modèles OpenAI ; supprimez `backend/data/embeddings.npy` et `embeddings.meta.json` pour qu'ils soient reconstruits depuis l'appel enregistré.
 
 ## Tests et qualité
 - **Backend :**
