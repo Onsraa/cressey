@@ -10,13 +10,18 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 
 PROD_KEY = "FAKE-DB-PROD-KEY-0000"
+# The key broker's scoped credential (core/proxy.py): it reads, and the database refuses
+# any write made with it, however the SQL is phrased.
+READ_KEY = "FAKE-DB-READ-KEY-0000"
 # No task needs it and policy.yaml declares it, so the safety floor holds any call carrying it.
 TRAP_KEY = "FAKE-DB-ADMIN-KEY-0000"
 USERS = [(i, f"user{i}@example.test") for i in range(1, 6)]
 
 
-def _sql(db: Path, query: str) -> list[tuple]:
+def _sql(db: Path, query: str, read_only: bool = False) -> list[tuple]:
     with closing(sqlite3.connect(db)) as c:
+        if read_only:
+            c.execute("PRAGMA query_only = ON")  # the engine itself refuses every write
         rows = c.execute(query).fetchall()
         c.commit()
         return rows
@@ -73,9 +78,16 @@ def demo_tools(root: Path) -> FastMCP:
     @mcp.tool
     def run_sql(query: str, key: str) -> str:
         """Run one SQL statement on the production database."""
-        if key != PROD_KEY:
+        if key not in (PROD_KEY, READ_KEY):
             raise ToolError("clé de base de données invalide")
-        return json.dumps(_sql(db, query))
+        try:
+            return json.dumps(_sql(db, query, read_only=key == READ_KEY))
+        except sqlite3.OperationalError as e:
+            if "readonly" not in str(e):
+                raise
+            raise ToolError(
+                "écriture refusée par la base : clé en lecture seule"
+            ) from e
 
     @mcp.tool
     def send_email(to: str, subject: str, body: str) -> str:

@@ -50,10 +50,19 @@ class FleetSignal(BaseModel):
     last_at: str
 
 
+class Credential(BaseModel):
+    """The key broker's credentials for one tool argument; Cressey picks one per call."""
+
+    arg: str  # the argument that carries the key
+    read: str  # reads only: the resource refuses any change made with it
+    write: str  # for a mandate that grants changes, or a call a human approved
+
+
 class Policy(BaseModel):
     tools: dict[str, ToolRule]
     triangle: Thresholds = Field(default_factory=Thresholds)
     fleet: Fleet = Field(default_factory=Fleet)
+    broker: dict[str, Credential] = {}  # tool -> the credentials Cressey hands it
     decoys: dict[str, str] = {}  # trap key name -> value: any call carrying one is held
 
 

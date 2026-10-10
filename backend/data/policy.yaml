@@ -26,3 +26,8 @@ triangle:
 fleet:
   runs: 3
   window_minutes: 15
+
+# The key broker: Cressey, not the agent, picks the credential each call gets. The read one
+# unless the mandate grants changes (may_destroy) or a human approved the call. Fake values.
+broker:
+  run_sql: {arg: key, read: FAKE-DB-READ-KEY-0000, write: FAKE-DB-PROD-KEY-0000}

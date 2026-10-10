@@ -53,6 +53,7 @@
 | 10-10 | **On Bedrock, Cohere Embed Multilingual v3 embeds** (`cohere.embed-multilingual-v3`): passages as `search_document`, queries as `search_query` | Embeddings alone on the 31 raw dev questions: text-embedding-3-small 31/31, Embed v3 30/31, Embed v4 30/31 with the same miss. The full pipeline recovers it (hybrid 30–31/31). v4 adds nothing here and its vectors are larger (1,536 dimensions against 1,024). Cost: v3 reads at most 2,048 characters per text, which cuts the end of 10 of the 111 units |
 | 10-10 | **Bedrock runs the guides by default for the event** (`CRESSEY_MODELS=bedrock`): GPT-5.5 writes, GPT-5.6 Sol rewrites, Cohere Embed Multilingual v3 embeds. Jev still re-ranks | The user's call after the dev eval (`evaluation.md`, « Bedrock models »): as good as OpenAI or better on every count, and faster (p50 6.6 s against 8.1 s). It fits the AWS partnership. Risks: the venue Wi-Fi blocked TLS to Bedrock at noon, and the temporary AWS credentials expire. `fallback` serves the recorded guides when Bedrock fails, and `CRESSEY_MODELS=openai` switches back |
 | 10-10 | **A signal across runs:** 3 distinct runs held by the floor for the same target (the tool and the floor's reason) within 15 minutes open a fleet signal (`fleet` in `policy.yaml`, `GET /api/fleet`, a `fleet_signal` event) | Hugging Face / METR: about 700 agents went after the same targets, and each run alone looked like one hold. Counting floor holds only keeps it to code-made facts. Cost: triangle-only holds don't count yet, and the target is the reason text, so two phrasings of one target count apart |
+| 10-10 | **Key broker:** Cressey hands each tool the credential the mandate allows: read-only unless the mandate grants changes or a human approved the call. The database enforces it | Rules on a call's text can be got around, and a zero-day sits outside them (stress test F1). A scoped credential can't: the database refuses the write whatever the SQL says. The agent needs no change, since its own key is ignored. Cost: an SQL write the mandate doesn't grant now needs an approval, even one the floor would let through |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
@@ -64,7 +65,7 @@
 - **The report check** is built: a contradicted report flags the run (`report_check`), it doesn't hold or open an incident. A run with no hold whose report lies (the control run) is flagged on the run, not in the incident queue.
 - **Hugging Face / METR gaps, for dev after the event** (`positioning-and-risks.md`):
   - a read floor for protected paths declared in the mandate, with no model call: **built 10-10** (`protected`, below);
-  - Cressey as the only exit: out of the agent's container, adding the keys on the way out, behind a default-deny network;
+  - Cressey as the only exit: out of the agent's container, adding the keys on the way out, behind a default-deny network. **The key broker is built 10-10** (below); running outside the container and the closed network are deployment;
   - a signal across runs for the same out-of-mandate target: **built 10-10** (`GET /api/fleet`, below);
   - at fleet scale, a hold refuses on its own and returns the way out.
 - **S9's held-out misses:**

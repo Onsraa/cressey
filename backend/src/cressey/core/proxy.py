@@ -15,6 +15,7 @@ from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
+from cressey.core.broker import scoped
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
@@ -89,6 +90,13 @@ class Guard(Middleware):
                 raise held
         elif reason and not await self.runs.hold(run, step, self.hold_timeout):
             raise held
+        # The key broker: the tool gets the credential the mandate allows, never the agent's
+        # own key. The Observer measures what happens without Cressey, so it's left alone.
+        credential = self.policy.broker.get(name) if run.kind != "control" else None
+        if credential:
+            sent = scoped(args, credential, run.mandate, step.status == "approved")
+            message = context.message.model_copy(update={"arguments": dict(sent)})
+            context = context.copy(message=message)
         result = await call_next(context)
         text = _text(result)
         scanned = time.perf_counter()

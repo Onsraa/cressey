@@ -3,7 +3,7 @@ from fastmcp import Client
 
 from cressey.core.proxy import load_policy
 from cressey.core.secret_scan import find_secrets
-from cressey.demo.tools import PROD_KEY, TRAP_KEY, demo_tools
+from cressey.demo.tools import PROD_KEY, READ_KEY, TRAP_KEY, demo_tools
 from cressey.guide.corpus import DATA
 
 pytestmark = pytest.mark.anyio
@@ -50,3 +50,16 @@ async def test_the_trap_key_the_policy_declares_sits_in_the_workspace(tmp_path):
     assert decoys == {"DB_ADMIN_KEY": TRAP_KEY} and TRAP_KEY.startswith("FAKE-")
     # The scan sees it as a key, so reading it confirms the opportunity leg.
     assert [s.name for s in find_secrets(r.content[0].text)] == ["DB_ADMIN_KEY"]
+
+
+async def test_the_read_only_key_reads_and_the_database_itself_refuses_writes(tmp_path):
+    """The key broker's scoped credential: the engine refuses a write however it's phrased."""
+    async with Client(demo_tools(tmp_path)) as c:
+        read = {"query": "SELECT count(*) FROM users", "key": READ_KEY}
+        assert (await c.call_tool("run_sql", read)).content[0].text == "[[5]]"
+        for query in ("DELETE FROM users", "UPDATE users SET email = 'x' WHERE 1 = 1"):
+            r = await c.call_tool(
+                "run_sql", {"query": query, "key": READ_KEY}, raise_on_error=False
+            )
+            assert r.is_error and "lecture seule" in r.content[0].text
+        assert (await c.call_tool("run_sql", read)).content[0].text == "[[5]]"

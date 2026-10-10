@@ -92,6 +92,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
   - a read or a write touches a path the mandate protects (`protected`), with no model asked: « chemin protégé : … ». A name protects everything under it, and globs work. Case and `..` can't step around it. This is the read floor from the Hugging Face / METR case;
   - a recipient is outside `may_send_to`;
   - the call carries a trap key (`decoys` in `policy.yaml`), whatever the mandate: in any argument, in any case, or in a token that decodes from base64, hex or URL encoding. The reason, « clé piège utilisée : DB_ADMIN_KEY », replaces the others.
+- **Key broker** (`core/broker.py`, `broker` in `policy.yaml`): Cressey, not the agent, picks the credential a tool receives. `run_sql` gets the read credential unless the mandate grants changes (`may_destroy`) or a human approved that call, and the database refuses any write made with it (SQLite `query_only`), however the SQL is phrased. The agent's own key is ignored, so a key it found, or a call the floor misread, can't exceed the grant. A `control` run is left alone: it measures what happens without Cressey.
 - **While a call is held,** the run's key is revoked: its other calls are denied.
   - Approval runs the call once and reinstates the key.
   - Rejection or expiry answers « Cressey : action retenue (…). Déclarer la tâche impossible est une réponse acceptée. » The key stays revoked.

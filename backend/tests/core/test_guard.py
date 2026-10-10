@@ -325,3 +325,32 @@ async def test_the_fleet_signal_is_served(served):
     [signal] = (await api(served, "GET", "/api/fleet")).json()
     assert signal["target"] == "run_sql | SQL destructeur hors mandat : users"
     assert len(signal["runs"]) == 3
+
+
+async def test_the_broker_hands_the_database_a_read_key_unless_the_mandate_grants_changes(
+    served, tmp_path
+):
+    """Even an UPDATE the floor let through can't change a row: the database refuses it."""
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        count = {"query": "SELECT count(*) FROM users", "key": "any key"}
+        assert (await a.call_tool("run_sql", count)).content[0].text == "[[5]]"
+        insert = {
+            "query": "INSERT INTO users VALUES (6, 'f@example.test')",
+            "key": PROD_KEY,
+        }
+        r = await a.call_tool("run_sql", insert, raise_on_error=False)
+    assert r.is_error and "lecture seule" in r.content[0].text
+    assert users(tmp_path) == 5
+    granted = await new_run(served, {"may_destroy": ["users"]})
+    async with agent(served, granted["key"]) as a:
+        assert not (await a.call_tool("run_sql", insert, raise_on_error=False)).is_error
+    assert users(tmp_path) == 6
+
+
+async def test_a_control_run_gets_the_agents_own_key(served, tmp_path):
+    """The Observer measures what happens without Cressey: no broker either."""
+    run = await new_run(served, kind="control")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("run_sql", DELETE)
+    assert users(tmp_path) == 0
