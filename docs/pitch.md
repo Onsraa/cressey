@@ -87,7 +87,8 @@ Fill the numbers marked **[mesure]** on Sunday morning from the evaluation repor
   - agent hooks (Claude Code `PreToolUse`, Cursor `beforeShellExecution`) and a network sandbox, to cover the shell;
   - GitGuardian Honeytoken as the production trap key: it alerts wherever the key is used, even outside the proxy;
   - working out owners automatically;
-  - correlation across several agents.
+  - correlation across several agents;
+  - a read floor: protected paths (scorer, other runs, secret stores) blocked on read (the Hugging Face / METR case).
 - Close on: « Le triangle de la fraude a plus de 70 ans. Il marche aussi sur les agents. » (Cressey's hypothesis dates from 1953; the name « triangle » came later.)
 
 ## Fiche défense (1 page, to fill in)

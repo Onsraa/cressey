@@ -64,7 +64,7 @@ We found nobody running the triangle as a runtime control with fixes routed to e
 |---|---|
 | PocketOS (April 2026) | **No.** A Cursor agent found an unscoped Railway token in an unrelated file and sent a raw `volumeDelete` GraphQL call. How it executed the call isn't public, and nothing points to MCP. On paper it's the best fit of all: pressure (a staging credential mismatch), opportunity (the token), rationalization (the agent guessed). Railway later restored the data |
 | Replit (July 2025) | **No.** It happened inside Replit's own platform, where a customer can't add a proxy. Checking the report against the log fits the lie. Replit's own fix was separating dev and prod (our `separer-dev-prod` runbook) |
-| Hugging Face / METR (July 2026) | **No** for prevention: lab agents with network access. The faked transcripts argue for a log at the proxy that the agent can't write to |
+| Hugging Face / METR (July 2026) | **No** as built: lab agents with network access. **Yes, if Cressey is the agent's only exit** (see below). The faked transcripts argue for a log at the proxy that the agent can't write to |
 | GitHub MCP attack (Invariant, May 2025) | **Plausibly yes:** opportunity (a token for every repo) plus drift. Pressure plays no part |
 | Supabase MCP in Cursor (General Analysis, July 2025, a red-team demo) | **Yes, if** we hold any write whose arguments contain a value read from a secret. The tracer already does the matching |
 | postmark-mcp (September 2025) | **No.** The malicious server sent the emails on from inside itself; the proxy saw a normal `send_email` |
@@ -72,6 +72,29 @@ We found nobody running the triangle as a runtime control with fixes routed to e
 The pattern: the incidents that go through MCP are prompt injection and data theft, where pressure plays no part and dataflow rules already exist. The pressure incidents happen in shells. That gap between the story and the sensor is the main strategic weakness.
 
 **Fix for the story:** the demo agent reaches the infrastructure through an infra MCP server. Railway's MCP server exposes `delete-volume`, so « PocketOS à travers le serveur MCP de Railway » is an honest framing. The second sensor goes on the roadmap: agent hooks. Claude Code has `PreToolUse` and Cursor has `beforeShellExecution`. In Cursor `deny` works, but `ask` is reported broken in 2.4.21.
+
+### Hugging Face / METR, read in detail (10-10)
+From [METR's write-up](https://metr.org/blog/2026-08-26-openai-hugging-face-incident-investigation/): OpenAI's ExploitGym agents, a task impossible 30–40% of the time, a message board made of folders in a shared Artifactory cache, then two Hugging Face credentials found online and a malicious dataset upload (11 July) that led to remote code execution and lateral movement. About 700 agents joined.
+
+**All three legs are there, which makes it a better fit than PocketOS on rationalization:**
+- **Pressure:** failures on impossible tasks, and « recruiters » pushing other agents.
+- **Opportunity:** a writable cache, internet access, and credentials found outside the mandate.
+- **Rationalization:** « external infrastructure exploit is outside intended scope. However task impossible, peers doing it. We should continue. » Tampering with the scorer matches the judge's question almost word for word.
+
+**Where the triangle would hold (our reasoning, not tested):**
+- **8 July:** the message board, a write outside the mandate under pressure. This is the earliest hold.
+- **9–10 July:** the writes that tamper with the scorer, transcripts and logs.
+- **11 July:** the dataset upload with a found credential, by the triangle and the tracer.
+
+A spike of holds across runs on 8 July would itself have been the alarm, days before Hugging Face locked the agents out on 13 July.
+
+**What breaks, and the fix for each (dev, after the event):**
+| Gap | Fix | Status |
+|---|---|---|
+| **The agents went around the sensor:** they broke out of the container and replaced the tool-call layer, so it showed one command and ran another | Cressey runs outside the agent's container and adds real keys on the way out (the key broker), so going around it gets the agent no credentials. The infrastructure must deny all other network traffic. Credentials found on the open internet still need that network rule. Pitch it as « Cressey + réseau fermé par défaut », never alone | Reducible, not solved by Cressey alone |
+| **Reads never hold** (`alarm()` in `core/triangle.py`): reverse-engineering the scorer went through. Reads are already labelled and scanned for secrets; they just can't trigger a hold | A read floor with no model call: protected paths declared in the mandate (scorer, other runs, secret stores) are blocked on read. Don't hold reads with the triangle: most calls are reads, and pressure and opportunity alone already held legitimate work (S9, M1) | Fixable |
+| **After remote code execution, the attack runs on Hugging Face's machines** | Mostly closed by the first fix: the agents drove the attack remotely, so each command still leaves through Cressey. The file read returned production credentials as a tool result; the secret scan flags them as outside the mandate, and the tracer holds any write that uses them | Follows from the first fix |
+| **Hundreds of agents at once:** the triangle judges one run at a time, and a hold waiting for a human doesn't work with 700 agents | A signal across runs: many runs touching the same target outside their mandate (« peers doing it », made measurable). At that scale a hold refuses on its own and returns the way out (« act on pressure » below). Cost stays bounded: each step is labelled once, and only writes are judged | Fixable |
 
 ## Risks, ranked
 Status as of 2026-10-10 14:00.
