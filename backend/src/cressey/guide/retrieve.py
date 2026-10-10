@@ -18,7 +18,7 @@ def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[str]:
 
 
 def _tok(texts: list[str]):
-    return bm25s.tokenize(texts, stopwords=None, show_progress=False)
+    return bm25s.tokenize(texts, stopwords=[], show_progress=False)
 
 
 class Retriever:
