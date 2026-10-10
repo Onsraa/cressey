@@ -2,13 +2,13 @@
   "split": "dev",
   "n_questions": 31,
   "hit_at_3_bm25": 0.8387096774193549,
-  "hit_at_3_hybrid": 0.967741935483871,
+  "hit_at_3_hybrid": 1.0,
   "hit_at_3_reranked": 0.967741935483871,
   "n_out_of_scope": 2,
   "unsure_correct": 2,
   "n_incidents": 8,
   "citation_validity": 1.0,
   "unsure_rate": 0.0,
-  "latency_p50_ms": 8113.73520799998,
-  "latency_p95_ms": 10853.896635600724
+  "latency_p50_ms": 6079.790271000093,
+  "latency_p95_ms": 12593.145207453199
 }
