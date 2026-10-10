@@ -144,6 +144,43 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/incidents": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/**
+		 * List Incidents
+		 * @description Most severe first, then the oldest.
+		 */
+		get: operations["list_incidents_api_incidents_get"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/incidents/{incident_id}": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		/** Get Incident */
+		get: operations["get_incident_api_incidents__incident_id__get"];
+		put?: never;
+		post?: never;
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/holds": {
 		parameters: {
 			query?: never;
@@ -262,6 +299,31 @@ export interface components {
 			task: string;
 			step: components["schemas"]["Step"];
 		};
+		/** Incident */
+		Incident: {
+			/** Id */
+			id: string;
+			/** Run Id */
+			run_id: string;
+			/** Step */
+			step: number;
+			/**
+			 * Severity
+			 * @enum {string}
+			 */
+			severity: "critique" | "haute";
+			/** Reason */
+			reason: string;
+			/** Created At */
+			created_at: string;
+			/** Decision */
+			decision: string;
+			/** Sources */
+			sources: components["schemas"]["Source"][];
+			legs: components["schemas"]["Legs"];
+			/** Guides */
+			guides: components["schemas"]["OwnerGuide"][];
+		};
 		JsonValue: unknown;
 		/** Leg */
 		Leg: {
@@ -304,6 +366,27 @@ export interface components {
 			 * @default []
 			 */
 			may_read_secrets: string[];
+		};
+		/** OwnerGuide */
+		OwnerGuide: {
+			/**
+			 * Leg
+			 * @enum {string}
+			 */
+			leg: "pressure" | "opportunity" | "rationalization";
+			/**
+			 * Owner Role
+			 * @enum {string}
+			 */
+			owner_role: "key_owner" | "task_author" | "platform_owner" | "soc";
+			/**
+			 * Status
+			 * @default pending
+			 * @enum {string}
+			 */
+			status: "pending" | "ok" | "unsure" | "unavailable";
+			/** Guide Id */
+			guide_id?: string | null;
 		};
 		/** ReportIn */
 		ReportIn: {
@@ -379,6 +462,27 @@ export interface components {
 			fingerprint: string;
 			/** Line */
 			line: number;
+		};
+		/**
+		 * Source
+		 * @description Where a value of the held call was first read.
+		 */
+		Source: {
+			/** Step */
+			step: number;
+			/** Tool */
+			tool: string;
+			/** Args */
+			args: string;
+			/**
+			 * How
+			 * @enum {string}
+			 */
+			how: "exact" | "lowercase" | "base64" | "hex" | "url";
+			/** Secret */
+			secret: string | null;
+			/** Value */
+			value: string;
 		};
 		/** Status */
 		Status: {
@@ -751,6 +855,57 @@ export interface operations {
 				};
 				content: {
 					"application/json": components["schemas"]["Status"];
+				};
+			};
+		};
+	};
+	list_incidents_api_incidents_get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Incident"][];
+				};
+			};
+		};
+	};
+	get_incident_api_incidents__incident_id__get: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				incident_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Incident"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
 				};
 			};
 		};

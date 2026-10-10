@@ -6,8 +6,10 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from cressey.core.eventlog import verify
+from cressey.core.incidents import Incidents
 from cressey.core.models import (
     Hold,
+    Incident,
     LogHead,
     ReportIn,
     Run,
@@ -26,6 +28,13 @@ def get_runs(request: Request) -> Runs:
 
 
 RunsDep = Annotated[Runs, Depends(get_runs)]
+
+
+def get_incidents(request: Request) -> Incidents:
+    return request.app.state.incidents
+
+
+IncidentsDep = Annotated[Incidents, Depends(get_incidents)]
 
 
 @router.post("/runs", status_code=201)
@@ -69,6 +78,20 @@ async def status(request: Request, runs: RunsDep) -> Status:
         mcp_path=MCP_PATH,
         log=LogHead(hash=head, count=count, intact=verify(runs.log.events) is None),
     )
+
+
+@router.get("/incidents")
+async def list_incidents(incidents: IncidentsDep) -> list[Incident]:
+    """Most severe first, then the oldest."""
+    return incidents.all()
+
+
+@router.get("/incidents/{incident_id}")
+async def get_incident(incident_id: str, incidents: IncidentsDep) -> Incident:
+    incident = incidents.get(incident_id)
+    if incident is None:
+        raise HTTPException(404)
+    return incident
 
 
 @router.get("/holds")

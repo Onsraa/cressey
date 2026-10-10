@@ -1,4 +1,5 @@
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException
@@ -8,29 +9,32 @@ from starlette.routing import Route
 
 from cressey.core.api import router as core_router
 from cressey.core.eventlog import EventLog
+from cressey.core.incidents import Incidents
 from cressey.core.judge import JevJudge
-from cressey.core.proxy import MCP_PATH, build_mcp, load_policy
+from cressey.core.proxy import MCP_PATH, Guard, build_mcp, load_policy
 from cressey.core.runs import Runs
 from cressey.demo.tools import demo_tools
 from cressey.guide.api import router as guide_router
+from cressey.guide.api import write_guide
 from cressey.guide.corpus import DATA, load_corpus
+from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    make_guide: Callable[[GuideIncident], Guide] = write_guide,
+) -> FastAPI:
     s = settings or Settings()
     load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
     runs = Runs(EventLog())
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
-    mcp = build_mcp(
-        runs,
-        load_policy(DATA / "policy.yaml"),
-        JevJudge.from_settings(s),
-        demo_tools(demo),
-        s.hold_timeout,
-    )
+    incidents = Incidents(runs, make_guide)
+    policy = load_policy(DATA / "policy.yaml")
+    guard = Guard(runs, incidents, policy, JevJudge.from_settings(s), s.hold_timeout)
+    mcp = build_mcp(guard, demo_tools(demo))
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
-    app.state.runs, app.state.settings = runs, s
+    app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s
     api = APIRouter(prefix="/api")
 
     @api.get("/health")

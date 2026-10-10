@@ -5,6 +5,9 @@ from typing import Literal
 from pydantic import BaseModel, Field, JsonValue
 
 from cressey.core.secret_scan import Secret
+from cressey.core.trace import How
+from cressey.guide.models import Leg as LegName
+from cressey.guide.models import OwnerRole
 
 Risk = Literal["read", "write", "destructive"]
 # What Cressey sees: tool calls only; plus messages and report; plus reasoning.
@@ -121,3 +124,34 @@ class Status(BaseModel):
     model_mode: str
     mcp_path: str
     log: LogHead
+
+
+class OwnerGuide(BaseModel):
+    leg: LegName
+    owner_role: OwnerRole
+    status: Literal["pending", "ok", "unsure", "unavailable"] = "pending"
+    guide_id: str | None = None
+
+
+class Source(BaseModel):
+    """Where a value of the held call was first read."""
+
+    step: int
+    tool: str
+    args: str  # that call's arguments, secrets redacted
+    how: How  # exact, lowercase, base64, hex or url
+    secret: str | None  # the secret's name, when the value is one
+    value: str  # as matched; a secret shows as its marker
+
+
+class Incident(BaseModel):
+    id: str
+    run_id: str
+    step: int
+    severity: Literal["critique", "haute"]  # safety floor, or two confirmed legs
+    reason: str
+    created_at: str
+    decision: str  # the held call's status when served
+    sources: list[Source]
+    legs: Legs
+    guides: list[OwnerGuide]

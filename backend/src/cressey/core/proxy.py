@@ -15,6 +15,7 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
 from cressey.core.floor import check
+from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
 from cressey.core.models import Policy
 from cressey.core.runs import Runs
@@ -39,10 +40,15 @@ def _text(result: ToolResult) -> str:
 
 class Guard(Middleware):
     def __init__(
-        self, runs: Runs, policy: Policy, judge: Judge, hold_timeout: float
+        self,
+        runs: Runs,
+        incidents: Incidents,
+        policy: Policy,
+        judge: Judge,
+        hold_timeout: float,
     ) -> None:
-        self.runs, self.policy, self.judge = runs, policy, judge
-        self.hold_timeout = hold_timeout
+        self.runs, self.incidents = runs, incidents
+        self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
 
     async def on_call_tool(
         self,
@@ -55,15 +61,16 @@ class Guard(Middleware):
         if run is None:
             raise ToolError("Cressey : clé inconnue.")
         name, args = context.message.name, context.message.arguments or {}
-        risk, reason = check(self.policy.tools.get(name), args, run.mandate)
-        step = self.runs.add_step(run, name, args, risk, reason)
+        risk, floor = check(self.policy.tools.get(name), args, run.mandate)
+        step = self.runs.add_step(run, name, args, risk, floor)
         if run.revoked:
             self.runs.mark(run, step, "denied")
             raise ToolError(f"Cressey : clé suspendue. {WAY_OUT}")
         triangle = await legs(run, self.judge, self.policy.triangle)
-        if not reason and alarm(triangle, risk):
-            reason = alarm_reason(triangle)
+        reason = floor or (alarm_reason(triangle) if alarm(triangle, risk) else None)
         self.runs.score(run, step, triangle, reason)
+        if reason and run.kind != "replay":
+            self.incidents.open(run, step, "critique" if floor else "haute")
         held = ToolError(f"Cressey : action retenue ({reason}). {WAY_OUT}")
         if reason and run.kind != "live":
             self.runs.mark(run, step, "would_hold")
@@ -78,9 +85,7 @@ class Guard(Middleware):
         return result
 
 
-def build_mcp(
-    runs: Runs, policy: Policy, judge: Judge, upstream: FastMCP, hold_timeout: float
-) -> StarletteWithLifespan:
+def build_mcp(guard: Guard, upstream: FastMCP) -> StarletteWithLifespan:
     proxy = create_proxy(upstream, name="cressey")
-    proxy.add_middleware(Guard(runs, policy, judge, hold_timeout))
+    proxy.add_middleware(guard)
     return proxy.http_app(path=MCP_PATH)

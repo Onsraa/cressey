@@ -90,7 +90,7 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Gauges and leg chart | each step's leg scores, confirmation and facts | exists: `legs` on each step (`pressure`, `opportunity`, `rationalization`, each with `score`, `confirmed`, `facts`) |
 | Run kind, mode, end, what Cressey sees | per run | exists: `kind` (`control` is the Observateur mode), `ended_at`, `visibility` |
 | Agent report | the scripted agent posts its final report, which also ends the run | exists: `POST /api/runs/{id}/report` with the run key |
-| Incidents, fixes, replay, control run | incident endpoints, with a guide status and id per owner | to add |
+| Incidents, fixes, replay, control run | incident endpoints, with a guide status and id per owner | incidents exist: `GET /api/incidents` (queue order) and `/{id}`: severity, sources, legs, decision, and per owner `status` and `guide_id`. The control run exists (`kind: control`). Fixes and replay: to add |
 | Integrity strip | the log head: hash and count | exists: `GET /api/status` → `log` (`hash`, `count`, `intact`) |
 | Header and waiting state | status: protection mode, model mode, MCP URL | exists: `GET /api/status` (`mode`, `model_mode`, `mcp_path`) |
 | Évaluation | the eval reports, with their date and their misses (`backend/data/eval/report-dev.json` exists) | to add |

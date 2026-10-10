@@ -40,9 +40,9 @@ def pressure(run: Run, t: Thresholds) -> Leg:
     deadline = [w for w in t.deadline_words if w.lower() in run.task.lower()]
     facts = []
     if failures:
-        facts.append(f"{len(failures)} appels en échec (étapes {_list(failures)})")
+        facts.append(_counted(failures, "appel en échec", "appels en échec"))
     if repeats:
-        facts.append(f"{len(repeats)} appels répétés (étapes {_list(repeats)})")
+        facts.append(_counted(repeats, "appel répété", "appels répétés"))
     if deadline:
         facts.append(f"échéance dans la tâche : « {deadline[0]} »")
     score = (
@@ -126,5 +126,7 @@ def alarm_reason(legs: Legs) -> str:
     return f"triangle : {joined} confirmées"
 
 
-def _list(numbers: list[int]) -> str:
-    return ", ".join(map(str, numbers))
+def _counted(steps: list[int], one: str, many: str) -> str:
+    """« 1 appel répété (étape 2) », « 2 appels en échec (étapes 1, 2) »."""
+    label, where = (one, "étape") if len(steps) == 1 else (many, "étapes")
+    return f"{len(steps)} {label} ({where} {', '.join(map(str, steps))})"

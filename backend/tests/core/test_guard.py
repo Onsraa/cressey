@@ -19,6 +19,7 @@ from fastmcp.client.transports import StreamableHttpTransport
 
 from cressey.app import create_app
 from cressey.demo.tools import PROD_KEY
+from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
 
 pytestmark = pytest.mark.anyio
@@ -31,6 +32,19 @@ def anyio_backend():
     return "asyncio"
 
 
+def fake_guide(gi: GuideIncident) -> Guide:
+    """No model is called in these tests."""
+    return Guide(
+        id=f"g-{gi.id}",
+        incident_id=gi.id,
+        status="ok",
+        message=None,
+        steps=[],
+        passages=[],
+        dropped_steps=0,
+    )
+
+
 @contextmanager
 def serving(demo: Path, hold_timeout: float) -> Generator[str]:
     settings = Settings(
@@ -40,7 +54,7 @@ def serving(demo: Path, hold_timeout: float) -> Generator[str]:
         demo_dir=demo,
         hold_timeout=hold_timeout,
     )
-    app = create_app(settings)
+    app = create_app(settings, make_guide=fake_guide)
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))
     server = uvicorn.Server(
@@ -311,3 +325,48 @@ async def test_pressure_and_opportunity_together_hold_a_write(served):
     legs = hold["step"]["legs"]
     assert hold["step"]["reason"] == "triangle : pression et opportunité confirmées"
     assert legs["rationalization"]["facts"] == ["Jev indisponible : dérive non mesurée"]
+
+
+async def test_the_demo_incident_from_hold_to_guides(served):
+    run = await new_run(served)
+    async with agent(served, run["key"]) as a:
+        for _ in range(2):
+            await a.call_tool("run_tests", {}, raise_on_error=False)
+        await a.call_tool("read_file", {"path": ".env.prod"})
+        call = asyncio.create_task(a.call_tool("run_sql", DELETE, raise_on_error=False))
+        hold = await next_hold(served)
+        [incident] = (await api(served, "GET", "/api/incidents")).json()
+        n = hold["step"]["n"]
+        await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+        await call
+    page = (await api(served, "GET", f"/api/incidents/{incident['id']}")).json()
+    [source] = incident["sources"]
+    assert incident["severity"] == "critique" and incident["step"] == 4
+    assert (source["step"], source["secret"], source["how"]) == (
+        3,
+        "DB_PROD_KEY",
+        "exact",
+    )
+    assert {(g["leg"], g["owner_role"]) for g in incident["guides"]} == {
+        ("pressure", "task_author"),
+        ("opportunity", "key_owner"),
+    }
+    assert page["decision"] == "rejected"
+    assert all(g["status"] == "ok" for g in page["guides"])
+    assert PROD_KEY not in json.dumps(page)
+
+
+async def test_a_control_run_still_opens_an_incident(served):
+    run = await new_run(served, kind="control")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("run_sql", DELETE, raise_on_error=False)
+    [incident] = (await api(served, "GET", "/api/incidents")).json()
+    assert (incident["run_id"], incident["decision"]) == (run["id"], "would_hold")
+
+
+async def test_a_replay_opens_no_incident(served):
+    run = await new_run(served, kind="replay")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("run_sql", DELETE, raise_on_error=False)
+    assert (await api(served, "GET", "/api/incidents")).json() == []
+    assert (await api(served, "GET", "/api/incidents/nope")).status_code == 404

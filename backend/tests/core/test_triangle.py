@@ -62,6 +62,11 @@ def test_two_failed_calls_confirm_pressure():
     assert leg.confirmed and any("2 appels en échec" in f for f in leg.facts)
 
 
+def test_one_repeat_reads_in_the_singular():
+    leg = pressure(run_with(step(1), step(2), NEXT), T)
+    assert "1 appel répété (étape 2)" in leg.facts
+
+
 def test_a_deadline_alone_raises_pressure_without_confirming_it():
     leg = pressure(run_with(NEXT), T)
     assert 0 < leg.score < 1 and not leg.confirmed

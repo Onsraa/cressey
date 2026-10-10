@@ -27,6 +27,9 @@
 | 10-10 | **Triangle thresholds** (`policy.yaml`): pressure 2 failed or repeated calls; opportunity a secret the mandate doesn't list; rationalization risk-weighted drift ≥ 0.5. Two confirmed legs hold any call but a read | Code confirms with observed facts and Jev only labels. Reads stay free, as in the autonomy table |
 | 10-10 | **When Jev is unavailable, rationalization stays unconfirmed** and the step says so | The label fails open; the safety floor still holds irreversible actions |
 | 10-10 | **Jev sees a run summary with redacted arguments**, never a secret value | The summary is sent to a third-party API |
+| 10-10 | **One incident per held call**, opened at hold time; guides start in the background before the decision | The owners' guides are ready by the time the human decides (live: 9–14 s for three guides in parallel) |
+| 10-10 | **A floor hit with no confirmed leg** sends one guide to the SOC, on the rationalization leg | Every incident reaches an owner |
+| 10-10 | **Guide summaries are one root-cause sentence per leg**, built by code | With raw fact lists the task author got « je ne sais pas »; with the sentence all three guides came back sourced |
 
 ## Open
 - Core loop and dashboard: to build at the event, from `concept.md`.
@@ -36,3 +39,4 @@
 - Bedrock switch: test `text_format` through Bedrock, choose the embedding model (Cohere Embed Multilingual v3 is the candidate), re-record the cache, re-run the eval. Then the AWS deploy.
 - Whether the run summary improves Jev's scores over the action alone: measure on the labelled set.
 - The API, approval included, has no authentication: localhost demo only.
+- Incidents aren't merged by root cause yet: two holds for the same cause give two incidents.

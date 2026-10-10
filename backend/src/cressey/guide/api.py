@@ -30,6 +30,13 @@ def get_store() -> GuideStore:
     return GuideStore(DATA / "guides.sqlite")
 
 
+def write_guide(incident: GuideIncident) -> Guide:
+    """Write and store the guide for an incident the core loop opened."""
+    guide = get_pipeline().run(incident)
+    get_store().put(guide)
+    return guide
+
+
 PipelineDep = Annotated[GuidePipeline, Depends(get_pipeline)]
 StoreDep = Annotated[GuideStore, Depends(get_store)]
 
