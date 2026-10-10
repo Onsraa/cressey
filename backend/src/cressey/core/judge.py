@@ -4,7 +4,9 @@ local Strands Decider when its URL is set. Its answers are cached like the guide
 so the demo replays offline."""
 
 import asyncio
+import hashlib
 import json
+import logging
 import weakref
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
@@ -25,6 +27,8 @@ from cressey.guide.cache import cache_key
 from cressey.guide.clients import decision_auth
 from cressey.settings import Settings
 
+log = logging.getLogger(__name__)
+
 Question = Noul | Choice
 # Jev allows 80 requests/s (docs.typesafe.ai, Models). At about 0.25 s a call, 20 in flight
 # stay under it: 16 for the judge, 4 for the guides' re-ranker (guide/clients.py).
@@ -40,12 +44,26 @@ class TooLarge(Exception):
     with the body {'detail': {'error_type': 'max_tokens_exceeded'}}."""
 
 
+class NotRecorded(Exception):
+    """Replay mode, and no recorded answer for this state: the decision can't be replayed."""
+
+
+def _fingerprints(state: dict[str, JsonValue]) -> str:
+    """A short hash of each top-level field: shows which one changed since recording,
+    without logging any of the run's content."""
+    return " ".join(
+        f"{k}={hashlib.sha256(json.dumps(v, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:8]}"
+        for k, v in state.items()
+    )
+
+
 class Judge(Protocol):
     async def answers(
         self, state: dict[str, JsonValue], questions: Mapping[str, Question]
     ) -> Answers | None:
         """Every question about one state, in one call; None when no model answers.
-        Raises TooLarge when the state is too big for the model."""
+        Raises TooLarge when the state is too big for the model, and NotRecorded when a
+        replay has no recorded answer."""
         ...
 
 
@@ -76,7 +94,7 @@ class JevJudge:
     def __init__(
         self,
         ask: Ask | None,
-        mode: Literal["live", "record", "replay", "fallback"],
+        mode: Literal["live", "record", "replay", "fallback", "replay-first"],
         cache_dir: Path,
         model: str,
     ) -> None:
@@ -118,8 +136,15 @@ class JevJudge:
         recorded: Answers | None = (
             json.loads(path.read_text()) if path.exists() else None
         )
-        if self.mode == "replay":
-            return recorded
+        if self.mode in ("replay", "replay-first"):
+            if recorded is not None:
+                return recorded
+            # On stage a miss means the state changed after recording: say which field.
+            log.error(
+                "judge: no recorded answer %s (%s)", path.name, _fingerprints(state)
+            )
+            if self.mode == "replay":
+                raise NotRecorded(path.name)
         live = None
         if self.ask:
             async with self._in_flight():

@@ -1,11 +1,13 @@
 """Record-and-replay cache for every model call, so the demo survives a network outage.
 
 live: call, store nothing · record: call and store · replay: cache only, never the network
-fallback: call; if the model is unavailable, serve the stored answer (mode for the stage)
+fallback: call; if the model is unavailable, serve the stored answer
+replay-first: the stored answer when there is one, the network only on a miss (the stage)
 """
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
@@ -28,7 +30,9 @@ from cressey.guide.clients import (
 from cressey.guide.models import GuideDraft, GuideIncident, Unit
 from cressey.settings import Settings
 
-Mode = Literal["live", "record", "replay", "fallback"]
+log = logging.getLogger(__name__)
+
+Mode = Literal["live", "record", "replay", "fallback", "replay-first"]
 
 
 def cache_key(
@@ -94,6 +98,10 @@ class Cached:
 
         if self.mode == "replay":
             return stored()
+        if self.mode == "replay-first":
+            if path.exists():
+                return stored()
+            log.warning("not recorded, asking live: %s.%s", self.adapter, method)
         try:
             out = live()
         except ModelUnavailable:

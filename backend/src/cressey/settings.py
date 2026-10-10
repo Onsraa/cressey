@@ -23,7 +23,8 @@ class Settings(BaseSettings):
     models: Literal["openai", "bedrock"] = Field(
         "bedrock", validation_alias="CRESSEY_MODELS"
     )
-    model_mode: Literal["live", "record", "replay", "fallback"] = Field(
+    # replay-first: the recorded answer when there is one, live only on a miss (the stage).
+    model_mode: Literal["live", "record", "replay", "fallback", "replay-first"] = Field(
         "live", validation_alias="CRESSEY_MODEL_MODE"
     )
     cache_dir: Path = Field(Path("data/cache"), validation_alias="CRESSEY_CACHE_DIR")

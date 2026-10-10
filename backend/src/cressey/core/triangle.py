@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from pydantic import JsonValue
 from typesafe_sdk import Choice, Noul
 
-from cressey.core.judge import Answers, Judge, Question, TooLarge
+from cressey.core.judge import Answers, Judge, NotRecorded, Question, TooLarge
 from cressey.core.models import Leg, Legs, Risk, Run, Step, Thresholds
 from cressey.core.secret_scan import redact
 
@@ -314,10 +314,15 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
     def with_args(a: str) -> dict[str, JsonValue]:
         return {**window, "current_step": _view(run, s, "", a)}
 
-    by_result, by_args = await asyncio.gather(
-        _answers_over_parts(judge, with_result, _chunks(texts.get(s.n, "")), LABELS),
-        _answers_over_parts(judge, with_args, args[1:], LABELS),
-    )
+    try:
+        by_result, by_args = await asyncio.gather(
+            _answers_over_parts(
+                judge, with_result, _chunks(texts.get(s.n, "")), LABELS
+            ),
+            _answers_over_parts(judge, with_args, args[1:], LABELS),
+        )
+    except NotRecorded:  # the judge logged it; the step stays unlabelled
+        return
     if by_result is None or by_args is None:
         return
     windows = [((first, r), a) for r, a in by_result]
@@ -338,6 +343,8 @@ async def _label(run: Run, i: int, judge: Judge) -> None:
         )
     except TooLarge:  # the labels stay; the flag just has no quote
         log.error("step %d: the point call is too large for the decision model", s.n)
+        return
+    except NotRecorded:  # the judge logged it; the labels stay without a quote
         return
     if picked:
         s.quotes = {c: _quote(parts, str(k)) for c, k in picked.items() if k in parts}
@@ -453,12 +460,19 @@ async def _rationalization(
     earlier = _before(run, call.n)
     shown = await _redacted_off_loop(run, earlier[-1:])
     # The whole call is judged, part by part: the payload can sit anywhere in it.
-    answer = await _max_over_parts(
-        judge,
-        lambda part: judgment_state(run, call, t, shown, part),
-        _args_parts(call),
-        JUDGMENT,
-    )
+    try:
+        answer = await _max_over_parts(
+            judge,
+            lambda part: judgment_state(run, call, t, shown, part),
+            _args_parts(call),
+            JUDGMENT,
+        )
+    except NotRecorded:
+        return Leg(
+            score=0.0,
+            confirmed=False,
+            facts=["réponse enregistrée absente : décision non rejouée"],
+        )
     if answer is None:
         return Leg(
             score=0.0,
@@ -517,13 +531,18 @@ async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
     shown = await _redacted_off_loop(run, run.steps)
     try:
         answer = await judge.answers(report_state(run, t, shown), REPORT)
-    except (
-        TooLarge
-    ):  # the report state is bounded; this would be a bug, so say it loudly
+    except TooLarge:
+        # The report state is bounded: this would be a bug, so say it loudly.
         log.error(
             "run %s: the report check is too large for the decision model", run.id
         )
         answer = None
+    except NotRecorded:
+        return Leg(
+            score=0.0,
+            confirmed=False,
+            facts=["réponse enregistrée absente : rapport non vérifié"],
+        )
     if answer is None:
         return Leg(
             score=0.0,

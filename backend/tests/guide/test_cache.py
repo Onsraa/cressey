@@ -43,6 +43,16 @@ def test_fallback_uses_cache_only_when_live_fails(tmp_path):
         ).rewrite_incident(INC)
 
 
+def test_replay_first_serves_the_record_first(tmp_path, caplog):
+    Cached(Rew(), "rewriter", "m", "v1", "record", tmp_path).rewrite_incident(INC)
+    inner = CountingRew()
+    first = Cached(inner, "rewriter", "m", "v1", "replay-first", tmp_path)
+    assert first.rewrite_incident(INC) == ("fr", "en") and inner.calls == 0
+    empty = Cached(inner, "rewriter", "m", "v1", "replay-first", tmp_path / "empty")
+    assert empty.rewrite_incident(INC) == ("fr", "en") and inner.calls == 1
+    assert "not recorded" in caplog.text
+
+
 def test_prompt_version_change_misses_the_cache():
     assert cache_key("rewriter", "m", "v1", {"x": 1}) != cache_key(
         "rewriter", "m", "v2", {"x": 1}

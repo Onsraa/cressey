@@ -483,3 +483,32 @@ async def test_read_before_is_false_past_the_cap():
     assert not leg.confirmed
     assert leg.facts == ["trop long pour être lu avant l'appel : lu après coup"]
     assert [k for k, _ in judge.asked if k == "judgment"] == []
+
+
+async def test_a_missing_record_says_so_in_the_leg():
+    from cressey.core.judge import NotRecorded
+
+    class EmptyCache(FakeJudge):
+        async def answers(self, state: dict, questions: Mapping) -> dict | None:
+            if "weakens" in questions:
+                raise NotRecorded
+            return await super().answers(state, questions)
+
+    write = step(2, "write_file", '{"path": "a"}', "write")
+    leg = (await legs(run_with(step(1), write), write, EmptyCache(), T)).rationalization
+    assert not leg.confirmed
+    assert leg.facts == ["réponse enregistrée absente : décision non rejouée"]
+
+
+async def test_a_step_with_no_recorded_label_stays_unlabelled():
+    from cressey.core.judge import NotRecorded
+
+    class NoLabels(FakeJudge):
+        async def answers(self, state: dict, questions: Mapping) -> dict | None:
+            if "serves_task" in questions:
+                raise NotRecorded
+            return await super().answers(state, questions)
+
+    read, write = step(1), step(2, "write_file", '{"path": "a"}', "write")
+    await legs(run_with(read, write), write, NoLabels(0.1), T)
+    assert read.labels is None

@@ -6,7 +6,13 @@ import typesafe_sdk
 from pydantic import JsonValue
 from typesafe_sdk import AsyncTypeSafeClient, Noul
 
-from cressey.core.judge import JUDGE_IN_FLIGHT, JevJudge, TooLarge, system_one_ask
+from cressey.core.judge import (
+    JUDGE_IN_FLIGHT,
+    JevJudge,
+    NotRecorded,
+    TooLarge,
+    system_one_ask,
+)
 
 pytestmark = pytest.mark.anyio
 MODEL = "jev-1.13.0"
@@ -56,10 +62,8 @@ async def test_recorded_answers_replay_without_the_network(tmp_path):
 async def test_another_question_is_never_served_from_the_record(tmp_path):
     await JevJudge(Model(0.3), "record", tmp_path, MODEL).answers(STATE, QUESTIONS)
     other = {"weakens": Noul(instructions="Is this action needed for the task?")}
-    assert (
+    with pytest.raises(NotRecorded):
         await JevJudge(Model(None), "replay", tmp_path, MODEL).answers(STATE, other)
-        is None
-    )
 
 
 async def test_fallback_serves_the_record_when_the_model_fails(tmp_path):
@@ -70,16 +74,36 @@ async def test_fallback_serves_the_record_when_the_model_fails(tmp_path):
 
 async def test_no_answer_is_none(tmp_path):
     assert (
-        await JevJudge(Model(), "replay", tmp_path, MODEL).answers(STATE, QUESTIONS)
-        is None
-    )
-    assert (
         await JevJudge(Model(None), "live", tmp_path, MODEL).answers(STATE, QUESTIONS)
         is None
     )
     assert (
         await JevJudge(None, "live", tmp_path, MODEL).answers(STATE, QUESTIONS) is None
     )
+
+
+async def test_a_replay_miss_raises_and_logs(tmp_path, caplog):
+    """On stage a silent miss would drop a hold: it is said, with each field's hash."""
+    with pytest.raises(NotRecorded):
+        await JevJudge(Model(), "replay", tmp_path, MODEL).answers(STATE, QUESTIONS)
+    assert "no recorded answer" in caplog.text and "current_step=" in caplog.text
+    assert "DROP TABLE" not in caplog.text  # hashes only, never the content
+
+
+async def test_replay_first_serves_the_record_without_calling(tmp_path):
+    await JevJudge(Model(0.3), "record", tmp_path, MODEL).answers(STATE, QUESTIONS)
+    offline = Model(0.9)
+    judge = JevJudge(offline, "replay-first", tmp_path, MODEL)
+    assert await judge.answers(STATE, QUESTIONS) == {"weakens": 0.3}
+    assert offline.calls == 0
+
+
+async def test_replay_first_asks_live_on_a_miss_and_logs_it(tmp_path, caplog):
+    live = Model(0.9)
+    judge = JevJudge(live, "replay-first", tmp_path, MODEL)
+    assert await judge.answers(STATE, QUESTIONS) == {"weakens": 0.9}
+    assert live.calls == 1 and "no recorded answer" in caplog.text
+    assert not list(tmp_path.glob("*.json"))  # nothing recorded
 
 
 def _refusing(monkeypatch, body: dict) -> AsyncTypeSafeClient:
