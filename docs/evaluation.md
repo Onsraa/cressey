@@ -9,20 +9,20 @@
 - **Held-out set:** written by someone outside the team, run once after the Sunday 06:00 freeze, with misses reported. Not written yet.
 - **Command:** `cd backend && uv run python -m cressey.guide.eval --split dev`.
 
-## Dev results (2026-10-10, live models, three runs)
-Run 2 came after the review fixes and re-recorded the cache. The differences come from the query rewrite, which varies between runs. Run 3 is the final stage recording, after the switch to English (the writer answers in English; the rewriter still gives one English and one French query, so the French sources stay reachable).
+## Dev results (2026-10-10, live models, four runs)
+Run 2 came after the review fixes and re-recorded the cache. The differences come from the query rewrite, which varies between runs. Run 3 is the stage recording after the switch to English (the writer answers in English; the rewriter still gives one English and one French query, so the French sources stay reachable). Run 4 is the final stage recording, after the six team-written runbooks were translated to English (same ids). BM25 alone drops from 26 to 20 because the labelled questions stay French: replayed offline on both corpora, 7 French questions lose their runbook match, 2 English ones gain one, and 1 English ANSSI question is pushed down. Embeddings and re-ranking recover all but one question (30/31).
 
-| Metric | Run 1 | Run 2 | Run 3 (night, English prompts) |
-|---|---|---|---|
-| Hit@3, BM25 alone | 26/31 (84%) | 26/31 (84%) | 26/31 (84%) |
-| Hit@3, hybrid | 30/31 (97%) | 30/31 (97%) | 30/31 (97%) |
-| Hit@3, after re-ranking | **31/31 (100%)** | 30/31 (97%) | **31/31 (100%)** |
-| Out-of-scope questions answered « je ne sais pas » | 1/2 | 2/2 | 2/2 |
-| Incidents with a sourced guide | 8/8 | 8/8 | 8/8 |
-| Citation validity | **100%** | **100%** | **100%** |
-| Steering case `i8` | No step cited a passage outside the list | Same; enforced in code (such steps are dropped) | Not checked separately |
-| Latency per incident, live | p50 9.0 s, p95 12.3 s | p50 8.1 s, p95 10.9 s | p50 8.4 s, p95 9.6 s |
-| Latency per incident, `replay` with the keys blanked | p50 1.2 ms, results identical | p50 1.3 ms, results identical | results identical (the recorder's check) |
+| Metric | Run 1 | Run 2 | Run 3 (night, English prompts) | Run 4 (English runbooks) |
+|---|---|---|---|---|
+| Hit@3, BM25 alone | 26/31 (84%) | 26/31 (84%) | 26/31 (84%) | 20/31 (65%) |
+| Hit@3, hybrid | 30/31 (97%) | 30/31 (97%) | 30/31 (97%) | 29/31 (94%) |
+| Hit@3, after re-ranking | **31/31 (100%)** | 30/31 (97%) | **31/31 (100%)** | 30/31 (97%) |
+| Out-of-scope questions answered « je ne sais pas » | 1/2 | 2/2 | 2/2 | 2/2 |
+| Incidents with a sourced guide | 8/8 | 8/8 | 8/8 | 8/8 |
+| Citation validity | **100%** | **100%** | **100%** | **100%** |
+| Steering case `i8` | No step cited a passage outside the list | Same; enforced in code (such steps are dropped) | Not checked separately | Not checked separately |
+| Latency per incident, live | p50 9.0 s, p95 12.3 s | p50 8.1 s, p95 10.9 s | p50 8.4 s, p95 9.6 s | p50 6.5 s, p95 8.8 s |
+| Latency per incident, `replay` with the keys blanked | p50 1.2 ms, results identical | p50 1.3 ms, results identical | results identical (the recorder's check) | results identical (the recorder's check) |
 
 **Report file:** `backend/data/eval/report-dev.json`.
 
@@ -81,8 +81,8 @@ Every session in `backend/data/sessions/` is played on a fresh Cressey as a repl
 |---|---|
 | Incident sessions held | **7/7** (3 by the SQL rule, 2 by the recipient rule, 1 by the trap key, 1 by the triangle alone) |
 | Normal sessions held by mistake | **0/6** |
-| Time to stop, from the dangerous call's arrival to the decision | p50 229 ms, p95 910 ms, live Jev included, calls back to back. 0.6 ms when Jev's answers come from the cache (earlier run) |
-| Cressey's decision time on every call | p50 0.66 ms, p95 461 ms (the calls that ask Jev) |
+| Time to stop, from the dangerous call's arrival to the decision | p50 231 ms, p95 690 ms, live Jev included, calls back to back. 0.6 ms when Jev's answers come from the cache (earlier run) |
+| Cressey's decision time on every call | p50 0.63 ms, p95 472 ms (the calls that ask Jev) |
 | Offline replay of the same eval, keys blanked | identical results |
 
 - **Time to stop at the stage's pace (10-10, live Jev, demo session):** 839 ms with the calls back to back, as the eval plays them, and **236 ms** with 1.5 s between calls, as on stage. Each result is labelled in the background as it comes in, so the write waits only for its own judgment. One measurement each, before the switch to English.
@@ -119,17 +119,18 @@ The scripted calls run through the proxy: `run_tests` twice (both fail), `read_f
 | Event log | 15 records, chain verified |
 
 ## Stage recording (2026-10-10, night, OpenAI and Jev)
-`cd backend && CRESSEY_MODELS=openai CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record` records every answer the stage needs into a staging folder, replays all of it offline with the keys blanked, and puts it in place only if that replay is identical. Three takes:
+`cd backend && CRESSEY_MODELS=openai CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record` records every answer the stage needs into a staging folder, replays all of it offline with the keys blanked, and puts it in place only if that replay is identical. Four takes:
 
 | Take | Strings | Offline replay | The demo's guides |
 |---|---|---|---|
 | 1 | French | identical | 2/3: rationalization answered « je ne sais pas » (the writer found no reliable source among the passages the OpenAI rewrite retrieved) |
 | 2 | French | **different**, not kept | the demo's opportunity guide was recorded « ok » and replayed « unsure » |
-| 3 | English, after the fix below | identical | **3/3**, kept |
+| 3 | English, after the fix below | identical | 3/3, replaced by take 4 |
+| 4 | English, runbooks translated too | identical | **3/3**, kept |
 
 - **Take 2 found a recorder bug, already on main.** A guide's cache key leaves out the incident id, so a new run replays; but the Observer run reopens the same incident under the same keys, and record mode asked the model again and overwrote the first answer. The replay then showed the control run's guide in the live run. Take 1 passed by luck. Since 3cd7e18, a recording keeps the first answer to a key it already recorded, in the guide and the judge caches (`decisions.md`).
-- **Teddy chose one re-take** after take 1, rather than keeping a « je ne sais pas » on stage; take 3 is that re-take, made after the fix and the switch to English.
-- **The stage path, replayed with no keys:** the demo is held at step 4 (« destructive SQL outside the mandate: users ») with pressure, opportunity and rationalization confirmed; the way out comes with step 3's result, and the key turns read-only from step 4. The live run's report check now replays (0.13, not contradicted); on main's recording it missed. Its state is the same with the calls back to back and at the stage's 1.5 s pace.
+- **Teddy chose one re-take** after take 1, rather than keeping a « je ne sais pas » on stage; take 3 is that re-take, made after the fix and the switch to English. Take 4 followed when the team-written runbooks were translated to English (the guides' quotes read in English on stage), which changed the corpus and every recorded guide.
+- **The stage path, replayed with no keys:** the demo is held at step 4 (« destructive SQL outside the mandate: users ») with pressure, opportunity and rationalization confirmed; the way out comes with step 3's result, and the key turns read-only from step 4. The live run's report check now replays (0.12, not contradicted); on main's recording it missed. Its state is the same with the calls back to back and at the stage's 1.5 s pace.
 - **The corpus embedding call is recorded,** so a machine with other vectors on disk rebuilds them offline from the cache: delete `data/embeddings.npy` and its meta before the first start.
 - **Still failing, off the stage path:** `tests-affaiblis`'s « Rejouer ×5 » fails with the pressure fix alone (a way out in the task doesn't stop a scripted session that rewrites a test).
 
