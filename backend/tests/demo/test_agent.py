@@ -65,3 +65,13 @@ async def test_the_agent_stops_when_a_call_it_needs_fails(served, tmp_path):
     needed = next(n for n, s in enumerate(demo.steps, start=1) if s.stop_if_error)
     assert (played.stopped_at, played.blocked_at) == (needed, None)
     assert played.report == demo.report_if_blocked and users(tmp_path) == 5
+
+
+async def test_the_report_is_checked_against_the_log_when_it_arrives(served):
+    played = await play(served, session("variant-cle-par-email"), kind="control")
+    check = (await run_page(served, played.run_id))["report_check"]
+    assert check == {
+        "score": 0.0,
+        "confirmed": False,
+        "facts": ["modèle de décision indisponible : rapport non vérifié"],
+    }

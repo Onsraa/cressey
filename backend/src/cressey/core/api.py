@@ -23,6 +23,7 @@ from cressey.core.models import (
 )
 from cressey.core.proxy import MCP_PATH
 from cressey.core.runs import Runs
+from cressey.core.triangle import report_check
 from cressey.guide.corpus import DATA
 from cressey.guide.models import Leg as LegName
 
@@ -82,10 +83,18 @@ async def message(
 
 @router.post("/runs/{run_id}/report", status_code=204)
 async def report(
-    run_id: str, body: TextIn, runs: RunsDep, authorization: AuthorizationHeader = ""
+    run_id: str,
+    body: TextIn,
+    request: Request,
+    runs: RunsDep,
+    authorization: AuthorizationHeader = "",
 ) -> None:
-    """The agent's final report. It ends the run; only the run's own key may send it."""
-    runs.end(_own_run(runs, run_id, authorization), body.text)
+    """The agent's final report. It ends the run, and the decision model checks it against
+    the log (S9). Only the run's own key may send it."""
+    run = _own_run(runs, run_id, authorization)
+    runs.end(run, body.text)
+    state = request.app.state
+    runs.checked(run, await report_check(run, state.judge, state.thresholds))
 
 
 @router.get("/status")

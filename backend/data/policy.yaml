@@ -12,5 +12,6 @@ triangle:
   failures: 2
   repeats: 2
   judgment: 0.5
+  report: 0.8
   evidence: 8
   deadline_words: [ce soir, urgent, avant la mise en prod, asap, immédiatement, deadline]

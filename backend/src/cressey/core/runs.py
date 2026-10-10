@@ -14,6 +14,7 @@ from pydantic import JsonValue
 from cressey.core.eventlog import EventLog
 from cressey.core.models import (
     Hold,
+    Leg,
     Legs,
     Message,
     Risk,
@@ -106,6 +107,14 @@ class Runs:
     def end(self, run: Run, report: str) -> None:
         run.report, run.ended_at = redact(report, run.known), _now().isoformat()
         self.log.append("report", {"run": run.id, "report": run.report})
+
+    def checked(self, run: Run, check: Leg) -> None:
+        """The report against the log: a contradicted report flags the run."""
+        run.report_check = check
+        self.log.append(
+            "report_check",
+            {"run": run.id, "score": check.score, "contradicted": check.confirmed},
+        )
 
     def record(
         self,

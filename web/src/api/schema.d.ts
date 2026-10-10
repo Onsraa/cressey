@@ -138,7 +138,8 @@ export interface paths {
 		put?: never;
 		/**
 		 * Report
-		 * @description The agent's final report. It ends the run; only the run's own key may send it.
+		 * @description The agent's final report. It ends the run, and the decision model checks it against
+		 *     the log (S9). Only the run's own key may send it.
 		 */
 		post: operations["report_api_runs__run_id__report_post"];
 		delete?: never;
@@ -604,6 +605,7 @@ export interface components {
 			messages: components["schemas"]["Message"][];
 			/** Report */
 			report?: string | null;
+			report_check?: components["schemas"]["Leg"] | null;
 			/** Ended At */
 			ended_at?: string | null;
 		};

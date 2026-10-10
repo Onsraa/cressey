@@ -49,6 +49,7 @@ def create_app(
     mcp = build_mcp(guard, demo_tools(demo))
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s
+    app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check
     api = APIRouter(prefix="/api")
 
     @api.get("/health")
