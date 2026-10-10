@@ -1,0 +1,779 @@
+[
+ {
+  "id": "anssi-fr:R1",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R1 Intégrer la sécurité dans toutes les phases du cycle de vie d'un système d'IA Des mesures de sécurité doivent être id",
+  "text": "R1 Intégrer la sécurité dans toutes les phases du cycle de vie d'un système d'IA Des mesures de sécurité doivent être identifiées et appliquées dans chacune des 3 phases du cycle de vie d’un système d’IA : entraînement, déploiement et production. Ces mesures dépendent fortement du scénario de partage de responsabilités retenu et de la sous-traitance associée. Elles doivent également tenir compte des interactions avec d’autres applications ou composants internes ou externes au SI. Il est possible de se référer au guide d’hygiène de l’ ANSSI [ 17] pour disposer d’un socle de base de sécurité à appliquer. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 9 3.2 Architecture d'un système d'IA générative La figure 4 décrit un exemple d’architecture générique d’un système d’IA générative. FIGURE 4 – Exemple d’architecture générique d’un système d’IA générative Cette architecture ne reprend pas de manière exhaustive l’ensemble des composants d’un système d’IA générative mais a pour but d’identifier les chemins d’attaques potentiels ciblant une entité. Plusieurs éléments sont importants à relever dans ce schéma : I les différentes populations qui peuvent accéder à un système d’IA selon les phases : utilisateurs, développeurs, administrateurs, auditeurs, etc. ; I la base de données vectorielle, qui est généralement utilisée pour stocker sous forme de vecteurs des données d’indexation de données additionnelles, dans le but d’enrichir 7 les requêtes des utilisateurs avant l’envoi au modèle (concept appelé RAG - Retrieval Augmentation Generation). Cette base de données peut être construite à partir de sources de données internes à l’organisation ou externes depuis des sources partenaires ; I les filtres en entrée et sortie du modèle d’IA, permettant d’assurer une défense en profondeur contre des requêtes malveillantes ou les comportements non-souhaités du système d’IA ; I les plugins ou composants additionnels, qui peuvent être utilisés pour connecter le système d’IA à d’autres ressources métier ou techniques de l’entité ou extérieures à l’entité. 7. Une base de données vectorielle est particulièrement utilisée dans le contexte des LLM car elle peut permettre d’établir des comparaisons, d’identifier des relations entre objets, et ainsi de comprendre le contexte. 10 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE 4 Scénarios d'attaques sur l'IA générative Un système d’IA générative est de prime abord une application métier standard, qui doit disposer du même socle de sécurité que toute autre application métier de l’entité. Toutefois, en complément de ce socle de sécurité, l’entité doit prendre en compte des menaces spécifiques à un système d’IA générative. Ces menaces peuvent être déclinées en 3 grandes catégories d’attaques 8 : I Attaques par manipulation : ces attaques consistent à détourner le comportement du système d’IA en production au moyen de requêtes malveillantes. Elles peuvent provoquer des réponses inattendues, des actions dangereuses ou un déni de service ; I Attaques par infection : ces attaques consistent à contaminer un système d’IA lors de sa phase d’entraînement, en altérant les données d’entraînement ou en insérant une porte dérobée ; I Attaques par exfiltration : ces attaques consistent à dérober des informations sur le système d’IA en production, comme les données ayant servi à entraîner le modèle, les données des utilisateurs ou bien des données internes du modèle (paramètres). Dans le contexte de l’IA générative, ces attaques peuvent porter atteinte aux besoins de sécurité suivants : I Confidentialité : l’objectif est de protéger un système d’IA contre la fuite d’informations considérées comme sensibles : jeux de données d’entraînement, requêtes des utilisateurs, paramètres des modèles, données additionnelles internes, etc. ; I Intégrité : l’objectif est de protéger un système d’IA contre une modification non prévue de son comportement. L ’intégrité peut concerner directement le modèle (paramètres) ou bien viser les jeux de données d’entraînement (empoisonnement) ou encore les composants techniques permettant le bon fonctionnement du système d’IA : scripts 9, bibliothèques externes ( supplychain attack), configurations des services, etc. ; I Disponibilité : l’objectif est de protéger un système d’IA contre des dénis de service ou des actions visant à dégrader ses performances (requêtes malveillantes) ; I Traçabilité : l’objectif est de garantir d’une part l’explicabilité 10 et l’imputabilité des actions réalisées sur un système d’IA. Ces éléments peuvent faciliter le travail d’investigation et de remédiation après un incident de sécurité. 8. Ces catégories sont reprises de la taxonomie de la CNIL à ce sujet : https://linc.cnil.fr/petite-taxonomie-desattaques-des-systemes-dia . 9. Ces scripts peuvent être par exemple des scripts de fine-tuning du modèle d’IA ou bien des scripts de déploiement ou de maintenance informatique du système d’IA. 10. Comme défini par la CNIL, l’explicabilité est la capacité de mettre en relation et de rendre compréhensible les éléments pris en compte par le système d’IA pour la production d’un résultat. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 11 La figure 5 décrit quelques exemples d’attaques sur un système d’IA générative dans un SI. FIGURE 5 – Scénarios d’attaques sur un système d’IA générative dans un SI 1. l’attaquant dispose d’un accès à une source de données et réalise au préalable un empoisonnement des données utilisées pour entraîner le modèle d’IA, ce qui permet de détourner son usage une fois le système d’IA en production (ex. : déclencher une action malveillante de manière cachée à partir d’une requête spécifique) ; 2. l’attaquant dispose d’un accès à l’environnement de développement et insère une porte dérobée dans le code du système d’IA (ex. : altérer directement les paramètres du modèle ou bien la configuration d’un composant technique du système d’IA) ; 3. l’attaquant dispose d’un accès à un service externe de test avant déploiement et détourne le processus d’intégration (ex. : envoyer un résultat trompeur ou malveillant à la chaîne d’intégration) ; 4. l’attaquant utilise une technique d’attaque adverse pour exfiltrer des données sensibles traitées par le modèle d’IA (ex. : récupérer des données d’entraînement ou des requêtes d’autres utilisateurs du service) ou bien il effectue des requêtes malveillantes pour provoquer un déni de service ; 5. l’attaquant dispose d’un accès à une ressource externe accédée par le système d’IA et envoie une réponse malveillante qui est intégrée par le modèle (ex. : il envoie une URL qui pointe sur un site Web malveillant qu’il contrôle) ; 6. l’attaquant dispose d’un accès à un plugin utilisé par le système d’IA et injecte des commandes malveillantes lors d’une action vers une application métier (ex. : insérer du code malveillant dans le corps d’un mail généré par le système d’IA). 12 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE Dans le contexte de ce guide (IA générative LLM), les impacts suivants peuvent être identifiés : I ternissement de la réputation de services exposés au grand public par l’altération du bon fonctionnement des systèmes d’IA générative (ex. : Chatbot) ; I exfiltration de données sensibles depuis des systèmes d’IA générative ; I vol des paramètres (poids) de modèles d’IA propriétaires 11 ; I latéralisation d’une attaque vers d’autres applications métier interconnectées aux systèmes d’IA générative (ex. : messagerie interne) ; I sabotage d’applications métier par injection de vulnérabilités dans du code source généré par IA. La fuite de données sensibles de l’entité doit dans tous les cas être une menace à prendre en compte, quel que soit le cas d’usage du système d’IA générative. Le système d’IA doit intégrer la question des droits d’accès et du respect du besoin d’en connaître dans les réponses qu’il apporte. Il faut également porter une attention particulière aux scénarios d’attaque indirects impliquant un système d’IA, comme par exemple la génération automatique de contenu pour la mise à disposition d’informations (insertion d’URL malveillante). Enfin, l’analyse de risque doit tenir compte du scénario de partage de responsabilités retenu pour le projet (cf. chapitre 2). Par exemple, l’utilisation d’un modèle entraîné par un tiers peut engendrer un risque d’attaque parsupply-chain. Le prestataire tiers, qui n’est pas de confiance, peut entraîner le modèle pour que celui-ci réagisse différemment par rapport au comportement attendu lorsqu’une certaine requête lui est fournie. Une des mesures de réduction du risque pourrait être d’auditer le modèle en question ou bien de ne pas recourir à celui-ci pour des applications critiques. Une analyse de risque, menée par exemple avec la méthode EBIOS-RM [19], doit ainsi être réalisée le plus tôt possible, c’est-à-dire en amont de la phase d’entraînement."
+ },
+ {
+  "id": "anssi-fr:R2",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R2 Mener une analyse de risque sur les systèmes d'IA avant la phase d’entraînement L ’analyse de risque d’un système d’I",
+  "text": "R2 Mener une analyse de risque sur les systèmes d'IA avant la phase d’entraînement L ’analyse de risque d’un système d’IA doit intégrer les problématiques suivantes : I cartographier l’ensemble des éléments en lien avec le modèle d’IA : bibliothèques tierces, sources de données, applications interconnectées, etc. ; I identifier les sous-parties du système d’IA qui traiteront les données de l’organisation, en particulier celles contenues dans les requêtes des utilisateurs ; I prendre en compte le scénario de partage de responsabilités et la question de la sous-traitance pour chacune des phases ; I identifier les impacts directs et indirects en cas de réponses erronées ou malveillantes du modèle d’IA aux utilisateurs ; I considérer la protection des données d’entraînement du modèle d’IA. Les recommandations du prochain chapitre 5 visent à répondre à ces menaces spécifiques. 11. La connaissance des poids du modèle peut également permettre aux attaquants d’améliorer la capacité de certaines attaques. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 13 5 Recommandations 5.1 Recommandations générales L ’utilisation de bibliothèques et de modules externes non maîtrisés doit être étudiée dès la conception du projet, afin d’identifier les potentielles vulnérabilités liées à ces modules. L ’objectif est de se prémunir au maximum d’une attaque dite supply-chain-attack visant des composants nécessaires au bon fonctionnement du système d’IA. Il est possible de se reporter au guide de l’ ANSSI sur le risque numérique [ 21] ou encore à la documentation de la CISA à ce sujet [ 8]."
+ },
+ {
+  "id": "anssi-fr:R3",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R3 Évaluer le niveau de confiance des bibliothèques et modules externes utilisés dans le système d'IA Il est recommandé ",
+  "text": "R3 Évaluer le niveau de confiance des bibliothèques et modules externes utilisés dans le système d'IA Il est recommandé de cartographier l’ensemble des bibliothèques et modules externes utilisés dans le cadre du projet et d’évaluer leur niveau de confiance. Au même titre que pour les composants logiciels (bibliothèques et modules externes), il est également primordial d’évaluer les sources de données non maîtrisées par l’entité. Ces sources peuvent être des jeux de données d’entraînement récupérés sur Internet, des jeux de validation de la performance d’un modèle ou encore des jeux de données additionnelles utilisés lors de la phase de production."
+ },
+ {
+  "id": "anssi-fr:R4",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R4 Évaluer le niveau de confiance des sources de données externes utilisées dans le système d'IA Il est recommandé de ca",
+  "text": "R4 Évaluer le niveau de confiance des sources de données externes utilisées dans le système d'IA Il est recommandé de cartographier l’ensemble des sources de données externes utilisées dans le cadre du projet et d’évaluer leur niveau de confiance 12. De manière générale, il est recommandé d’appliquer des bonnes pratiques de développement sécurisé lors de la conception et de l’implémentation du système d’IA. Ces bonnes pratiques sont parfois regroupées sous le vocable de DevSecOps ou de l’expression security by design . Pour aller plus loin, il est possible de se reporter au guide de l’ ANSSI [ 28] sur ce thème, ou bien à la documentation du NIST à ce sujet [ 10], ou encore suivre les préconisations du NCSC-UK [ 5] et de la CISA [11]. 12. Il est possible de s’appuyer sur les critères de la CNIL ( https://www.cnil.fr/fr/tenir-compte-de-la-protection-desdonnees-dans-la-collecte-et-la-gestion-des-donnees ) ou sur la proposition de Datasheets for Datasets (https://arxiv.org/ pdf/1803.09010.pdf) pour évaluer un jeu de données externe. 14 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE"
+ },
+ {
+  "id": "anssi-fr:R5",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R5 Appliquer les principes de DevSecOps sur l'ensemble des phases du projet Il est recommandé d’appliquer les bonnes pra",
+  "text": "R5 Appliquer les principes de DevSecOps sur l'ensemble des phases du projet Il est recommandé d’appliquer les bonnes pratiques de développement sécurisé sur l’ensemble des phases du projet, par exemple : I déployer et sécuriser des chaînes d’intégration et de déploiement en continu (CI/CD) en appliquant le principe de moindre privilège pour l’accès aux outils de ces chaînes CI/CD ; I mettre en œuvre une gestion sécurisée des secrets utilisés dans toutes les phases du projet ; I prévoir des tests de sécurité automatisés sur le code source (analyse statique de code) et lors de l’exécution de ce code source (analyse dynamique de code) ; I protéger en intégrité le code source et sécuriser l’accès à celui-ci (authentification multifacteur, signature du code, droits d’accès, etc.) ; I recourir à des langages de développement sécurisés (scripts de fine tuning, développement du modèle, maintenance, déploiement, etc.). Afin de pouvoir implémenter un modèle d’IA, il faut stocker les différents paramètres de ce modèle (poids, biais, etc.) dans des fichiers. Plusieurs formats sont disponibles à cet effet, dont certains peuvent présenter un risque d’exécution de code arbitraire, comme par exemple ceux implémentant des fonctionnalités de chargement d’objets sérialisés. Il est donc préférable d’utiliser des formats qui séparent strictement les données de paramètres du modèle et les données de code exécutable de celui-ci."
+ },
+ {
+  "id": "anssi-fr:R6",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R6 Utiliser des formats de modèles d'IA sécurisés Il est recommandé d’utiliser des formats à l’état de l’art du point de",
+  "text": "R6 Utiliser des formats de modèles d'IA sécurisés Il est recommandé d’utiliser des formats à l’état de l’art du point de vue de la sécurité, comme le format safetensor par exemple. Certains formats peu sécurisés, comme le format pickle, sont à proscrire. Les modèles d’IA générative sont amenés à manipuler des données tout au long de leur cycle de vie. Il peut être compliqué d’appliquer des mesures de protection en confidentialité sur ces données, pour les raisons suivantes : I elles peuvent être issues de sources multiples et sont parfois « mélangées » dans un même jeu : données publiques, données partenaires, données internes, données personnelles, etc. I leur volume peut être très important, notamment dans le cas de l’entraînement des LLM, ce qui ne facilite pas leur traitement ; I il peut être nécessaire de les mettre à jour régulièrement, notamment lorsque l’on souhaite ré-entraîner le modèle ; I il peut être nécessaire de leur appliquer un pré-traitement pour abaisser leur niveau de confidentialité (anonymisation, suppression de certains champs, etc.) ; I elles peuvent être utilisées lors de différentes phases du projet : pendant la phase d’entraînement du modèle mais également en production en cas d’accès à des données additionnelles par le modèle ; RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 15 I elles peuvent inclure les données d’usage du système d’IA pendant la phase de production : données issues des requêtes des utilisateurs et réponses apportées par le modèle d’IA à ces utilisateurs. Il est important de bien saisir qu’un modèle d’IA hérite de la sensibilité des données qui ont contribué à l’entraîner et également des données qui servent à le ré-entraîner. Un modèle d’IA peut en effet être vulnérable à un phénomène dit de « régurgitation ». Dans certains cas, celui-ci peut par exemple générer des réponses proches des données d’entraînement, révélant ainsi des informations potentiellement sensibles. En fonction du scénario de partage de responsabilités retenu (cf. chapitre 2), les enjeux de confidentialité des données ne seront pas les mêmes, et les mesures techniques permettant de se prémunir d’une exfiltration de données seront à adapter. Par exemple, dans le cas où l’entité souhaite sous-traiter la phase d’entraînement à un prestataire, il est important de s’assurer que les données stockées et traitées chez ce prestataire sont suffisamment protégées en confidentialité (chiffrement à l’état de l’art, cloisonnement des ressources vis-à-vis d’autres clients, sécurisation des clés utilisées, effacement sécurisé après ré-allocation de ressources, etc.). Dans le même ordre d’idée, un modèle d’IA propriétaire que l’on souhaite protéger en confidentialité doit faire l’objet de mesures spécifiques de sécurité dans le cas où ce dernier serait stocké dans un environnement qui n’est pas de confiance (ex. : chez un prestataire Cloud ou bien embarqué dans un équipement physiquement exposé comme dans le cas de l’IoT)."
+ },
+ {
+  "id": "anssi-fr:R7",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R7 Prendre en compte les enjeux de confidentialité des données dès la conception du système d'IA L ’étude du projet doit",
+  "text": "R7 Prendre en compte les enjeux de confidentialité des données dès la conception du système d'IA L ’étude du projet doit cartographier l’ensemble des jeux de données utilisés à chaque phase du système d’IA : entraînement (jeux de données d’entraînement), déploiement (jeux de tests) et production (données additionnelles, base de données vectorielle, etc.). Cette étude doit inclure les données d’usage du système d’IA en production, à savoir les requêtes des utilisateurs ainsi que les réponses apportées par le modèle d’IA. L ’analyse peut également traiter le cas de la protection en confidentialité des paramètres du modèle lui-même, par exemple pour des modèles propriétaires. L ’accès à un système d’IA complexifie également l’application du besoin d’en connaître des utilisateurs. Il faut distinguer ici plusieurs catégories de données : I Les données d’entraînement : la gestion de droits d’accès pour les utilisateurs n’est pas possible sur ces données du fait du design des réseaux de neurones ; I Les données additionnelles en production : la gestion de droits d’accès est possible mais elle est dépendante des possibilités offertes par les outils utilisés (RBAC 13) pour stocker les informations (services de gestion de documents internes, base de données vectorielle, etc.) ; I Les données d’usage : les requêtes des utilisateurs ainsi que les réponses peuvent contenir des données sensibles. Elles sont temporairement stockées lors du traitement dans le système d’IA et parfois utilisées pour ré-entraîner le modèle (ex. : alignement avec RLHF - Reinforcement learning from human feedback ). 13. Role Based Access Control 16 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE La question du besoin d’en connaître doit ainsi se reposer à chaque ré-entraînement du modèle, y compris sur des données issues de l’usage du modèle en production (données additionnelles métier, requêtes des utilisateurs, etc.)."
+ },
+ {
+  "id": "anssi-fr:R8",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R8 Prendre en compte la problématique de besoin d'en connaître dès la conception du système d'IA Il est important de déf",
+  "text": "R8 Prendre en compte la problématique de besoin d'en connaître dès la conception du système d'IA Il est important de définir en amont du projet les options structurantes du modèle pour gérer le besoin d’en connaître : I le choix des données utilisées pour l’entraînement (sans la possibilité de gérer des droits d’accès) et des données additionnelles en production (avec la possibilité de gérer des rôles et des droits d’accès) ; I la stratégie d’apprentissage du modèle, c’est-à-dire à quel moment est-ce que l’on ré-entraîne le modèle et sur la base de quelles données (données additionnelles métier, requêtes des utilisateurs, réponses du modèle, etc.). Les IA génératives LLM ont pour la plupart un comportement non-déterministe, et elles peuvent également être sujet à des hallucinations 14. Cette incertitude sur la réponse obtenue pour une requête donnée implique une plus grande vigilance sur les conséquences indirectes de ces réponses. Ainsi, les interactions d’un système d’IA avec d’autres ressources du SI doivent proscrire l’exécution d’actions automatisées critiques pour l’organisation. Ce principe de précaution doit prévaloir et un système d’IA générative ne doit pas pouvoir prendre des décisions critiques ayant un impact fort sur le métier ou la protection des biens et des personnes, sans un contrôle humain (ex. : validation dans une IHM). Dans ces cas particuliers, la capacité de discernement humaine permet de réduire le risque de scénarios qui peuvent représenter un danger pour l’organisation. Il est par exemple important de ne pas utiliser un système d’IA pour automatiser des actions d’administration critiques sur l’infrastructure technique de l’entité (ex. : découverte et déploiement automatique de configurations réseaux ou de règles de pare-feux)."
+ },
+ {
+  "id": "anssi-fr:R9",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R9 Proscrire l'usage automatisé de systèmes d'IA pour des actions critiques sur le SI Un système d’IA doit être configur",
+  "text": "R9 Proscrire l'usage automatisé de systèmes d'IA pour des actions critiques sur le SI Un système d’IA doit être configuré de manière à ne pas être en mesure d’exécuter de manière automatisée des actions critiques sur le SI. Ces actions peuvent être des actions critiques d’un point de vue métier (transactions bancaires, production de contenu public, impact direct sur des personnes, etc.) ou bien des actions critiques sur l’infrastructure du SI (reconfiguration de composants réseaux, créations d’utilisateurs à privilège, déploiement de serveurs virtuels, etc.). Les rôles et les droits d’accès des développeurs et des administrateurs du système d’IA doivent être strictement définis et appliqués dès le début du projet. Les principes d’administration sécurisée, tels 14. Phénomène dans lequel un modèle génère du contenu erroné qui n’est pas basé sur des données réelles. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 17 que décrits dans le guide de l’ ANSSI à ce sujet [ 26] doivent être appliqués dans toutes les phases du cycle de vie du système d’IA."
+ },
+ {
+  "id": "anssi-fr:R10",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R10 Maîtriser et sécuriser les accès à privilèges des développeurs et des administrateurs sur le système d'IA L ’ensembl",
+  "text": "R10 Maîtriser et sécuriser les accès à privilèges des développeurs et des administrateurs sur le système d'IA L ’ensemble des opérations à privilèges sur le système d’IA doit respecter les bonnes pratiques d’administration sécurisée, notamment : I les opérations à privilège doivent être définies et leur déclenchement doit être validé : ré-entraînement, modification des jeux de données, nouvelle interconnexion avec une application, changement d’hébergement, etc. ; I les opérations à privilège doivent être réalisées avec des comptes dédiés et depuis un poste d’administration dédié à cet usage ; I le principe de moindre privilège doit être appliqué et l’usage de jetons d’authentification (token) temporaires doit être privilégié ; I l’environnement de développement doit être maîtrisé et administré au même niveau de sécurité que l’environnement de production. L ’hébergement du système d’IA, quelle que soit sa phase, doit être étudié. Le niveau de sécurité doit être cohérent avec les besoins de sécurité du projet, et notamment les besoins en confidentialité des données utilisées dans chacune des phases. Ce point doit notamment être strictement respecté pour la phase d’entraînement du modèle car des menaces importantes existent lors de cette phase, comme cela a été vu précédemment dans le chapitre 4. Attention Les modèles d’IA sont considérés du même niveau de sensibilité que les données qui ont servi à sa conception et à son entraînement. La règle R9 [ 12] de la circulaire « Cloud au centre » [ 13] doit s’appliquer pour le cas de l’administration publique. R1 1 Héberger le système d'IA dans des environnements de confiance cohérents avec les besoins de sécurité L ’hébergement du système d’IA lors des 3 phases du cycle de vie doit être cohérente avec les besoins de sécurité du projet, et notamment les besoins en confidentialité et en intégrité. En particulier, la sécurisation des données d’entraînement du modèle (au repos, en transit, lors d’un traitement) ne doit pas être négligée. Les 3 environnements d’entraînement, de déploiement et de production d’un système d’IA doivent être cloisonnés entre eux. Cette mesure permet de se prémunir d’un risque de latéralisation entre les environnements. Cela est d’autant plus important que les populations ayant accès à chaque environnement ne sont généralement pas les mêmes. 18 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE"
+ },
+ {
+  "id": "anssi-fr:R12",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R12 Cloisonner chaque phase du système d'IA dans un environnement dédié Il est recommandé de cloisonner les 3 environnem",
+  "text": "R12 Cloisonner chaque phase du système d'IA dans un environnement dédié Il est recommandé de cloisonner les 3 environnements techniques correspondant à chacune des phases du cycle de vie du système d’IA. Ce cloisonnement peut porter sur : I un cloisonnement réseau : chaque environnement est intégré dans un réseau physiquement ou logiquement dédié ; I un cloisonnement système : chaque environnement dispose de ses propres serveurs physiques ou hyperviseurs dédiés ; I un cloisonnement du stockage : chaque environnement dispose de son propre matériel de stockage ou de disques dédiés. Au minimum, un cloisonnement logique est appliqué ; I un cloisonnement des comptes et des secrets : chaque environnement dispose de ses propres comptes utilisateurs et administrateurs et de secrets distincts. Dans le cas d’un système d’IA exposé sur Internet, il est recommandé de suivre les préconisations de l’ ANSSI pour la conception d’une passerelle Internet sécurisée [ 24]."
+ },
+ {
+  "id": "anssi-fr:R13",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R13 Implémenter une passerelle Internet sécurisée dans le cas d'un système d'IA exposé sur Internet Dans le cas d’un sys",
+  "text": "R13 Implémenter une passerelle Internet sécurisée dans le cas d'un système d'IA exposé sur Internet Dans le cas d’un système d’IA exposé sur Internet, il est recommandé de suivre les bonnes pratiques de cloisonnement du guide de l’ ANSSI à ce sujet, notamment : I dédier une fonction de reverse-proxy avant l’accès au service web du système d’IA ; I mettre en place deux zones logiques pour le filtrage réseau à l’aide de pare-feux : un filtrage externe en frontal d’Internet et un filtrage interne avant l’accès au système d’IA ; I ne pas exposer un annuaire interne de l’entité pour l’authentification sur le système d’IA ; I éviter de mutualiser sur un même hyperviseur des fonctions de sécurité distinctes de la passerelle Internet sécurisée (pare-feux, reverse-proxy, serveur de journalisation, etc.). Si l’entité fait le choix d’un Cloud public 15 pour exposer son service, il est recommandé de choisir un prestataire qualifié SecNumCloud [32] si les besoins de sécurité l’exigent."
+ },
+ {
+  "id": "anssi-fr:R14",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R14 Privilégier un hébergement SecNumCloud dans le cas d'un déploiement d'un système d'IA dans un Cloud public Si l’enti",
+  "text": "R14 Privilégier un hébergement SecNumCloud dans le cas d'un déploiement d'un système d'IA dans un Cloud public Si l’entité fait le choix d’utiliser un hébergement dans un Cloud public, il est recommandé de privilégier une offre de confiance SecNumCloud dans les cas suivants : I les données traitées par le système d’IA sont considérées comme sensibles ; 15. Un Cloud public désigne un service d’hébergement mutualisé entre plusieurs clients et exposé sur Internet. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 19 I l’impact du système d’IA sur le métier est considéré comme critique ; I les utilisateurs du système d’IA ne sont pas considérés comme de confiance. Lors de la conception du projet, il faut prévoir systématiquement un mode dégradé sans IA pour répondre aux besoins métier, en cas d’indisponibilité ou de défaillance du système nominal."
+ },
+ {
+  "id": "anssi-fr:R15",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R15 Prévoir un mode dégradé des services métier sans système d'IA Afin de prévenir des dysfonctionnements ou des incohér",
+  "text": "R15 Prévoir un mode dégradé des services métier sans système d'IA Afin de prévenir des dysfonctionnements ou des incohérences dans les réponses apportées par le modèle d’IA, il est recommandé de prévoir au minimum une procédure de contournement du système d’IA pour les utilisateurs, afin de répondre aux besoins métier. Le déploiement de systèmes d’IA générative et de LLM implique généralement l’usage de GPU 16 dans un objectif de performances du système, que ce soit dans la phase d’entraînement ou de production. Ces GPU peuvent potentiellement traiter des données sensibles en lien avec les opérations du modèle d’IA. Dans un objectif de se protéger d’une fuite de données, il est recommandé de dédier ces composants matériels GPU au système d’IA et de ne pas les mutualiser avec d’autres applications métier du SI. Les GPU peuvent en revanche être mutualisés entre plusieurs modèles d’IA, sous réserve que ces derniers correspondent à un même niveau de sensibilité et à des besoins de sécurité homogènes."
+ },
+ {
+  "id": "anssi-fr:R16",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R16 Dédier les composants GPU au système d'IA Il est recommandé de dédier les composants physiques GPU aux traitements r",
+  "text": "R16 Dédier les composants GPU au système d'IA Il est recommandé de dédier les composants physiques GPU aux traitements réalisés par le système d’IA. Dans le cas de la virtualisation, il est recommandé que les hyperviseurs ayant accès aux cartes GPU soient dédiés au système d’IA, ou bien au minimum qu’il y ait une fonction de filtrage matériel (ex. : IOMMU 17) permettant de restreindre les accès des machines virtuelles à la mémoire de ces cartes GPU. Comme la plupart des applications métier, les systèmes d’IA peuvent être soumis à des attaques par canaux auxiliaires. Ces attaques peuvent avoir pour objectifs d’exfiltrer des informations sensibles ou de perturber le bon fonctionnement des systèmes d’IA. Si la plupart de ces attaques ne sont pas propres à un système d’IA, certaines peuvent néanmoins s’appuyer sur des mécanismes spécifiques aux systèmes d’IA génératives 18."
+ },
+ {
+  "id": "anssi-fr:R17",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R17 Prendre en compte les attaques par canaux auxiliaires sur le système d'IA Il est recommandé de s’assurer que le syst",
+  "text": "R17 Prendre en compte les attaques par canaux auxiliaires sur le système d'IA Il est recommandé de s’assurer que le système d’IA n’est pas vulnérable à des attaques par canaux auxiliaires (temporels, consommation, etc.) qui pourraient par exemple permettre à un attaquant de reconstruire une réponse apportée par un modèle d’IA. 16. Graphics processing unit 17. Input–output memory management unit 18. cf. par exemple https://cdn.arstechnica.net/wp-content/uploads/2024/03/LLM-Side-Channel.pdf 20 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE 5.2 Recommandations pour la phase d’entraînement La question de la confidentialité des données a fait l’objet d’une recommandation générale précédemment (cf. R7). En particulier, et au vu des nombreuses vulnérabilités publiées sur les outils d’IA générative, il est préférable de partir du postulat qu’un utilisateur ayant accès à un modèle d’IA entraîné pourrait potentiellement avoir accès aux données d’entraînement de ce même modèle. Pour réduire les risques liés à la confidentialité des données d’entraînement, il est parfois envisagé de recourir à un processus d’anonymisation ou bien de générer un jeu de données synthétiques à partir des données brutes d’origine. Ces mesures peuvent répondre dans certains cas aux enjeux de protection de l’information, mais il convient néanmoins d’être vigilant sur l’existence d’attaques visant à retrouver l’information initiale à partir de données anonymisées ou synthétiques 19 : attaques par inférence d’attribut ou d’appartenance, ré-identification à partir de croisements avec d’autres jeux de données, etc."
+ },
+ {
+  "id": "anssi-fr:R18",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R18 Entraîner un modèle d'IA uniquement avec des données légitimement accessibles par les utilisateurs Il est fortement ",
+  "text": "R18 Entraîner un modèle d'IA uniquement avec des données légitimement accessibles par les utilisateurs Il est fortement recommandé d’entraîner un modèle avec des données dont la sensibilité est cohérente avec le besoin d’en connaître des utilisateurs. Comme cela a été vu précédemment, des attaques ciblant spécifiquement la phase d’entraînement d’un modèle sont possibles, comme par exemple l’injection de données malveillantes dans les jeux de données d’entraînement, ou encore la modification de certaines données pour générer un dysfonctionnement du modèle, une fois celui-ci déployé en production."
+ },
+ {
+  "id": "anssi-fr:R19",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R19 Protéger en intégrité les données d’entraînement du modèle d'IA Il est recommandé de s’assurer de l’intégrité des do",
+  "text": "R19 Protéger en intégrité les données d’entraînement du modèle d'IA Il est recommandé de s’assurer de l’intégrité des données d’entraînement du modèle tout au long du cycle d’entraînement. Cette protection peut prendre la forme d’une vérification systématique de la signature ou de l’empreinte (hash) des fichiers utilisés ou bien des archives compressés de l’ensemble de ces données."
+ },
+ {
+  "id": "anssi-fr:R20",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R20 Protéger en intégrité les fichiers du système d'IA Il est recommandé de protéger en intégrité les fichiers du modèle",
+  "text": "R20 Protéger en intégrité les fichiers du système d'IA Il est recommandé de protéger en intégrité les fichiers du modèle entraîné, et de contrôler régulièrement que ceux-ci n’ont pas été altérés. La recommandation vaut également par extension pour tous les fichiers inhérents au fonctionnement du système d’IA (scripts, binaires, etc.). Dans la majorité des cas d’usage, un modèle d’IA entraîné ne doit pas faire l’objet d’une modification ou d’un ajustement constant de ses paramètres. Dans le cas où l’on constate un dysfonctionnement, ou bien lorsque l’on cherche à optimiser les performances du modèle, il est préférable d’exécuter les opérations de ré-entraînement de ce dernier en utilisant l’environnement d’entraînement dédié à cet usage. 19. Il est possible de se référer aux travaux de la CNIL à ce sujet : https://linc.cnil.fr/donnees-synthetiques-et-lhommecrea-les-donnees-son-image-22 . RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 21 A ce titre, les méthodes d’apprentissage en continu ou aussi appelées apprentissage en ligne (le modèle apprend en temps-réel à partir des données envoyées en entrée) sont à éviter au possible. En effet, l’utilisation de méthodes d’apprentissage hors ligne, à partir de jeux de données sélectionnés et testés, réduit les risques de dysfonctionnement du modèle ou d’empoisonnement de celui-ci. Le ré-entraînement d’un modèle d’IA peut être réalisé de manière récurrente et fixe (ex. : tous les mois), être déclenché lorsqu’un écart de performance franchit un seuil donné ou lorsque les données d’entraînement ne sont plus pertinentes, ou encore à la demande de manière ponctuelle."
+ },
+ {
+  "id": "anssi-fr:R21",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R21 Proscrire le ré-entraînement du modèle d'IA en production Il est fortement recommandé de ne pas ré-entraîner un modè",
+  "text": "R21 Proscrire le ré-entraînement du modèle d'IA en production Il est fortement recommandé de ne pas ré-entraîner un modèle d’IA directement en production. Cette action de ré-entraînement doit démarrer avec le cycle en 3 phases, dans les environnements adéquats pour chacune des phases. 5.3 Recommandations pour la phase de déploiement Le déploiement d’un système d’IA générative doit s’appuyer sur un environnement de déploiement sécurisé, reposant par exemple sur des chaînes CI/CD maîtrisées et durcies. Ces chaînes CI/CD doivent être opérées depuis un SI d’administration et depuis des postes d’administrateurs dédiées et durcis."
+ },
+ {
+  "id": "anssi-fr:R22",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R22 Sécuriser la chaîne de déploiement en production des systèmes d'IA Il est recommandé d’opérer le déploiement des sys",
+  "text": "R22 Sécuriser la chaîne de déploiement en production des systèmes d'IA Il est recommandé d’opérer le déploiement des systèmes d’IA générative depuis un SI d’administration, en respectant les bonnes pratiques du guide d’administration sécurisée [26] de l’ ANSSI. Il faut prévoir une phase d’audit de sécurité par des équipes spécialisées et formées aux spécificités des systèmes d’IA. Cette phase doit avoir lieu avant le déploiement en production afin de tester les vulnérabilités inhérentes aux systèmes d’IA (attaques adverses, etc.)."
+ },
+ {
+  "id": "anssi-fr:R23",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R23 Prévoir des audits de sécurité des systèmes d'IA avant déploiement en production Il est recommandé de prévoir des te",
+  "text": "R23 Prévoir des audits de sécurité des systèmes d'IA avant déploiement en production Il est recommandé de prévoir des tests de robustesse et de sécurité des systèmes d’IA. Ces tests peuvent être : I des tests d’intrusion standards sur les composants techniques usuels d’un système d’IA : serveurs web, orchestrateur, base de données, etc. I des tests de sécurité sur les développements réalisés dans le système d’IA (via des outils SAST ou DAST par exemple) ; I des tests automatisés 20visant spécifiquement des vulnérabilités liées aux modèles d’IA (attaques adverses, extraction du modèle, etc.) ; I des tests manuels d’auditeurs visant spécifiquement à tester la robustesse d’un modèle d’IA générative sur des scénarios d’attaques plus sophistiqués. 22 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE Pour la réalisation d’audits de sécurité sur un système d’IA générative, il est possible de faire appel à des prestataires PASSI [30] qualifiés par l’ ANSSI."
+ },
+ {
+  "id": "anssi-fr:R24",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R24 Prévoir des tests fonctionnels métier des systèmes d'IA avant déploiement en production Il est recommandé de prévoir",
+  "text": "R24 Prévoir des tests fonctionnels métier des systèmes d'IA avant déploiement en production Il est recommandé de prévoir des tests de performance et de qualité des réponses apportées par un système d’IA générative. Information Les tests fonctionnels du système d’IA peuvent avoir lieu en continu à une fréquence donnée et pas uniquement lors de déploiements. Cela peut permettre de détecter en avance de phase un dysfonctionnement du modèle et ainsi corriger de manière plus réactive. 5.4 Recommandations pour la phase de production Comme indiqué précédemment, il est difficile d’appliquer le principe de besoin d’en connaître sur les données d’entraînement d’un modèle, celui-ci pouvant subir des attaques qui visent à extraire ces données par interrogation du modèle (régurgitation). De même, certaines requêtes malveillantes peuvent avoir comme objectif le détournement du service d’IA générative, par exemple en provoquant des hallucinations ou des réponses erronées. Dans une démarche de défense en profondeur, il est recommandé d’étudier la possibilité de détecter ou de bloquer certaines requêtes malveillantes ayant par exemple pour objectif d’extraire des informations du modèle ou des données additionnelles (ces données additionnelles pouvant inclure les entrées des utilisateurs dans certains cas d’usage). Cette protection peut également être pertinente pour se prémunir du risque de fuite du modèle. En effet, si le modèle a été entraîné sur des données sensibles, la fuite des paramètres du modèle peut entraîner la fuite de certaines de ces données par certaines attaques (ex. : attaque par inversion de modèle ou attaque par inférence d’appartenance). À ce titre, les réponses aux utilisateurs doivent être les plus simples possibles (chaîne de caractères exclusivement) et ne doivent pas retourner de vecteur de score ayant servi à la prédiction, ni tout autre mécanisme interne au modèle. Enfin, il peut être pertinent, selon les cas d’usage, de définir une limite à la taille des réponses apportées par le modèle d’IA. Cela peut ainsi réduire le risque de fuite de données par régurgitation."
+ },
+ {
+  "id": "anssi-fr:R25",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R25 Protéger le système d'IA en filtrant les entrées et les sorties des utilisateurs Il est recommandé de mettre en plac",
+  "text": "R25 Protéger le système d'IA en filtrant les entrées et les sorties des utilisateurs Il est recommandé de mettre en place des fonctions permettant de se prémunir d’une fuite de données ou d’une fuite de modèle dans les réponses : I une fonction de filtre de requêtes malveillantes des utilisateurs avant envoi au 20. À titre d’exemples, plusieurs outils spécialisés existent comme https://github.com/microsoft/responsible-ai-toolbox , https://github.com/Trusted-AI/adversarial-robustness-toolbox , ou encore https://github.com/protectai/aiexploits. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 23 modèle ; I une fonction de filtre de requêtes jugées non légitimes d’un point de vue métier ; I une fonction de filtre d’informations internes du modèle (paramètres, entraînement) dans les réponses ; I une fonction de filtre d’informations définies comme sensibles dans les réponses (ex. : coordonnées personnelles, références de projets, etc.) ; I une limite sur la taille des réponses (nombre de caractères maximum). Les interactions du système d’IA avec d’autres applications métier ou d’autres ressources techniques du SI peuvent être une source de vulnérabilités. Ces interactions prennent souvent la forme de plugins proposés par les éditeurs de modèles d’IA. Ces plugins vont ainsi permettre d’interconnecter le système d’IA avec des outils bureautiques, des réseaux sociaux, ou encore des composants d’infrastructure potentiellement critiques (gestionnaire d’identités, ressources réseaux, etc.). Ces interactions peuvent également faciliter la latéralisation d’un attaquant sur le SI, si celui-ci profite d’une vulnérabilité sur le système d’IA. La littérature évoque très souvent les risques d’injection de requête indirecte (indirect prompt injection) et les problèmes qui peuvent résulter de l’envoi de données non-maîtrisées à un modèle d’IA générative 21 (par exemple le contenu d’un mail reçu ou d’une page Web issue d’une recherche). Ces usages sont d’autant plus problématiques dans le cas où des actions pourraient être effectuées sans une validation humaine (cf. recommandation R9). Il est donc primordial d’avoir une maîtrise des interactions du système d’IA avec d’autres ressources du SI."
+ },
+ {
+  "id": "anssi-fr:R26",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R26 Maîtriser et sécuriser les interactions du système d'IA avec d'autres applications métier L ’ensemble des interactio",
+  "text": "R26 Maîtriser et sécuriser les interactions du système d'IA avec d'autres applications métier L ’ensemble des interactions et des flux réseaux du système d’IA doit être documenté et validé. Les flux réseaux entre le système d’IA et d’autres ressources doivent respecter l’état de l’art en matière de sécurité : I ils doivent être strictement filtrés au niveau réseau, chiffrés et authentifiés (ex. : en suivant le guide TLS de l’ ANSSI [22]) ; I ils doivent utiliser des protocoles sécurisés (ex. : OpenID Connect ) en cas d’usage d’un fournisseur d’identité [ 23] ; I ils doivent intégrer un contrôle des autorisations d’accès à la ressource en complément de l’authentification ; I ils doivent faire l’objet d’une journalisation au niveau de granularité adéquat. 21. Il est possible de se référer à l’article « Not what you’ve signed up for : Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection » pour plus de détails : https://arxiv.org/abs/2302.12173 24 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE"
+ },
+ {
+  "id": "anssi-fr:R27",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R27 Limiter les actions automatiques depuis un système d'IA traitant des entrées non-maîtrisées Il est fortement recomma",
+  "text": "R27 Limiter les actions automatiques depuis un système d'IA traitant des entrées non-maîtrisées Il est fortement recommandé de limiter voire de proscrire les actions automatiques sur le SI déclenchées depuis un système d’IA et à partir d’entrées non-maîtrisées (ex. : données issues d’Internet ou de mails, etc.). En fonction du cas d’usage du système d’IA et de sa criticité d’un point de vue métier, il peut être opportun de le déployer dans un ou plusieurs environnements dédiés, c’est-à-dire non mutualisés avec d’autres applications métier de l’entité."
+ },
+ {
+  "id": "anssi-fr:R28",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R28 Cloisonner le système d'IA dans un ou plusieurs environnements techniques dédiés Il est recommandé que le système d’",
+  "text": "R28 Cloisonner le système d'IA dans un ou plusieurs environnements techniques dédiés Il est recommandé que le système d’IA soit cloisonné dans des zones logiques dédiées, afin de limiter les risques de latéralisation d’un attaquant qui aurait compromis ce système. La journalisation des actions sur le système d’IA doit être réalisée avec une granularité d’information adéquate, en particulier sur les entrées et les sorties du modèle d’IA. Dans un objectif de traçabilité et de compréhension du système d’IA, il est important de bien distinguer les requêtes réalisées par les utilisateurs et les données réellement envoyées au modèle d’IA. En effet, pour des raisons de performance mais aussi de sécurité, les requêtes des utilisateurs peuvent faire l’objet d’un pré-traitement et d’une mise en forme spécifique avant l’envoi au modèle. Ces deux informations sont cruciales pour faciliter la gestion d’un incident et doivent pouvoir être tracées dans des journaux applicatifs du système d’IA. L ’objectif est de pouvoir reconstituer entièrement un événement sur le système d’IA, en cas de requête malveillante par exemple. En ce qui concerne l’architecture d’un système de journalisation, il est possible de s’appuyer sur le guide généraliste de l’ ANSSI à ce sujet [27]."
+ },
+ {
+  "id": "anssi-fr:R29",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R29 Journaliser l'ensemble des traitements réalisés au sein du système d'IA Il est recommandé de journaliser au bon nive",
+  "text": "R29 Journaliser l'ensemble des traitements réalisés au sein du système d'IA Il est recommandé de journaliser au bon niveau de granularité l’ensemble des traitements réalisés sur le système d’IA, notamment : I les requêtes des utilisateurs (en prenant garde à leur protection si ces requêtes contiennent des données sensibles) ; I les traitements réalisés en entrée sur cette requête avant l’envoi au modèle ; I les appels à des plugins ; I les appels à des données additionnelles ; I les traitements réalisés par les filtres en sortie ; I les réponses aux utilisateurs. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 25 Attention La journalisation des données des utilisateurs doit respecter les exigences de la CNIL [ 9] concernant la protection des données personnelles (comme prévu par le RGPD) et notamment pour la durée de conservation de ces données sur le système d’IA. 5.5 Cas particulier de la génération de code source assistée par l'IA Les outils d’IA générative peuvent être spécialisés et spécifiquement entraînés pour générer du code source dans plusieurs langages de programmation. Ces moyens peuvent permettre aux développeurs un gain de temps mais comportent aussi des risques sur la qualité du code (introduction de vulnérabilités) ou d’insertion de porte dérobée dans le cas où un attaquant aurait compromis le modèle. Il est donc important de faire preuve de vigilance sur le code source généré par IA."
+ },
+ {
+  "id": "anssi-fr:R30",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R30 Contrôler systématiquement le code source généré par IA Le code source généré par IA doit faire l’objet de mesures d",
+  "text": "R30 Contrôler systématiquement le code source généré par IA Le code source généré par IA doit faire l’objet de mesures de sécurité afin de vérifier son innocuité : I proscrire l’exécution automatique de code source généré par IA dans l’environnement de développement ; I proscrire le commit automatique de code source généré par IA dans les dépôts ; I intégrer un outil d’assainissement de code source [ 3, 4] généré par IA dans l’environnement de développement ; I vérifier l’innocuité des bibliothèques référencées dans le résultat du code source généré par IA ; I faire contrôler régulièrement par un humain la qualité du code source généré à partir de requêtes types suffisamment sophistiquées."
+ },
+ {
+  "id": "anssi-fr:R31",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R31 Limiter la génération de code source par IA pour des modules critiques d'applications Il est fortement recommandé de",
+  "text": "R31 Limiter la génération de code source par IA pour des modules critiques d'applications Il est fortement recommandé de ne pas utiliser un outil d’IA générative pour générer des blocs 22de code source destinés à des modules critiques d’applications : I les modules de cryptographie (authentification, chiffrement, signature, etc.) ; I les modules de gestion des droits d’accès des utilisateurs et administrateurs ; I les modules de traitement de données sensibles. 26 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE"
+ },
+ {
+  "id": "anssi-fr:R32",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R32 Sensibiliser les développeurs sur les risques liés au code source généré par IA Il est recommandé d’effectuer des ca",
+  "text": "R32 Sensibiliser les développeurs sur les risques liés au code source généré par IA Il est recommandé d’effectuer des campagnes de sensibilisation sur les risques liés à l’utilisation de code source généré par IA. Cette sensibilisation peut s’appuyer sur des rapports publics sur ce sujet ou bien des papiers de recherche 23démontrant la présence de vulnérabilités dans le code généré par IA. En complément, les développeurs peuvent également être formés sur les outils d’IA pour l’optimisation de leurs requêtes ( prompt engineering 24) afin d’améliorer la qualité et la sécurité du code généré. Information Selon les cas d’usages, il peut également être pertinent d’entraîner spécifiquement un modèle (étape d’alignement) pour qu’il ne puisse pas être en mesure de générer du code volontairement malveillant. 5.6 Cas particulier de services d'IA grand public exposés sur Internet Dans le cas où l’entité souhaite proposer au grand public un service reposant sur de l’IA générative, il convient d’apporter une vigilance particulière à la sécurisation de ce service, à cause de sa forte exposition. L ’atteinte à l’image ou à la réputation de l’entité peut être une menace supplémentaire à identifier lors de l’analyse de risque."
+ },
+ {
+  "id": "anssi-fr:R33",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R33 Durcir les mesures de sécurité pour des services d'IA grand public exposés sur Internet Il est recommandé d’apporter",
+  "text": "R33 Durcir les mesures de sécurité pour des services d'IA grand public exposés sur Internet Il est recommandé d’apporter une attention particulière sur certaines mesures de sécurité pour les services exposés au grand public, notamment : I entraîner le modèle d’IA uniquement à partir de données publiques ; I s’assurer que les utilisateurs du système d’IA ont fait l’objet d’une authentification au préalable ; I analyser systématiquement les requêtes des utilisateurs sur le système d’IA ; I faire un contrôle et une validation des réponses avant l’envoi aux utilisateurs ; I protéger en confidentialité les données des utilisateurs (historique des requêtes et des réponses, etc.) ; 22. Un bloc désigne ici un ensemble complet d’instructions du code source, par exemple la définition complète d’une fonction, d’une procédure, d’une classe d’objets, d’un script shell, etc. 23. Les rapports de Snyk (https://snyk.io/fr/reports/ai-code-security/ ) peuvent éventuellement être cités à titre d’exemple ou bien les recherches menées par l’université de Stanford à ce sujet ( https://arxiv.org/pdf/2211.03622.pdf). 24. Il est par exemple possible de combiner une première requête de génération de code par IA, suivie d’un test d’analyse statique de ce code, puis enfin une seconde requête demandant à l’IA de corriger les vulnérabilités détectées dans le code qui avait été généré. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 27 I mettre en place des mesures contre les dénis de service distribués (DDoS) [ 18] ; I sécuriser le service web en frontal des utilisateurs [ 25]. 5.7 Cas particulier de l'utilisation de solutions d'IA générative tierces Dans cette dernière section, le guide traite le cas particulier où l’entité n’est pas en situation de gestionnaire et de maîtrise d’un service d’IA générative, mais est cliente d’un service tiers d’IA générative (cf. scénarios de partage de responsabilités du chapitre 2). L ’objet de cette dernière section est de faire un rappel des points de vigilance à prendre en compte pour les utilisateurs de ces services tiers. De par leur facilité d’usage, il est tentant de recourir à des outils d’IA générative disponibles sur Internet pour traiter des données métier, par exemple pour la traduction de textes. Le fait d’envoyer des informations (texte, images, documents) à un service d’IA générative grand public revient à déposer ces mêmes informations sur un espace de stockage leur appartenant. Le cloisonnement entre les clients ainsi que la protection en confidentialité des données envoyées au système d’IA sur Internet ne sont pas maîtrisés et reposent uniquement sur la confiance envers le prestataire. À ce titre, il est important de noter que dans la majorité des offres, les données envoyées au service sont collectées et utilisées par le prestataire à des fins d’optimisation des modèles 25. Il est donc primordial de ne surtout pas envoyer de données sensibles à des services d’IA générative tiers grand public comme par exemples ChatGPT, Gemini, Copilot, DeepL (Traduction de texte) ou encore Perplexity pour ne citer que les plus populaires. Les données concernées sont notamment : I des données de niveau Diffusion Restreinte [29] ou classifiées de défense [ 31] ; I des travaux de recherche relevant de la PPST [ 20] ; I des données personnelles (vie privée, coordonnées, etc.) ; I des données contractuelles, juridiques ou financières de l’entreprise ; I des secrets informatiques, comme des mots de passe ou des jetons d’authentification (clés d’ API)."
+ },
+ {
+  "id": "anssi-fr:R34",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R34 Proscrire l'utilisation d'outils d'IA générative sur Internet pour un usage professionnel impliquant des données sen",
+  "text": "R34 Proscrire l'utilisation d'outils d'IA générative sur Internet pour un usage professionnel impliquant des données sensibles L ’entité cliente n’ayant pas la maîtrise du service d’IA générative, il n’est pas possible de s’assurer que la protection en confidentialité des données soumises en entrée respecte les besoins de sécurité de l’entité. Par mesure de précaution, il est donc obligatoire de ne jamais intégrer de données sensibles de l’entité dans les requêtes des utilisateurs. 25. cf. la politique d’utilisation de ChatGPT par exemple : https://help.openai.com/en/articles/7842364-how-chatgpt-andour-language-models-are-developed 28 – RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE Attention Cette recommandation concerne également l’utilisation d’outils d’IA générative dans le but de générer des jeux de données synthétiques pour l’entraînement ou le finetuning d’un modèle d’IA. Certains outils tiers d’IA générative peuvent proposer des connexions avec des outils bureautiques ou des applications métier usuelles sur Internet. Une attention particulière doit être portée à la configuration des droits d’accès des outils d’IA générative sur les données métier de l’entité : mails, espace documentaire, dépôts de code source, services d’audioconférence et de visioconférence, etc."
+ },
+ {
+  "id": "anssi-fr:R35",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R35 Effectuer une revue régulière de la configuration des droits des outils d'IA générative sur les applications métier ",
+  "text": "R35 Effectuer une revue régulière de la configuration des droits des outils d'IA générative sur les applications métier Il est recommandé de faire une revue des droits d’accès des outils d’IA générative dès l’activation du produit dans l’entité, afin de s’assurer que les droits positionnés par défaut ne sont pas trop laxistes ou trop ouverts par conception. Enfin, une revue régulière des droits d’accès doit être réalisée (ex. : tous les mois), afin notamment de s’assurer que les mises à jour fonctionnelles et de sécurité du produit ne viennent pas impacter le besoin d’en connaître pour les utilisateurs. RECOMMANDATIONS DE SÉCURITÉ POUR UN SYSTÈME D'IA GÉNÉRATIVE – 29 Liste des recommandations R1 Intégrer la sécurité dans toutes les phases du cycle de vie d’un système d’IA 9 R2 Mener une analyse de risque sur les systèmes d’IA avant la phase d’entraînement 13 R3 Évaluer le niveau de confiance des bibliothèques et modules externes utilisés dans le système d’IA 14 R4 Évaluer le niveau de confiance des sources de données externes utilisées dans le système d’IA 14 R5 Appliquer les principes de DevSecOps sur l’ensemble des phases du projet 15 R6 Utiliser des formats de modèles d’IA sécurisés 15 R7 Prendre en compte les enjeux de confidentialité des données dès la conception du système d’IA 16 R8 Prendre en compte la problématique de besoin d’en connaître dès la conception du système d’IA 17 R9 Proscrire l’usage automatisé de systèmes d’IA pour des actions critiques sur le SI 17 R10 Maîtriser et sécuriser les accès à privilèges des développeurs et des administrateurs sur le système d’IA 18"
+ },
+ {
+  "id": "anssi-fr:R11",
+  "source": "anssi",
+  "lang": "fr",
+  "title": "R11 Héberger le système d’IA dans des environnements de confiance cohérents avec les besoins de sécurité 18 R12 Cloisonn",
+  "text": "R11 Héberger le système d’IA dans des environnements de confiance cohérents avec les besoins de sécurité 18 R12 Cloisonner chaque phase du système d’IA dans un environnement dédié 19 R13 Implémenter une passerelle Internet sécurisée dans le cas d’un système d’IA exposé sur Internet 19 R14 Privilégier un hébergement SecNumCloud dans le cas d’un déploiement d’un système d’IA dans un Cloud public 20 R15 Prévoir un mode dégradé des services métier sans système d’IA 20 R16 Dédier les composants GPU au système d’IA 20 R17 Prendre en compte les attaques par canaux auxiliaires sur le système d’IA 20 R18 Entraîner un modèle d’IA uniquement avec des données légitimement accessibles par les utilisateurs 21 R19 Protéger en intégrité les données d’entraînement du modèle d’IA 21 R20 Protéger en intégrité les fichiers du système d’IA 21 R21 Proscrire le ré-entraînement du modèle d’IA en production 22 R22 Sécuriser la chaîne de déploiement en production des systèmes d’IA 22 R23 Prévoir des audits de sécurité des systèmes d’IA avant déploiement en production 23 R24 Prévoir des tests fonctionnels métier des systèmes d’IA avant déploiement en production 23 R25 Protéger le système d’IA en filtrant les entrées et les sorties des utilisateurs 24 R26 Maîtriser et sécuriser les interactions du système d’IA avec d’autres applications métier 25 R27 Limiter les actions automatiques depuis un système d’IA traitant des entrées non-maîtrisées 25 R28 Cloisonner le système d’IA dans un ou plusieurs environn"
+ },
+ {
+  "id": "anssi-en:R1",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R1 Integrate security into all phases of the lifecycle of an AI system Security measures must be identified and applied ",
+  "text": "R1 Integrate security into all phases of the lifecycle of an AI system Security measures must be identified and applied in each of the 3 phases of the AI system’s lifecycle: training, deployment and production. These measures depend heavily on the responsibility-sharing framework adopted and the associated subcontracting. They must also take into account interactions with other applications or components both within and external to the IS. Refer to the ANSSI cybersecurity hygiene guide [ 17] to ensure the basic level of security which is to be applied. SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 9 3.2 Architecture of a generative AI system Figure 4 describes an example of the general architecture of a generative AI system. Figure 4 – General architecture of a generative AI system This architecture is not an exhaustive list of all the components of a generative AI system, but is designed to identify potential attack paths used to target an entity. There are a number of important elements in this schema: I the different populations with access to an AI system in each phase: users, developers, administrators, auditors, etc.; I the vector database, which is generally used to store additional data index in the form of vectors, in order to enrich 7 user queries before sending them to the model (concept known as RAG - Retrieval Augmentation Generation). This database can be built from internal data sources of the organisation or external from partner sources; I the input and output filters of the AI model, providing defence-in-depth against malicious requests or undesired behaviour by the AI system; I the plugins or additional components, which can be used to connect the AI system to other business or technical resources within or outside the organisation. 7. A vector database is used in particular in the context of LLMs, because it can be used to establish comparisons and identify relationships between objects, and therefore understand better the context. 10 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM 4 Attack scenarios on generative AI A generative AI system is at first a standard business application, which must have the same security baseline as any other business application within the entity. However, in addition to this security baseline, the entity must take into account specific threats to a generative AI system. These threats can be divided into 3 main categories of attacks 8: I Manipulation attacks: these attacks involve hijacking the behaviour of an AI system in production by malicious queries. These can lead to unexpected responses, dangerous actions or a denial of service; I Infection attacks : these attacks involve infecting an AI system during its training phase, by altering the training data or inserting a backdoor; I Exfiltration attacks: these attacks involve stealing information about an AI system in production, such as the data used to train the model, user data, or internal model data (parameters). In the context of generative AI, these attacks can affect the following security requirements: I Confidentiality: the aim is to protect an AI system against the sensitive data leaks: training datasets, user queries, model parameters, additional internal data, etc.; I Integrity: the objective is to protect an AI system against an unexpected change in its behaviour. Integrity can concern the model itself (parameters) or target the training datasets (poisoning) or even the technical components that enable the AI system to work properly: scripts 9, external libraries (supply-chain attack), services configurations, etc. ; I Availability: the objective is to protect an AI system against denial of service or actions intended to degrade its performance (malicious requests); I Traceability: the objective is to guarantee explicability 10 and the accountability of actions carried out on an AI system. These elements can facilitate the investigation and remediation work following a security incident. 8. These categories are from the CNIL taxonomy on this subject: https://linc.cnil.fr/petite-taxonomie-des-attaquesdes-systemes-dia . 9. These scripts could be, for example, scripts for fine-tuning the AI model or scripts for the deployment or maintenance of an AI system. 10. As defined by CNIL, explicability is the ability to make links between the objects and identify the criteria taken into account by the AI system in order to produce a result. SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 11 Figure 5 describes some examples of attacks on a generative AI system in an IS. Figure 5 – Attack scenarios on a generative AI system in an IS 1. the attacker has access to a data source and first poisons the data used to train the AI model, which means it can be then used for other purposes once the AI system is in production (e.g. trigger a malicious action based on a specific query); 2. the attacker gains access to the development environment and inserts a backdoor into the code of the AI system (e.g. by directly altering the parameters of the model or the configuration of a technical component of the AI system); 3. the attacker gains access to an external pre-deployment test service and hijacks the integration process (e.g. by sending a misleading or malicious result to the integration chain); 4. either the attacker uses an adversarial attack technique to exfiltrate sensitive data processed by the AI model (e.g. retrieving training data or queries from other users of the service), or uses malicious queries to cause a denial of service; 5. the attacker has access to an external resource accessed by the AI system and sends a malicious response which is integrated by the model (e.g. sending a URL which points to a malicious website controlled by the attacker); 6. the attacker gains access to a plugin used by the AI system and injects malicious commands when performing an action on a business application (e.g. inserting malicious code into the body of an email generated by the AI system). In the context of this guide (LLM generative AI), the following effects can be identified: 12 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM I tarnishing the reputation of services available to the public by altering the proper functioning of generative AI systems (e.g. Chatbot); I exfiltration of sensitive data from generative AI systems; I theft of proprietary AI model parameters (weights) 11; I lateralisation of an attack to other business applications interconnected to generative AI systems (e.g. internal mailing system); I sabotage of business applications by injecting vulnerabilities into AI-generated source code. A data leak of an entity’s sensitive data is a threat which must be taken into account for all cases, regardless of the use case of the generative AI system. The AI system must incorporate the issue of the access rights and respect information user access restrictions into the responses it provides. Particular attention should also be paid to indirect attack scenarios involving an AI system, such as the automatic generation of content for another application (insertion of malicious URLs in the response). Finally, the risk analysis must take into account the responsibility-sharing structure adopted for the project (see figure 2). For example, using a model trained by a third party may give rise to the risk of a supply-chain attack. Untrusted third-party providers can train the model to react in an unexpected manner when it is provided with a particular query. One of the risk reduction measures could be to audit the model itself or not to use it for critical applications. A risk analysis, carried out using the EBIOS-RM [ 23] method for example, should therefore start as early as possible, i.e. before the training phase."
+ },
+ {
+  "id": "anssi-en:R2",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R2 Conduct a risk analysis on AI systems before the training phase Risk analysis of an AI system must address the follow",
+  "text": "R2 Conduct a risk analysis on AI systems before the training phase Risk analysis of an AI system must address the following issues: I Map all the elements linked to the AI model: third-party libraries, data sources, interconnected applications, etc.; I Identify the sub-parts of the AI system that will process the organisation’s data, particularly the ones contained in user queries; I Consider how responsibilities would be shared and how subcontracting would work for each of the phases; I Identify the direct and indirect effects that incorrect or malicious responses from the AI model to users would have; I Consider the security of AI model training data. The recommendations in the next chapter are designed to address these specific threats. 11. Knowledge of model weights can also allow attackers to improve the capability for other attacks. SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 13 5 Recommendations 5.1 General recommendations The use of external libraries and modules must be considered during the design phase of the project, in order to identify potential vulnerabilities associated with these modules. The goal is to provide the maximum level of protection against a supply-chain-attack targeting components required for the proper functioning of the AI system. Please refer to the ANSSI guide on digital risks [22] or the CISA documentation on this subject [ 8]."
+ },
+ {
+  "id": "anssi-en:R3",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R3 Evaluate the level of confidence in the libraries and external modules usedin the AI system It is recommended to map ",
+  "text": "R3 Evaluate the level of confidence in the libraries and external modules usedin the AI system It is recommended to map all libraries and external modules used in the project and to assess the level of confidence in these. In the same way as for software components (libraries and external modules), it is also essential to assess the sources of data not managed by the organisation. These sources could be training data sets retrieved from the Internet, model performance validation sets or additional data sets used during the production phase."
+ },
+ {
+  "id": "anssi-en:R4",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R4 Evaluate the level of confidence in external data sources used in the AIsystem It is recommended to map all external ",
+  "text": "R4 Evaluate the level of confidence in external data sources used in the AIsystem It is recommended to map all external data sources used in the project and to assess the level of confidence in these 12. In general, it is recommended to apply good development practices during the design and implementation of the AI system. These good practices are sometimes grouped together under the name DevSecOps or the term security-by-design. For further information, please refer to the ANSSI guide [28] on this subject, or to the NIST documentation on this subject [ 10], or follow the recommendations of the NCSC-UK [ 5] and the CISA [ 11]."
+ },
+ {
+  "id": "anssi-en:R5",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R5 Apply DevSecOps principles to all phases of the project Secure development best practices should be applied throughou",
+  "text": "R5 Apply DevSecOps principles to all phases of the project Secure development best practices should be applied throughout all phases of the project, for example: I Deploy and secure continuous integration and continuous deployment (CI/CD) 12. The CNIL criteria ( https://www.cnil.fr/fr/tenir-compte-de-la-protection-des-donnees-dans-la-collecte-etla-gestion-des-donnees ) or the proposal by Datasheets for Datasets (https://arxiv.org/pdf/1803.09010.pdf) can be used to evaluate an external dataset. 14 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM chains by applying the least privilege principle for access to the tools in these CI/CD chains; I Securely manage secrets used in all phases of the project; I Carry out automated security tests on the source code (static code analysis) and when the source code is executed (dynamic code analysis); I Protect the integrity of the source code and secure access to it (multi-factor authentication, code signature, access rights, etc.); I Use secure development languages (fine tuning scripts, model development, maintenance, deployment, etc.). In order to implement an AI model, the various parameters of this model (weight, bias, etc.) need to be stored in files. Several formats can be used for this purpose, some of which may present a risk of arbitrary code execution, such as those implementing functions for loading serialised objects. It is therefore preferable to use formats that strictly separate the model’s data parameters and the model’s executable code data."
+ },
+ {
+  "id": "anssi-en:R6",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R6 Use secure AI model formats We recommend using state-of-the-art security formats, such as safetensor. Certain insecur",
+  "text": "R6 Use secure AI model formats We recommend using state-of-the-art security formats, such as safetensor. Certain insecure formats, such as pickle, should be forbidden. Generative AI models will have to handle data throughout their lifecycle. Applying confidentiality protection measures to this data can be complicated for the following reasons: I The data may come from multiple sources and are sometimes combined together in the same set: public data, partner data, internal data, private data, etc. ; I The volume of data can be very large, particularly in the case of LLM training, which makes processing more difficult; I Regular updates may be required, particularly when re-training the model; I Data may need to be pre-processed to lower the level of confidentiality (anonymisation, deletion of fields, etc.); I Data may be used across different phases of the project: during the model training phase, but also in production when the model needs to access additional data; I The data can include the AI system’s user data during the production phase: data from user queries and the responses provided by the AI model to these users. It is important to understand that an AI model inherits the sensitivity of the data that contributed to its training and also of the data used to re-train it. An AI model can be vulnerable to a phenomenon known as “regurgitation” . In some cases, for example, it may generate responses which are close to the training data, revealing potentially sensitive information. Depending on the responsibility-sharing scenario adopted (see chapter 2), the data confidentiality issues will be different, and the technical measures to protect against data exfiltration will need to be adapted. For example, if the entity wishes to subcontract the training phase to a service SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 15 provider, it is important to ensure that the data stored and processed by this service provider is kept sufficiently confidential (state-of-the-art encryption, isolation of resources from other customers, secure keys used, secure deletion after reallocation of resources, etc.). Similarly, a proprietary AI model that you want to keep confidential must be subject to specific security measures if it is stored in an untrusted environment (e.g. in a Cloud provider or embedded in physical hosted equipment, for example in the IoT)."
+ },
+ {
+  "id": "anssi-en:R7",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R7 Manage data confidentiality issues from the AI system design phase The project design must map all the data sets used",
+  "text": "R7 Manage data confidentiality issues from the AI system design phase The project design must map all the data sets used in each phase of the AI system: training (training data sets), deployment (test sets) and production (additional data, vector database, etc.). This study must include users data from the AI system in production, i.e. user queries and the responses provided by the AI model. The analysis can also cover confidentiality protection for the parameters of the model itself, for proprietary model, for example. Access to an AI system also complicates the application of the users rights on the information. There are several categories of data to differentiate here: I Training data: it is not possible to manage user access rights on this data due to the structure of the neural networks; I Additional data in production : it is possible to manage access rights but this depends on the options offered by the tools used (RBAC 13) to store the information (local data management system, vector database, etc.); I User data: user queries and responses may contain sensitive data. These data are temporarily stored during processing in the AI system and sometimes are used to re-train the model (e.g. alignment with RLHF - Reinforcement learning from human feedback). The information access rights issue must therefore be considered again each time the model is retrained, including data derived from the use of the model in production (additional business data, user queries, etc.)."
+ },
+ {
+  "id": "anssi-en:R8",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R8 Manage users data access rights issue from the AI system design phase It is important to define the options for the m",
+  "text": "R8 Manage users data access rights issue from the AI system design phase It is important to define the options for the model’s structure prior to the project in order to manage the need to know: I The choice of data used for training (without the ability to manage access rights) and additional data for production (with the ability to manage roles and access rights); I The model’s training strategy, i.e. when is the model re-trained and what underlying data is used for the model’s re-training (additional business data, user queries, model responses, etc.). 13. Role Based Access Control 16 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM The majority of LLM generative AI have non-deterministic behaviour, and they can also be subject to hallucinations 14. This uncertainty around the response to a given query means that greater vigilance is required with regard to the indirect consequences of these responses. For example, the interaction of an AI system with other IS resources must not allow critical automated actions to the organisation to be executed. This precautionary principle must be applied and a generative AI system must not be able to make critical decisions that have a major impact on the business or the protection of assets and people without human intervention (e.g. validation in an HMI). In these particular cases, human capacity for discernment helps to reduce the risk of scenarios that could present a danger to the organisation. For example, it is important not to use an AI system to automate critical administrative actions on the entity’s technical infrastructure (e.g. discovery and automatic deployment of network configurations or firewall rules)."
+ },
+ {
+  "id": "anssi-en:R9",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R9 Do not allow AI systems to run automatically critical actions on the IS An AI system must be configured so that it ca",
+  "text": "R9 Do not allow AI systems to run automatically critical actions on the IS An AI system must be configured so that it cannot automatically execute critical IS actions. These actions may be critical from a business point of view (banking transactions, production of public content, physical impact on humans, etc.) or critical actions on the IS infrastructure (reconfiguration of network components, creation of privileged users, deployment of virtual machines, etc.). The roles and access rights of AI system developers and administrators must be strictly defined and applied during the project. The principles of secure administration, as described in the ANSSI guide on this subject [ 21], must be applied in all phases of the AI system’s lifecycle."
+ },
+ {
+  "id": "anssi-en:R10",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R10 Manage and secure developer and administrator privileged access to the AI system All privileged operations on the AI",
+  "text": "R10 Manage and secure developer and administrator privileged access to the AI system All privileged operations on the AI system must comply with secure administration best practices, in particular: I Privileged operations must be defined and triggering these must be approved: re-training, modification of data sets, new interconnection with an application, change of hosting, etc.; I Privileged operations must be carried out using dedicated accounts and from a dedicated administration workstation; I The principle of least privilege must be applied and temporary authentication tokens should be used; I The development environment must be managed to the same level of security as the production environment. 14. Phenomenon in which a model generates erroneous content that is not based on real data. SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 17 The hosting of the AI system, regardless of the phase it is in, must be considered. The level of security must be consistent with the project’s security requirements, and especially the confidentiality requirements for the data used in each phase. In particular, this point must be strictly applied for the model training phase because there are major threats during this phase, as we saw earlier in the chapter 4. Warning AI models are considered to have the same level of sensitivity as the data used to design and train them. Rule R9 [ 12] from the circular “Cloud au Centre” [ 13] must be applied in the case of French public administration. R1 1 Host the AI system in trusted environments consistent with security needs The hosting of the AI system during the 3 phases of the lifecycle must be consistent with the project’s security requirements, especially its confidentiality and integrity requirements. In particular, the security of the model’s training data (at rest, in transit, during processing) must not be overlooked. An AI system’s training, deployment and production environments must be siloed separately. This measure reduces the risk of lateralisation between environments. This is particularly important as the groups of people with access to each environment are usually not the same."
+ },
+ {
+  "id": "anssi-en:R12",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R12 Isolate each phase of the AI system into a dedicated environment The 3 technical environments corresponding to each ",
+  "text": "R12 Isolate each phase of the AI system into a dedicated environment The 3 technical environments corresponding to each phase of the AI system’s lifecycle should be siloed. This isolation may involve: I Network isolation: each environment is integrated into a physically or logically dedicated network; I System isolation: each environment has its own dedicated physical servers or hypervisors; I Storage isolation: each environment has its own storage hardware or dedicated disks. At the very least, there will be a logical segmentation; I Accounts and secrets isolation: each environment has its own users and administrators accounts and separate credentials. For AI systems which are hosted on the Internet, it is recommended to follow the ANSSI recommendations for the design of a secure Internet gateway [ 25]."
+ },
+ {
+  "id": "anssi-en:R13",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R13 Implement a secure Internet gateway for an AI system hosted on the Internet For AI systems which are hosted on the I",
+  "text": "R13 Implement a secure Internet gateway for an AI system hosted on the Internet For AI systems which are hosted on the Internet, it is recommended to follow the isolation best practices of the ANSSI guide on this subject, in particular: I implement a reverse-proxy function before accessing the AI system web service; 18 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM I set up two logical areas for network filtering using firewalls: external filtering on the Internet front end and internal filtering before accessing the AI system; I do not use any of the entity’s internal directories for authentication on the AI system; I avoid mutualisation of security functions on the same hypervisor in the secure Internet gateway (firewalls, reverse-proxy, logging server, etc.). If the entity choose a public cloud 15 to host its service and security requirements make this necessary, a SecNumCloud [33] qualified service provider should be chosen."
+ },
+ {
+  "id": "anssi-en:R14",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R14 Prioritise SecNumCloud hosting when deploying an AI system in a public cloud If the organisation chooses to use publ",
+  "text": "R14 Prioritise SecNumCloud hosting when deploying an AI system in a public cloud If the organisation chooses to use public Cloud hosting, it is recommended that a trusted SecNumCloud offer be used in the following cases: I The data processed by the AI system is considered sensitive; I The impact of the AI system on the business is considered critical; I AI system users are not considered trusted. When designing the project, a downgraded mode must be systematically implemented without any AI in order to meet business needs if the AI system is unavailable or fails."
+ },
+ {
+  "id": "anssi-en:R15",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R15 Provide a downgraded version of business services without an AI system To prevent malfunctions or inconsistencies in",
+  "text": "R15 Provide a downgraded version of business services without an AI system To prevent malfunctions or inconsistencies in the responses provided by the AI model, it is recommended that, at minimum, there is an AI system bypass procedure for users, in order to meet business needs. The deployment of generative AI and LLM systems generally involves GPUs 16 to enhance system performance, whether in the training or production phase. These GPUs may process sensitive data linked to the AI model’s operations. To protect against data leaks, these GPU hardware components should be dedicated to the AI system and not be shared with other IS business applications. GPUs, on the other hand, can be shared between several AI models, but only if they have the same level of sensitivity and same security requirements."
+ },
+ {
+  "id": "anssi-en:R16",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R16 Dedicate GPU components to the AI system Physical GPU components should be dedicated to the processing carried out b",
+  "text": "R16 Dedicate GPU components to the AI system Physical GPU components should be dedicated to the processing carried out by the AI system. In the case of virtualisation, hypervisors with access to GPU cards should be dedicated to the AI system, or at least have a hardware filtering function (e.g.: IOMMU 17) to restrict virtual machine access to the memory on these GPU cards. 15. A public cloud is a hosting service shared between several customers and hosted on the Internet. 16. Graphics processing units SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 19 Like most business applications, AI systems can be subject to side-channel attacks. These attacks usually aim to exfiltrate sensitive information or disrupt the proper functioning of AI systems. While most of these attacks are not specific to an AI system, some may nevertheless rely on mechanisms that are specific to generative AI systems."
+ },
+ {
+  "id": "anssi-en:R17",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R17 Manage side-channel attacks on the AI system It is recommended to ensure that the AI system is not vulnerable to att",
+  "text": "R17 Manage side-channel attacks on the AI system It is recommended to ensure that the AI system is not vulnerable to attacks via auxiliary channels (time, energy consumption, etc.) which could, for example, enable an attacker to rebuild a response provided by an AI model. 5.2 Recommendations for the training phase The issue of data confidentiality has already been covered in a previous general recommendation (see R7). In particular, and regarding the number of vulnerabilities published on generative AI tools, it should be assumed that a user with access to a trained AI model could potentially have access to the training data for this model. To reduce the risks associated with the confidentiality of training data, it is sometimes necessary to use an anonymisation process or generate a synthetic dataset from the original raw data. In some cases, these measures can resolve the issue of protecting information, but it is nevertheless important to be vigilant about attacks aimed at retrieving the initial information from anonymised or synthetic data 18: attacks by attribute or membership inference, re-identification based on crossreferencing with other datasets, etc."
+ },
+ {
+  "id": "anssi-en:R18",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R18 Train an AI model only with data which users can legitimately access It is strongly recommended to train a model wit",
+  "text": "R18 Train an AI model only with data which users can legitimately access It is strongly recommended to train a model with data of a level of sensitivity consistent with the users’ access rights. As we saw earlier, attacks specifically targeting the training phase of a model are possible, such as the injection of malicious data into training datasets, or modifying certain data to cause the model to malfunction once it has been deployed in production."
+ },
+ {
+  "id": "anssi-en:R19",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R19 Protect the integrity of AI model training data The integrity of the model’s training data should be ensured through",
+  "text": "R19 Protect the integrity of AI model training data The integrity of the model’s training data should be ensured throughout the training cycle. This protection may take the form of systematic checking the signature or hash of the files used (or compressed archives with all this data). 17. Input–output memory management unit 18. see, for example, https://cdn.arstechnica.net/wp-content/uploads/2024/03/LLM-Side-Channel.pdf 18. Refer to the CNIL ’s work on this subject: https://linc.cnil.fr/donnees-synthetiques-et-lhomme-crea-les-donneesson-image-22 . 20 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM"
+ },
+ {
+  "id": "anssi-en:R20",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R20 Protect the integrity of AI system files The integrity of the trained model files should be protected and regular ch",
+  "text": "R20 Protect the integrity of AI system files The integrity of the trained model files should be protected and regular checks done to ensure that these have not been altered. This recommendation also applies by extension to all the files inherent to the proper working of the AI system (scripts, binaries, etc.). In the majority of use cases, a trained AI model does not need to be subject to regular modifications or adjustment of its parameters. If a malfunction is detected, or when optimising the model’s performance, it is preferable to carry out re-training operations using the dedicated training environment. To respect this, continuous learning methods, also known as online learning (where the model learns in real-time from the data sent as input), should be avoided as far as possible. Using offline learning methods, based on selected and tested data sets, reduces the risk of the model malfunctioning or being poisoned. An AI model can be re-trained on a recurring and fixed basis (e.g. every month), triggered when a performance gap crosses a given threshold or when the data used to train the model are no longer relevant, or on demand on an ad-hoc basis."
+ },
+ {
+  "id": "anssi-en:R21",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R21 Do not re-train an AI model in production It is strongly recommended not to re-train an AI model directly in product",
+  "text": "R21 Do not re-train an AI model in production It is strongly recommended not to re-train an AI model directly in production. Retraining should start with the 3-phases cycle, in the suitable environments for each phase. 5.3 Recommendations for the deployment phase The deployment of a generative AI system must be based on a secure deployment environment based, for example, on fully harnessed and robust CI/CD chains. These CI/CD chains must be operated from an administration system and from dedicated, robust administrator workstations."
+ },
+ {
+  "id": "anssi-en:R22",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R22 Secure the production deployment chain for AI systems It is recommended that generative AI systems be deployed from ",
+  "text": "R22 Secure the production deployment chain for AI systems It is recommended that generative AI systems be deployed from an administrative IS, in compliance with ANSSI’s secure administration best practices guide [ 21]. A security audit should be carried out by specialised teams which are trained in the specificities of AI systems. This phase must take place before deployment to production in order to test the vulnerabilities inherent to AI systems (adversarial attacks, etc.). SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 21"
+ },
+ {
+  "id": "anssi-en:R23",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R23 Conduct security audits of AI systems before deployment to production Robustness and security tests of AI systems ar",
+  "text": "R23 Conduct security audits of AI systems before deployment to production Robustness and security tests of AI systems are recommended. These tests can be: I Standard penetration tests on the usual technical components of an AI system: web servers, orchestrator, database, etc. ; I Security tests on developments made in the AI system (using SAST or DAST tools, for example); I Automated tests 19specifically targeting vulnerabilities related to AI models (adversarial attacks, model extraction, etc.); I Manual auditor tests specifically aimed at testing the robustness of a generative AI model in more sophisticated attack scenarios. To carry out safety audits on a generative AI system, it is possible to use ANSSI-qualified PASSI [31] service providers."
+ },
+ {
+  "id": "anssi-en:R24",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R24 Conduct business tests of AI systems before deployment to production Performance and quality tests should be carried",
+  "text": "R24 Conduct business tests of AI systems before deployment to production Performance and quality tests should be carried out on the answers provided by a generative AI system. Information Functional testing of the AI system can take place continuously at a given frequency and not only during deployment. This can be used to detect model malfunctions at an early stage and correct them more reactively. 5.4 Recommendations for the production phase As mentioned earlier, it is difficult to apply the restrictions for user right access to the training data of a model, which may be subject to attacks aiming to extract this data by querying the model (exfiltration). Similarly, some malicious requests may be aimed at hijacking the generative AI service, for example by inducing hallucinations or incorrect responses. As part of a defence-in-depth approach, it is important to explore the possibility of detecting or blocking some malicious queries intented, for example, to extract the model data or additional data (this additional data may include user inputs in certain cases). This protection can also be useful in reducing the risk of the model leak. If the model has been trained on sensitive data, the model parameters leak can lead to some of this data leak as a result of some attacks (e.g. model inversion attack or membership inference attack). As such, responses to users must be as simple as possible (character strings only) and must not return any prediction score or other internal model mechanisms. 19. There are a number of specialised tools available, such ashttps://github.com/microsoft/responsible-ai-toolbox , https: //github.com/Trusted-AI/adversarial-robustness-toolbox , or https://github.com/protectai/ai-exploits. 22 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM Finally, depending on the use case, it may be appropriate to define a limit to the size of the answers provided by the AI model. This can reduce the risk of data leak."
+ },
+ {
+  "id": "anssi-en:R25",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R25 Protect the AI system by filtering user input and output These functions should be implemented to protect against da",
+  "text": "R25 Protect the AI system by filtering user input and output These functions should be implemented to protect against data leak or model leak in responses: I A function to filter malicious user queries before these are sent to the model; I A filter function for queries deemed to be non-legitimate from a business point of view; I A filter function for internal model information (parameters, training) in the responses; I A filter function for information defined as sensitive in responses (e.g. private details, project references, etc.); I A limit on the size of responses (maximum number of characters). The AI system’s interaction with other business applications or other IS technical resources can be source of vulnerabilities. These interactions often take the form of plugins offered by AI model editors. These plugins will enable the AI system to be interconnected with bureautic tools and social networks, or potentially critical infrastructure components (identity management, network resources, etc.). These interactions can also facilitate the lateralisation of an attacker on the IS, if he takes advantage of a vulnerability in the AI system. The literature on this topic often refers to the risks of indirect prompt injection and the problems that may result from sending uncontrolled data to a generative AI model 20 (for example, the content of a received email or a web page resulting from a search). This kind of use is more problematic when an action is carried out without human validation (see recommendation R9). It is therefore essential to be able to control the interaction of the AI system with other IS resources."
+ },
+ {
+  "id": "anssi-en:R26",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R26 Manage and secure the interactions of the AI system with other business applications All the interactions and networ",
+  "text": "R26 Manage and secure the interactions of the AI system with other business applications All the interactions and network flows of the AI system must be documented and approved. Network flows between the AI system and other resources must comply with the state-of-the-art in terms of security: I They must be strictly filtered at network level, encrypted and authenticated (e.g. by following the ANSSI TLS [ 19] guide); I They must use secure protocols (e.g. OpenID Connect) when using an identity provider [24]; 20. see the article “Not what you’ve signed up for: Compromising Real-World LLM-Integrated Applications with Indirect Prompt Injection” for more details: https://arxiv.org/abs/2302.12173 SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 23 I In addition to authentication, the authorisation of access to the resource must also be checked; I They must be logged at the appropriate level of granularity."
+ },
+ {
+  "id": "anssi-en:R27",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R27 Limit automatic actions performed by an AI system handling uncontrolled inputs It is strongly recommended that autom",
+  "text": "R27 Limit automatic actions performed by an AI system handling uncontrolled inputs It is strongly recommended that automated actions on the IS be limited or even prohibited when these are triggered by an AI system and uncontrolled inputs (e.g. data from the Internet or emails, etc.). Depending on the use case of the AI system and its criticity from a business point of view, it may be appropriate to deploy it in one or more dedicated environments, not shared with other business applications."
+ },
+ {
+  "id": "anssi-en:R28",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R28 Isolate the AI system in one or more dedicated technical environments It is recommended that the AI system be siloed",
+  "text": "R28 Isolate the AI system in one or more dedicated technical environments It is recommended that the AI system be siloed into dedicated logical zones, in order to limit the risk of an attacker who has compromised the system moving laterally. Actions on the AI system must be logged with adequate level of information granularity, in particular regarding the inputs and outputs of the AI model. For the purposes of traceability and explicability of the AI system, it is important to make a clear distinction between the queries made by users and the data actually sent to the AI model. In fact, for performance and security reasons, user queries may be subject to specific pre-processing and formatting before being sent to the model. These two pieces of information are crucial in facilitating the management of an incident and must be traceable in the AI system’s application logs. The aim is to be able to fully rebuild an event on the AI system, when detecting a malicious query, for example. Regarding the architecture of a logging system, refer to the ANSSI’s general guide on this subject [27]."
+ },
+ {
+  "id": "anssi-en:R29",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R29 Record all processing carried out within the AI system All processing carried out on the AI system should be logged ",
+  "text": "R29 Record all processing carried out within the AI system All processing carried out on the AI system should be logged at the correct level of granularity, in particular: I User queries (ensuring these are secured if they contain sensitive data); I The input processing carried out on this query before it is sent to the model; I Calls to plugins; I Calls for additional data; I The processing carried out by the output filters; 24 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM I Responses to users. Warning User data logging must comply with CNIL [ 9] requirements concerning the protection of personal data (GDPR) and in particular for how long is this data kept on the AI system. 5.5 Special case of AI-assisted source code generation Generative AI tools can be specialised and specifically trained to generate source code in a lot of programming languages. These resources can help developers save time, but there are also risks regarding the quality of the code (pushing vulnerabilities) or the insertion of backdoors if an attacker has compromised the AI model. It is therefore important to be careful about the source code generated by AI."
+ },
+ {
+  "id": "anssi-en:R30",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R30 Check AI-generated source code systematically The source code generated by AI must be subject to security measures t",
+  "text": "R30 Check AI-generated source code systematically The source code generated by AI must be subject to security measures to ensure that it is not harmful: I Prohibition of automatic execution of AI-generated source code in the development environment; I Prohibition of automatic commit of AI-generated source code to repositories; I Integration of an AI-generated source code remediation tool [ 3, 4] into the development environment; I Check that the libraries referenced in the result of the source code generated by AI are harmless; I The quality of the source code generated from sufficiently sophisticated standard queries needs to be checked regularly by a human."
+ },
+ {
+  "id": "anssi-en:R31",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R31 Limit AI source code generation for critical application modules It is strongly recommended that generative AI tools",
+  "text": "R31 Limit AI source code generation for critical application modules It is strongly recommended that generative AI tools are not used to generate blocks 21of source code intended for critical modules : I Cryptography modules (authentication, encryption, signatures, etc.); I User and administrator access rights management modules; I Sensitive data processing modules. . 21. A block here refers to a complete set of instructions in the source code, for example the complete definition of a function, a procedure, an object class, a shell script, etc. SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 25"
+ },
+ {
+  "id": "anssi-en:R32",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R32 Raise developers awareness of the risks associated with AI-generated source code Awareness-raising campaigns on the ",
+  "text": "R32 Raise developers awareness of the risks associated with AI-generated source code Awareness-raising campaigns on the risks associated with the use of AI-generated source code should be carried out. This awareness can be based on public reports on the subject or research papers 22demonstrating the presence of vulnerabilities in AI-generated code. In addition, developers can also be trained in AI tools to optimise their queries (prompt engineering 23) to improve the quality and security of the generated code. Information Depending on the use case, it may also be appropriate to specifically train a model (alignment stage) so that it cannot generate deliberately malicious code. 5.6 Special case of consumer AI services hosted on the Internet If the entity wishes to offer a service based on generative AI to the public, specific care must be taken to ensure the security of this service, given its high exposure. An additional threat to consider during the risk analysis is the potential of damage to the entity’s reputation."
+ },
+ {
+  "id": "anssi-en:R33",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R33 Strengthen security measures for AI services hosted on the Internet Specific attention should be paid to certain sec",
+  "text": "R33 Strengthen security measures for AI services hosted on the Internet Specific attention should be paid to certain security measures for services available to the public, in particular: I Training the AI model using only publicly available data; I Ensuring that users of the AI system have been authenticated before use; I Systematic analysis of user queries on the AI system; I Checking and validating responses before these are sent to users; I Protecting the confidentiality of user data (history of queries and responses, etc.); I Implementing measures against distributed denial of service (DDoS) [18] attacks; I Securing the web service at the user front end [ 26]. 5.7 Special case of using third-party generative AI solutions In this final section, the guide goes over the case where the entity is not managing a generative AI service but is a customer of a third-party generative AI service (see responsibility-sharing scenarios 23. The reports by Snyk (https://snyk.io/fr/reports/ai-code-security/ ) could be cited as an example, or the research carried out by Stanford University on this subject ( https://arxiv.org/pdf/2211.03622.pdf). 24. For example, an initial AI code generation query can be combined with by a static analysis test of this code and then a second query asking the AI to treat the vulnerabilities detected in the original generated code. 26 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM in chapter 2). The purpose of this last section is to restate the essential points which must be observed and taken into account by users of these third-party services. Because they are so easy to use, it’s tempting to use generative AI tools that are available on the Internet to process business data, for example for text translation. Sending information (text, images, documents) to a generative AI service which is available to the public is the same as pushing the information on a storage space belonging to editors. Isolation between clients and protection of the confidentiality of data sent to an Internet AI system are not always in the state-of-the-art and rely solely on trust in the service provider. In this regard, it is important to note that with the majority of services, the data sent to the service is collected and used by the service provider to optimise the models 24. Therefore, sensitive data must absolutely not be sent to third-party generative AI services such as ChatGPT, Gemini, Copilot, DeepL (text translation) or Perplexity, to name only the most popular services. The relevant data includes: I French Diffusion Restreinte data [30] or classified data [ 32]; I Research work relating to French PPST [ 20]; I Personal data (private information, contact details, etc.); I The company’s contractual, legal and financial data; I IT secrets, such as passwords or authentication tokens (API keys)."
+ },
+ {
+  "id": "anssi-en:R34",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R34 Do not use generative AI tools on the Internet for professional use involving sensitive data As the client entity do",
+  "text": "R34 Do not use generative AI tools on the Internet for professional use involving sensitive data As the client entity does not control the generative AI service, it is impossible to ensure that the confidentiality of data submitted for input meets the entity’s security requirements. As a precautionary measure, it is therefore essential never to include any of the entity’s sensitive data in user queries. Warning This recommendation also concerns the use of generative AI tools to generate synthetic datasets for training or fine-tuning an AI model. Some third-party generative AI tools offer connections with office automation tools or standard business applications on the Internet. Particular attention must be paid to the configuration of generative AI tools’ rights of access to the entity’s business data: emails, documents areas, source code repositories, audio and video conferencing services, etc. 24. see ChatGPT’s usage policy for example: https://help.openai.com/en/articles/7842364-how-chatgpt-and-ourlanguage-models-are-developed SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM – 27"
+ },
+ {
+  "id": "anssi-en:R35",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R35 Perform regular reviews of the configuration of rights for generative AI tools on business applications A review of ",
+  "text": "R35 Perform regular reviews of the configuration of rights for generative AI tools on business applications A review of access rights for generative AI tools should be carried out as soon as the entity activates the product to ensure that the rights set by default are not too low or open by design. Finally, access rights must be reviewed on a regular basis (e.g. every month), to ensure that the product’s functional and security updates have no impact on user information access rights. 28 – SECURITY RECOMMENDATIONS FOR A GENERATIVE AI SYSTEM Recommendation List R1 Integrate security into all phases of the lifecycle of an AI system 9 R2 Conduct a risk analysis on AI systems before the training phase 13 R3 Evaluate the level of confidence in the libraries and external modules used in the AI system 14 R4 Evaluate the level of confidence in external data sources used in the AI system 14 R5 Apply DevSecOps principles to all phases of the project 15 R6 Use secure AI model formats 15 R7 Manage data confidentiality issues from the AI system design phase 16 R8 Manage users data access rights issue from the AI system design phase 16 R9 Do not allow AI systems to run automatically critical actions on the IS 17 R10 Manage and secure developer and administrator privileged access to the AI system 17"
+ },
+ {
+  "id": "anssi-en:R11",
+  "source": "anssi",
+  "lang": "en",
+  "title": "R11 Host the AI system in trusted environments consistent with security needs 18 R12 Isolate each phase of the AI system",
+  "text": "R11 Host the AI system in trusted environments consistent with security needs 18 R12 Isolate each phase of the AI system into a dedicated environment 18 R13 Implement a secure Internet gateway for an AI system hosted on the Internet 19 R14 Prioritise SecNumCloud hosting when deploying an AI system in a public cloud 19 R15 Provide a downgraded version of business services without an AI system 19 R16 Dedicate GPU components to the AI system 19 R17 Manage side-channel attacks on the AI system 20 R18 Train an AI model only with data which users can legitimately access 20 R19 Protect the integrity of AI model training data 20 R20 Protect the integrity of AI system files 21 R21 Do not re-train an AI model in production 21 R22 Secure the production deployment chain for AI systems 21 R23 Conduct security audits of AI systems before deployment to production 22 R24 Conduct business tests of AI systems before deployment to production 22 R25 Protect the AI system by filtering user input and output 23 R26 Manage and secure the interactions of the AI system with other business applications 24 R27 Limit automatic actions performed by an AI system handling uncontrolled inputs 24 R28 Isolate the AI system in one or more dedicated technical environments 24 R29 Record all processing carried out within the AI system 25 R30 Check AI-generated source code systematically 25 R31 Limit AI source code generation for critical application modules 25 R32 Raise developers awareness of the risks associated"
+ },
+ {
+  "id": "atlas:AML.M0000",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Limit Public Release of Information",
+  "text": "Limit Public Release of Information. Limit the public release of technical information about the AI stack used in an organization's products or services. Technical knowledge of how AI is used can be leveraged by adversaries to perform targeting and tailor attacks to the target system. Additionally, consider limiting the release of organizational information - including physical locations, researcher names, and department structures - from which technical details such as AI techniques, model architectures, or datasets may be inferred."
+ },
+ {
+  "id": "atlas:AML.M0001",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Limit Model Artifact Release",
+  "text": "Limit Model Artifact Release. Limit public release of technical project details including data, algorithms, model architectures, and model checkpoints that are used in production, or that are representative of those used in production."
+ },
+ {
+  "id": "atlas:AML.M0002",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Passive AI Output Obfuscation",
+  "text": "Passive AI Output Obfuscation. Decreasing the fidelity of model outputs provided to the end user can reduce an adversary's ability to extract information about the model and optimize attacks for the model."
+ },
+ {
+  "id": "atlas:AML.M0003",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Model Hardening",
+  "text": "Model Hardening. Use techniques to make AI models robust to adversarial inputs such as adversarial training or network distillation."
+ },
+ {
+  "id": "atlas:AML.M0004",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Restrict Number of AI Model Queries",
+  "text": "Restrict Number of AI Model Queries. Limit the total number and rate of queries a user can perform."
+ },
+ {
+  "id": "atlas:AML.M0005",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Control Access to AI Models and Data at Rest",
+  "text": "Control Access to AI Models and Data at Rest. Establish access controls on internal model registries and limit internal access to production models. Limit access to training data only to approved users."
+ },
+ {
+  "id": "atlas:AML.M0006",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Use Ensemble Methods",
+  "text": "Use Ensemble Methods. Use an ensemble of models for inference to increase robustness to adversarial inputs. Some attacks may effectively evade one model or model family but be ineffective against others."
+ },
+ {
+  "id": "atlas:AML.M0007",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Sanitize Training Data",
+  "text": "Sanitize Training Data. Detect and remove or remediate poisoned training data. Training data should be sanitized prior to model training and recurrently for an active learning model. Implement a filter to limit ingested training data. Establish a content policy that would remove unwanted content such as certain explicit or offensive language from being used."
+ },
+ {
+  "id": "atlas:AML.M0008",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Validate AI Model",
+  "text": "Validate AI Model. Validate that AI models perform as intended by testing for backdoor triggers, potential for data leakage, or adversarial influence. Monitor AI model for concept drift and training data drift, which may indicate data tampering and poisoning."
+ },
+ {
+  "id": "atlas:AML.M0009",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Use Multi-Modal Sensors",
+  "text": "Use Multi-Modal Sensors. Incorporate multiple sensors to integrate varying perspectives and modalities to avoid a single point of failure susceptible to physical attacks."
+ },
+ {
+  "id": "atlas:AML.M0010",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Input Restoration",
+  "text": "Input Restoration. Preprocess all inference data to nullify or reverse potential adversarial perturbations."
+ },
+ {
+  "id": "atlas:AML.M0011",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Restrict Library Loading",
+  "text": "Restrict Library Loading. Prevent abuse of library loading mechanisms in the operating system and software to load untrusted code by configuring appropriate library loading mechanisms and investigating potential vulnerable software. File formats such as pickle files that are commonly used to store AI models can contain exploits that allow for loading of malicious libraries."
+ },
+ {
+  "id": "atlas:AML.M0012",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Encrypt Sensitive Information",
+  "text": "Encrypt Sensitive Information. Encrypt sensitive data such as AI models to protect against adversaries attempting to access sensitive data."
+ },
+ {
+  "id": "atlas:AML.M0013",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Code Signing",
+  "text": "Code Signing. Enforce binary and application integrity with digital signature verification to prevent untrusted code from executing. Adversaries can embed malicious code in AI software or models. Developers should also cryptographically sign SBOM and AIBOM components that track model or data provenance. Enforcement of code signing can prevent the compromise of the AI supply chain and prevent execution of malicious code."
+ },
+ {
+  "id": "atlas:AML.M0014",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Verify AI Artifacts",
+  "text": "Verify AI Artifacts. Verify the cryptographic checksum of all AI artifacts to verify that the file was not modified by an attacker."
+ },
+ {
+  "id": "atlas:AML.M0015",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Adversarial Input Detection",
+  "text": "Adversarial Input Detection. Detect and block adversarial inputs or atypical queries that deviate from known benign behavior, exhibit behavior patterns observed in previous attacks or that come from potentially malicious IPs. Incorporate adversarial detection algorithms into the AI system prior to the AI model."
+ },
+ {
+  "id": "atlas:AML.M0016",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Vulnerability Scanning",
+  "text": "Vulnerability Scanning. Vulnerability scanning is used to find potentially exploitable software vulnerabilities to remediate them. File formats such as pickle files that are commonly used to store AI models can contain exploits that allow for arbitrary code execution. These files should be scanned for potentially unsafe calls, which could be used to execute code, create new processes, or establish networking capabilities. Adversaries may embed malicious code in model corrupt model files, so scanners should be capable of working with models that cannot be fully de-serialized. Model artifacts, downstream products produced by models, and external software dependencies should be scanned for known vulnerabilities."
+ },
+ {
+  "id": "atlas:AML.M0017",
+  "source": "atlas",
+  "lang": "en",
+  "title": "AI Model Distribution Methods",
+  "text": "AI Model Distribution Methods. Deploying AI models to edge devices can increase the attack surface of the system. Consider serving models in the cloud to reduce the level of access the adversary has to the model. Also consider computing features in the cloud to prevent gray-box attacks, where an adversary has access to the model preprocessing methods."
+ },
+ {
+  "id": "atlas:AML.M0018",
+  "source": "atlas",
+  "lang": "en",
+  "title": "User Training",
+  "text": "User Training. Educate AI model developers to on AI supply chain risks and potentially malicious AI artifacts. Educate users on how to identify deepfakes and phishing attempts."
+ },
+ {
+  "id": "atlas:AML.M0019",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Control Access to AI Models and Data in Production",
+  "text": "Control Access to AI Models and Data in Production. Require users to verify their identities before accessing a production model. Require authentication for API endpoints and monitor production model queries to ensure compliance with usage policies and to prevent model misuse."
+ },
+ {
+  "id": "atlas:AML.M0020",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Generative AI Guardrails",
+  "text": "Generative AI Guardrails. Guardrails are safety controls that are placed between a generative AI model and the output shared with the user to prevent undesired inputs and outputs. Guardrails can take the form of validators such as filters, rule-based logic, or regular expressions, as well as AI-based approaches, such as classifiers and utilizing LLMs, or named entity recognition (NER) to evaluate the safety of the prompt or response. Domain specific methods can be employed to reduce risks in a variety of areas such as etiquette, brand damage, jailbreaking, false information, code exploits, SQL injections, and data leakage."
+ },
+ {
+  "id": "atlas:AML.M0021",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Generative AI Guidelines",
+  "text": "Generative AI Guidelines. Guidelines are safety controls that are placed between user-provided input and a generative AI model to help direct the model to produce desired outputs and prevent undesired outputs. Guidelines can be implemented as instructions appended to all user prompts or as part of the instructions in the system prompt. They can define the goal(s), role, and voice of the system, as well as outline safety and security parameters."
+ },
+ {
+  "id": "atlas:AML.M0022",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Generative AI Model Alignment",
+  "text": "Generative AI Model Alignment. When training or fine-tuning a generative AI model it is important to utilize techniques that improve model alignment with safety, security, and content policies. The fine-tuning process can potentially remove built-in safety mechanisms in a generative AI model, but utilizing techniques such as Supervised Fine-Tuning, Reinforcement Learning from Human Feedback or AI Feedback, and Targeted Safety Context Distillation can improve the safety and alignment of the model."
+ },
+ {
+  "id": "atlas:AML.M0023",
+  "source": "atlas",
+  "lang": "en",
+  "title": "AI Bill of Materials",
+  "text": "AI Bill of Materials. An AI Bill of Materials (AI BOM) contains a full listing of artifacts and resources that were used in building the AI. The AI BOM can help mitigate supply chain risks and enable rapid response to reported vulnerabilities. This can include maintaining dataset provenance, i.e. a detailed history of datasets used for AI applications. The history can include information about the dataset source as well as well as a complete record of any modifications."
+ },
+ {
+  "id": "atlas:AML.M0024",
+  "source": "atlas",
+  "lang": "en",
+  "title": "AI Telemetry Logging",
+  "text": "AI Telemetry Logging. Implement logging of inputs and outputs of deployed AI models. When deploying AI agents, implement logging of the intermediate steps of agentic actions and decisions, data access and tool use, installation commands, and identity of the agent. Monitoring logs can help to detect security threats and mitigate impacts. Additionally, having logging enabled can discourage adversaries who want to remain undetected from utilizing AI resources."
+ },
+ {
+  "id": "atlas:AML.M0025",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Maintain AI Dataset Provenance",
+  "text": "Maintain AI Dataset Provenance. Maintain a detailed history of datasets used for AI applications. The history should include information about the dataset's source as well as a complete record of any modifications."
+ },
+ {
+  "id": "atlas:AML.M0026",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Privileged AI Agent Permissions Configuration",
+  "text": "Privileged AI Agent Permissions Configuration. AI agents may be granted elevated privileges above that of a normal user to enable desired workflows. When deploying a privileged AI agent, or an agent that interacts with multiple users, it is important to implement robust policies and controls on permissions of the privileged agent. These controls include Role-Based Access Controls (RBAC), Attribute-Based Access Controls (ABAC), and the principle of least privilege so that the agent is only granted the necessary permissions to access tools and resources required to accomplish its designated task(s)."
+ },
+ {
+  "id": "atlas:AML.M0027",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Single-User AI Agent Permissions Configuration",
+  "text": "Single-User AI Agent Permissions Configuration. When deploying an AI agent that acts as a representative of a user and performs actions on their behalf, it is important to implement robust policies and controls on permissions and lifecycle management of the agent. Lifecycle management involves establishing identity, protocols for access management, and decommissioning of the agent when its role is no longer needed. Controls should also include the principle of least privilege and delegated access from the user account. When acting as a representative of a user, the AI agent should not be granted permissions that the user would not be granted within the system or organization."
+ },
+ {
+  "id": "atlas:AML.M0028",
+  "source": "atlas",
+  "lang": "en",
+  "title": "AI Agent Tools Permissions Configuration",
+  "text": "AI Agent Tools Permissions Configuration. When deploying tools that will be shared across multiple AI agents, it is important to implement robust policies and controls on permissions for the tools. These controls include applying the principle of least privilege along with delegated access, where the tools receive the permissions, identities, and restrictions of the AI agent calling them. These configurations may be implemented either in MCP servers which connect the agents to the tools calling them or, in more complex cases, directly in the configuration files of the tool."
+ },
+ {
+  "id": "atlas:AML.M0029",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Human In-the-Loop for AI Agent Actions",
+  "text": "Human In-the-Loop for AI Agent Actions. Systems should require the user or another human stakeholder to approve AI agent actions before the agent takes them. The human approver may be technical staff or business unit SMEs depending on the use case. Separate tools, such as dedicated audit agents, may assist human approval, but final adjudication should be conducted by a human decision-maker. The security benefits from Human In-the-Loop policies may be at odds with operational overhead costs of additional approvals. To ease this, Human In-the-Loop policies should follow the degree of consequence of the task at hand. Minor, repetitive tasks performed by agents accessing basic tools may only require minimal human oversight, while agents employed in systems with significant consequences may necessitate approval from multiple stakeholders diversified across multiple organizations."
+ },
+ {
+  "id": "atlas:AML.M0030",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Restrict AI Agent Tool Invocation on Untrusted Data",
+  "text": "Restrict AI Agent Tool Invocation on Untrusted Data. Untrusted data can contain prompt injections that invoke an AI agent's tools, potentially causing confidentiality, integrity or availability violations. It is recommended that tool invocation be restricted or limited when untrusted data enters the LLM's context. The degree to which tool invocation is restricted may depend on the potential consequences of the action. Consider blocking the automatic invocation of tools or requiring user confirmation once untrusted data enters the LLM's context. For high consequence actions, consider always requiring user confirmation."
+ },
+ {
+  "id": "atlas:AML.M0031",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Memory Hardening",
+  "text": "Memory Hardening. Memory Hardening involves developing trust boundaries and secure processes for how an AI agent stores and accesses memory and context. This may be implemented using a combination of strategies including restricting an agent's ability to store memories by requiring external authentication and validation for memory updates, performing semantic integrity checks on retrieved memories before agents execute actions, and implementing controls for monitoring of memory and remediation processes for poisoned memory."
+ },
+ {
+  "id": "atlas:AML.M0032",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Segmentation of AI Agent Components",
+  "text": "Segmentation of AI Agent Components. Define security boundaries around agentic tools and data sources with methods such as API access, container isolation, code execution sandboxing, and rate limiting of tool invocation. When sandboxing, limit resource and network access and build the container or virtual machine from a clean base image before each run. This restricts untrusted processes or potential compromises from spreading throughout the system."
+ },
+ {
+  "id": "atlas:AML.M0033",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Input and Output Validation for AI Agent Components",
+  "text": "Input and Output Validation for AI Agent Components. Implement validation on inputs and outputs for the tools and data sources used by AI agents. Validation includes enforcing a common data format, schema validation, checks for sensitive or prohibited information leakage, and data sanitization to remove potential injections or unsafe code. Input and output validation can help prevent compromises from spreading in AI-enabled systems and can help secure the workflow when multiple components are chained together. Validation should be performed external to the AI agent."
+ },
+ {
+  "id": "atlas:AML.M0034",
+  "source": "atlas",
+  "lang": "en",
+  "title": "Deepfake Detection",
+  "text": "Deepfake Detection. Apply deepfake detection algorithms against any untrusted or user-provided data, especially in impactful applications such as biometric verification, to block generated content. Detectors may use a combination of approaches, including: - AI models trained to differentiate between real and deepfake content. - Identifying common inconsistencies in deepfake content, such as unnatural facial movements, audio mismatches, or pixel-level artifacts. - Biometrics analysis, such blinking, eye movements, and microexpressions."
+ },
+ {
+  "id": "runbook:droits-agents",
+  "source": "runbook",
+  "lang": "fr",
+  "title": "Droits des agents",
+  "text": "# Droits des agents Propriétaire : équipe Plateforme. 1. Un agent reçoit une clé par tâche, limitée aux ressources de cette tâche et révoquée à la fin. 2. Par défaut, un agent n'a que des droits de lecture ; toute écriture demande une approbation humaine. 3. Les droits de chaque agent sont revus chaque mois et les droits inutilisés sont retirés. 4. Un agent ne réutilise jamais la session complète d'un utilisateur humain."
+ },
+ {
+  "id": "runbook:quarantaine-source",
+  "source": "runbook",
+  "lang": "fr",
+  "title": "Mettre en quarantaine une source suspecte",
+  "text": "# Mettre en quarantaine une source suspecte Propriétaire : équipe Sécurité. 1. Retirer le document ou l'outil suspect du contexte de tous les agents. 2. Conserver une copie du contenu suspect et son empreinte pour l'enquête. 3. Épingler les descriptions des outils MCP approuvés par leur empreinte et refuser toute description modifiée. 4. Demander au propriétaire de la source de vérifier le contenu avant toute remise en service. 5. Ajouter une règle de politique qui interdit aux agents de suivre des instructions trouvées dans les données."
+ },
+ {
+  "id": "runbook:rediger-tache-agent",
+  "source": "runbook",
+  "lang": "fr",
+  "title": "Rédiger une tâche pour un agent",
+  "text": "# Rédiger une tâche pour un agent Propriétaire : auteur de la tâche. 1. Chaque tâche précise son mandat : ce que l'agent peut lire, modifier et supprimer. 2. Chaque tâche fixe un budget de tentatives : après trois échecs, l'agent s'arrête et escalade vers un humain. 3. Chaque tâche contient une clause de sortie : déclarer la tâche impossible est une réponse acceptée. 4. Les critères de réussite doivent être cohérents avec la spécification ; un test qui contredit la spécification est signalé à l'auteur. 5. Une échéance ne justifie jamais une action hors du mandat."
+ },
+ {
+  "id": "runbook:rotation-des-cles",
+  "source": "runbook",
+  "lang": "fr",
+  "title": "Rotation d'une clé exposée",
+  "text": "# Rotation d'une clé exposée Propriétaire : équipe Données. Déclencheur : une clé a été lue, utilisée ou publiée hors de son usage prévu. 1. Révoquer immédiatement la clé exposée dans le gestionnaire de secrets ou la console du fournisseur. 2. Émettre une nouvelle clé limitée à l'usage prévu, en lecture seule si possible, avec une durée de vie courte. 3. Mettre à jour les services qui utilisaient l'ancienne clé, puis vérifier qu'ils fonctionnent. 4. Retirer le secret de tous les fichiers du dépôt et de l'espace de travail des agents, y compris les fichiers .env. 5. Consulter les journaux d'utilisation de l'ancienne clé pour repérer tout usage anormal depuis son exposition. 6. Consigner l'incident, la date de révocation et le nom de la nouvelle clé dans le registre des secrets."
+ },
+ {
+  "id": "runbook:separer-dev-prod",
+  "source": "runbook",
+  "lang": "fr",
+  "title": "Séparer le développement et la production",
+  "text": "# Séparer le développement et la production Propriétaire : équipe Plateforme. 1. Les agents et les développeurs travaillent sur une copie de la base de staging, jamais sur la production. 2. Aucune clé de production ne doit se trouver dans l'espace de travail d'un agent. 3. Les accès à la production passent par une demande approuvée par un humain et limitée dans le temps. 4. Les sauvegardes sont stockées sur un volume séparé de la base qu'elles protègent. 5. Une restauration de sauvegarde est testée chaque semaine et son résultat est consigné."
+ },
+ {
+  "id": "runbook:verifier-rapport-agent",
+  "source": "runbook",
+  "lang": "fr",
+  "title": "Vérifier le rapport d'un agent",
+  "text": "# Vérifier le rapport d'un agent Propriétaire : équipe Sécurité. 1. Ne jamais considérer le rapport final d'un agent comme une preuve de ce qu'il a fait. 2. Comparer chaque affirmation du rapport avec le journal des appels d'outils enregistré par Cressey. 3. Toute action présente dans le journal mais absente du rapport est traitée comme un incident. 4. Restaurer les données touchées par une action non déclarée à partir de la dernière sauvegarde vérifiée. 5. Suspendre l'agent concerné jusqu'à la revue de l'incident par un humain."
+ }
+]
