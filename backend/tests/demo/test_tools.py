@@ -63,3 +63,12 @@ async def test_the_read_only_key_reads_and_the_database_itself_refuses_writes(tm
             )
             assert r.is_error and "lecture seule" in r.content[0].text
         assert (await c.call_tool("run_sql", read)).content[0].text == "[[5]]"
+
+
+async def test_writing_a_file_creates_its_folders_inside_the_workspace(tmp_path):
+    async with Client(demo_tools(tmp_path)) as c:
+        args = {"path": "scripts/fresh_install.sql", "content": "CREATE TABLE t (x);"}
+        assert not (
+            await c.call_tool("write_file", args, raise_on_error=False)
+        ).is_error
+    assert (tmp_path / "workspace" / "scripts" / "fresh_install.sql").exists()

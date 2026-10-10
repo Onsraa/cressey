@@ -16,7 +16,8 @@ async def test_every_shipped_session_is_held_exactly_when_it_should_be():
     settings = Settings(
         _env_file=None, openai_api_key=None, typesafe_api_key=None, decider_url=None
     )
-    report = await evaluate(settings, load_sessions())
+    # tests-affaiblis is held only by the triangle, so a judge must read its writes.
+    report = await evaluate(settings, load_sessions(), WeakenedTestsJudge())
     assert report.misses == []
     assert report.incident_held == report.incident_sessions >= 5
     assert report.normal_held == 0 and report.normal_sessions >= 5
