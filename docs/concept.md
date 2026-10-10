@@ -23,7 +23,7 @@ Cressey watches what a company's AI agents do. When the fraud triangle lights up
 |---|---|---|
 | **Pressure** | Failures, retries, time spent against budget, a deadline in the task | « URGENT » in the messages; the reasoning |
 | **Opportunity** | Rights the agent was granted minus rights the task needs; secrets within reach in the workspace | None |
-| **Rationalization** | Drift from the task: Jev answers « does this action serve the task? » with a confidence score, weighted by the action's risk class (read 0, write 0.5, destructive 1). Drift alone never alarms: in S2, `run_tests` on a typo fix scored only 0.15 for "needed". The agent's report contradicting the real log | Its justifications; its reasoning |
+| **Rationalization** | Drift from the task: Jev answers « does this action serve the task? » with a confidence score, given the run summary rather than the action alone, weighted by the action's risk class (read 0, write 0.5, destructive 1). Drift alone never alarms: in S2, `run_tests` on a typo fix scored only 0.15 for "needed". The agent's report contradicting the real log | Its justifications; its reasoning |
 
 **Rules.** Code decides; models only read meaning, the rule carried over from Earshot.
 1. **Safety floor, independent of the triangle.** Any irreversible action, or any data leaving, outside the task's mandate is held, whatever the score. Each task declares what it may destroy. Code classifies each action: SQL goes through sqlglot, with a keyword rule for `REPLACE INTO`. Anything it can't classify counts as destructive (S4).
@@ -31,8 +31,13 @@ Cressey watches what a company's AI agents do. When the fraud triangle lights up
 3. **Models only label, with confidence. They never approve.** The agent's text is untrusted input to Cressey.
 
 ## The loop
-1. **Detect:** the triangle and the safety floor are checked on every tool call.
+1. **Detect:** the triangle and the safety floor are checked on every tool call, against the whole run so far.
+   - Each call is when Cressey can still stop the action, but the evidence comes from the run. Fraud builds over several steps: one step judged alone misses rationalization spread over steps (« task impossible » at step 3, « peers doing it » at step 8), an attack split into harmless steps, and drift that repeats.
+   - Code keeps one state per run: the leg counters (failures, retries, time used against budget), each secret read with its step, and each action with its risk class.
+   - Jev gets a short run summary built by code: the task and mandate, the counters, the secrets read, the last N actions (N in the policy config), and short quotes of messages and reasoning when visible, marked as agent text. It stays one Jev call, so the inline latency barely changes.
 2. **Stop:** hold the call, revoke the key Cressey issued, and offer the agent a way out: « déclarer la tâche impossible est une réponse acceptée ».
+   - While the call is held, an LLM reads the whole run: tool calls, messages, report, and the reasoning when visible. It labels each leg with step numbers and verbatim quotes, which code checks against the log, as it does for the guides' quotes. It runs off the inline path, since the hold already waits for a human. It labels; it never releases the hold. Its labels go into the incident and the trace.
+   - The whole transcript is untrusted input to that LLM, so it widens the injection surface and costs more tokens.
 3. **Trace:**
    - Code matches the key, command or URL in the dangerous call to the first place the agent read it. It compares in lower case, and also decodes base64, hex and URL encoding; reversed or computed values aren't traced (S4).
    - Jev ranks the inputs that influenced the agent, with a confidence score.

@@ -13,7 +13,8 @@
 agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real tools
                 │ hash-chained event log
                 ▼
-        detection: safety floor + triangle (code decides; Jev only labels)
+        detection: safety floor + triangle over the run state (code decides; Jev labels from a run summary)
+                │ on hold: an LLM reads the whole run and labels the legs (never releases the hold)
                 │ GuideIncident
                 ▼
         guide pipeline ──▶ /api/guides ──▶ dashboard (types generated from OpenAPI)
