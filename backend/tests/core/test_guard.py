@@ -552,6 +552,7 @@ REVIEW_ALL = {
     "floor": "review",
     "trap_key": "review",
     "trap_key_read": "alert",  # a decoy key that only reads is flagged, not held
+    "irreversible": "review",
     "triangle": "review",
     "fleet": "alert",
 }

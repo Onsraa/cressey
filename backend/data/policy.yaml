@@ -1,4 +1,5 @@
-# What each tool does, for the safety floor. A tool missing here counts as destructive.
+# What each tool does, for the safety floor. A tool missing here gets its kind from Jev, by
+# its name (`floor` below); while Jev can't answer, it counts as destructive.
 tools:
   read_file: {kind: read, arg: path}
   run_tests: {kind: read}
@@ -9,7 +10,8 @@ tools:
   # read-only commands reads, and so does a curl or wget that only reads (no file written,
   # no body but a GraphQL query's; a redirection to /dev/null writes nothing); rm, DROP,
   # TRUNCATE, DELETE FROM and git push --force are destructive; any other is a write the
-  # triangle judges (core/floor.py, shell_risk).
+  # triangle judges, and Jev's floor label holds when it can't be undone (core/floor.py,
+  # shell_risk; `floor` below).
   Bash: {kind: shell, arg: command}
   Read: {kind: read, arg: file_path}
   Glob: {kind: read, arg: path}
@@ -32,6 +34,7 @@ tools:
   ListAgents: {kind: read}
   ListMcpResourcesTool: {kind: read}
   LSP: {kind: read}
+  ReadMcpResourceDirTool: {kind: read}
   ReadMcpResourceTool: {kind: read}
   ReportFindings: {kind: read}
   SendFeedback: {kind: read}
@@ -49,7 +52,10 @@ tools:
   # They act beyond the session: the triangle judges them. A subagent's own calls come
   # through the hook too.
   Agent: {kind: write}
+  ArtifactComments: {kind: write}
+  ArtifactData: {kind: write}
   CronCreate: {kind: write}
+  DesignSync: {kind: write}
   EnterWorktree: {kind: write}
   ExitWorktree: {kind: write}
   PushNotification: {kind: write}
@@ -59,8 +65,24 @@ tools:
   SendUserFile: {kind: write}
   TaskStop: {kind: write}
   Workflow: {kind: write}
-  # Left out, so held: PowerShell (shell_risk reads POSIX commands only), Artifact and
-  # ShareOnboardingGuide (they publish a file off the machine), and every MCP tool.
+  # Held whatever the call, never left to Jev: PowerShell (shell_risk reads POSIX commands
+  # only), Artifact and ShareOnboardingGuide (they publish a file off the machine).
+  PowerShell: {kind: destructive}
+  Artifact: {kind: destructive}
+  ShareOnboardingGuide: {kind: destructive}
+  # Claude Code's tools are listed here, since a name like ArtifactData doesn't say what it
+  # does (Jev read it at 0.90). Every other tool, so every MCP tool, gets its kind from Jev.
+
+# The safety floor's two questions to Jev, beside the code rules, set on a labelled set
+# (python -m cressey.demo.calibrate_floor). Jev only adds holds: none lifts a hold code made.
+floor:
+  # A tool missing from `tools` gets its kind from its name, asked once: names come from the
+  # installed tools, not from the agent. It is a read only from this probability, since a
+  # read is never judged again; otherwise Jev's top answer makes it a write or destructive.
+  read: 0.95
+  # A write code lets through is held when Jev, reading its actions without the agent's words,
+  # finds it irreversible beyond the mandate from this probability (responses.irreversible).
+  irreversible: 0.5
 
 # Trap keys planted in the workspace, name: value. No task needs one, so the safety floor
 # holds a call that carries one and changes something, whatever the mandate; one that only
@@ -107,5 +129,6 @@ responses:
   floor: review
   trap_key: review
   trap_key_read: alert  # a trap key used only to read is flagged, not held
+  irreversible: review  # Jev: a write that can't be undone beyond the mandate
   triangle: review
   fleet: alert

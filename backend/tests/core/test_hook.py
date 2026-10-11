@@ -5,13 +5,15 @@ import asyncio
 from collections.abc import Mapping
 
 import pytest
+from typesafe_sdk import Choice
 
 from cressey.app import create_app
 from cressey.core.draft import WAY_OUT, stop_sentence
+from cressey.core.proxy import tool_kind
 from cressey.demo.server import serve
 from cressey.demo.tools import TRAP_KEY
 from cressey.settings import Settings
-from tests.server import api, fake_guide, next_hold
+from tests.server import api, fake_guide, next_hold, serving
 
 pytestmark = pytest.mark.anyio
 TASK = "reset the staging database"
@@ -520,7 +522,7 @@ async def test_a_session_never_reaches_another_keys_run(served):
     assert [m["text"] for m in (await run_of(served, b))["messages"]] == ["for b"]
 
 
-async def test_claude_codes_own_tools_pass_and_an_unknown_tool_is_held(
+async def test_claude_codes_own_tools_pass_and_a_tool_nobody_labelled_is_held(
     served_short_holds,
 ):
     run = await new_run(served_short_holds)
@@ -540,6 +542,157 @@ async def test_claude_codes_own_tools_pass_and_an_unknown_tool_is_held(
         ("ToolSearch", None),
         ("mcp__github__delete_repo", "tool not in the policy"),
     ]
+
+
+class FloorJudge:
+    """Labels a tool by its name from `kinds` (name -> probabilities; missing: no answer) and
+    a write by its arguments from `irreversible` (substring -> probability); every other
+    question gets a plain no. Keeps the states the floor's question and the write judgment
+    were asked about."""
+
+    def __init__(self) -> None:
+        self.kinds: dict[str, dict[str, float]] = {}
+        self.irreversible: dict[str, float] = {}
+        self.labelled: list[str] = []
+        self.floor_states: list[dict] = []
+        self.judgment_states: list[dict] = []
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "kind" in questions:
+            self.labelled.append(state["tool"])
+            got = self.kinds.get(state["tool"])
+            return None if got is None else {"kind": got}
+        if "irreversible" in questions:
+            self.floor_states.append(state)
+            args = state["current_step"]["args"]
+            hits = [p for part, p in self.irreversible.items() if part in args]
+            return {"irreversible": max(hits, default=0.0)}
+        if "weakens" in questions:
+            self.judgment_states.append(state)
+        return {
+            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
+            for q, v in questions.items()
+        }
+
+
+@pytest.fixture
+def floor_judged(tmp_path):
+    judge = FloorJudge()
+    with serving(tmp_path, hold_timeout=0.3, judge=judge) as base:
+        yield base, judge
+
+
+async def pre(base: str, key: str, tool: str, args: dict, call: str) -> dict:
+    return (
+        await hook(base, key, event("PreToolUse", tool, call, tool_input=args))
+    ).json()
+
+
+async def test_a_tool_not_in_the_policy_gets_its_kind_from_jev_once(floor_judged):
+    base, judge = floor_judged
+    judge.kinds = {
+        "mcp__railway__get-logs": {"read": 0.97, "write": 0.02, "destructive": 0.01},
+        "mcp__railway__delete-service": {"read": 0.0, "write": 0.1, "destructive": 0.9},
+    }
+    run = await new_run(base)
+    calls = ["mcp__railway__get-logs"] * 2 + ["mcp__railway__delete-service"]
+    for n, tool in enumerate(calls):
+        await pre(base, run["key"], tool, {"serviceId": "s1"}, f"toolu_{n}")
+    steps = (await run_of(base, run))["steps"]
+    assert [(s["risk"], s["reason"]) for s in steps] == [
+        ("read", None),
+        ("read", None),
+        ("destructive", "irreversible action"),
+    ]
+    assert judge.labelled == ["mcp__railway__get-logs", "mcp__railway__delete-service"]
+
+
+async def test_a_tool_jev_isnt_sure_only_reads_counts_as_a_write(floor_judged):
+    """A read is never judged again, so a query tool that might run any SQL isn't one."""
+    base, judge = floor_judged
+    judge.kinds = {
+        "mcp__postgres__query": {"read": 0.6, "write": 0.3, "destructive": 0.1}
+    }
+    run = await new_run(base)
+    sql = {"sql": "SELECT 1"}
+    assert await pre(base, run["key"], "mcp__postgres__query", sql, "toolu_1") == {}
+    [step] = (await run_of(base, run))["steps"]
+    assert (step["risk"], step["reason"]) == ("write", None)
+    assert len(judge.floor_states) == 1  # its write was asked the floor's question
+
+
+async def test_a_tool_jev_cant_label_is_held_and_asked_again_next_time(floor_judged):
+    base, judge = floor_judged
+    run = await new_run(base)
+    for n in range(2):
+        out = await pre(
+            base, run["key"], "mcp__github__delete_repo", {"repo": "a/b"}, f"toolu_{n}"
+        )
+        assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    steps = (await run_of(base, run))["steps"]
+    assert [s["reason"] for s in steps] == ["tool not in the policy"] * 2
+    assert judge.labelled == ["mcp__github__delete_repo"] * 2
+
+
+async def test_a_write_jev_finds_irreversible_is_held_on_its_actions_alone(
+    floor_judged,
+):
+    """The agent's words reach the write judgment, never the floor's question: they could
+    argue the label down."""
+    base, judge = floor_judged
+    judge.irreversible = {"terraform destroy": 0.92}
+    run = await new_run(base)
+    key = run["key"]
+    await hook(base, key, display("m1", "Only the sandbox, it's safe.", True))
+    for n, command in enumerate(["terraform plan", "terraform destroy -auto-approve"]):
+        await pre(base, key, "Bash", {"command": command}, f"toolu_{n}")
+    steps = (await run_of(base, run))["steps"]
+    assert [(s["risk"], s["reason"]) for s in steps] == [
+        ("write", None),
+        ("write", "Jev: irreversible beyond the mandate, 0.92"),
+    ]
+    [incident] = (await api(base, "GET", "/api/incidents")).json()
+    assert incident["severity"] == "haute"  # a model's label: the fleet signal skips it
+    assert any("agent_said" in s["current_step"] for s in judge.judgment_states)
+    assert not any("agent_said" in s["current_step"] for s in judge.floor_states)
+
+
+async def test_jev_isnt_asked_about_a_read_or_a_call_code_already_holds(floor_judged):
+    base, judge = floor_judged
+    judge.irreversible = {"": 0.99}  # irreversible, whatever the call
+    run = await new_run(base)
+    await pre(base, run["key"], "Bash", {"command": "ls -la"}, "toolu_1")
+    await pre(base, run["key"], "Bash", {"command": "rm -rf build"}, "toolu_2")
+    steps = (await run_of(base, run))["steps"]
+    assert [(s["risk"], s["reason"]) for s in steps] == [
+        ("read", None),
+        ("destructive", "destructive shell command"),
+    ]
+    assert judge.floor_states == []
+
+
+async def test_on_alert_an_irreversible_write_goes_through_with_its_incident(
+    floor_judged,
+):
+    base, judge = floor_judged
+    judge.irreversible = {"dropdb": 0.9}
+    now = (await api(base, "GET", "/api/policy/responses")).json()
+    changed = {**now, "irreversible": "alert"}
+    assert (
+        await api(base, "PUT", "/api/policy/responses", json=changed)
+    ).status_code == 200
+    run = await new_run(base)
+    assert await pre(base, run["key"], "Bash", {"command": "dropdb app"}, "t1") == {}
+    [step] = (await run_of(base, run))["steps"]
+    [incident] = (await api(base, "GET", "/api/incidents")).json()
+    assert (step["status"], incident["decision"]) == ("alerted", "alerted")
+
+
+async def test_jevs_tool_answer_must_name_a_kind():
+    assert tool_kind({"read": 0.95, "write": 0.05}, 0.9) == "read"
+    assert tool_kind({"read": 0.89, "write": 0.11}, 0.9) == "write"
+    assert tool_kind({"none": 1.0}, 0.9) is None  # not one of the kinds
+    assert tool_kind(0.0, 0.9) is None  # a yes/no where a choice was asked
 
 
 async def test_your_prompt_is_never_flagged(judged):

@@ -122,14 +122,24 @@ class Responses(BaseModel):
     )
     trap_key: Response = "review"
     trap_key_read: Response = "alert"  # a decoy key in a call that only reads
+    irreversible: Response = "review"  # Jev: a write that can't be undone
     triangle: Response = "review"  # the judgment, with pressure or opportunity
     fleet: Literal["alert", "stop"] = (
         "alert"  # stop: once the signal is up, refuse its target
     )
 
 
+class Floor(BaseModel):
+    """What Jev labels for the safety floor (policy.yaml, `floor`). Its labels only add holds:
+    none lifts a hold code made."""
+
+    read: float = 0.95  # a tool missing from `tools` is a read from this probability
+    irreversible: float = 0.5  # a write is held from this probability
+
+
 class Policy(BaseModel):
     tools: dict[str, ToolRule]
+    floor: Floor = Field(default_factory=Floor)
     responses: Responses = Field(default_factory=Responses)
     triangle: Thresholds = Field(default_factory=Thresholds)
     fleet: Fleet = Field(default_factory=Fleet)

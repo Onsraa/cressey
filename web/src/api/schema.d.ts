@@ -850,6 +850,12 @@ export interface components {
 			 */
 			trap_key_read: "alert" | "review" | "stop";
 			/**
+			 * Irreversible
+			 * @default review
+			 * @enum {string}
+			 */
+			irreversible: "alert" | "review" | "stop";
+			/**
 			 * Triangle
 			 * @default review
 			 * @enum {string}

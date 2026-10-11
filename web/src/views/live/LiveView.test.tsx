@@ -294,6 +294,7 @@ test("on its Live page, alert mode and the run's cross-run signal are chips, not
 			floor: "review",
 			trap_key: "alert",
 			trap_key_read: "alert",
+			irreversible: "review",
 			triangle: "review",
 			fleet: "alert",
 		},

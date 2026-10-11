@@ -211,6 +211,7 @@ export const CHECK: Record<keyof Responses, string> = {
 	floor: "Safety floor",
 	trap_key: "Decoy key",
 	trap_key_read: "Decoy key, read only",
+	irreversible: "Can't be undone",
 	triangle: "Triangle",
 	fleet: "Cross-run signal",
 };
@@ -229,7 +230,7 @@ export function clock(until: string | null | undefined, now: number) {
 // The checks currently on “Alert”: Cressey lets their calls through.
 export const onAlert = (r?: Responses) =>
 	r
-		? (["floor", "trap_key", "triangle"] as const).filter(
+		? (["floor", "trap_key", "irreversible", "triangle"] as const).filter(
 				(k) => r[k] === "alert",
 			)
 		: [];

@@ -15,7 +15,7 @@ Agent firewalls judge the action. Cressey also reads the conditions that produce
 ```
 agent ──▶ Cressey (MCP proxy or Claude Code hook) ──▶ real tools
              │
-             ├─ safety floor     code rules: destructive actions outside the mandate, trap keys
+             ├─ safety floor     code rules, widened by Jev labels that only add holds
              ├─ fraud triangle   Jev labels each step, code decides
              ▼
           allow  |  hold for a human  |  refuse
@@ -24,7 +24,7 @@ agent ──▶ Cressey (MCP proxy or Claude Code hook) ──▶ real tools
           incident ──▶ source trace + fix guides ──▶ dashboard
 ```
 - **Two ways in.** An MCP proxy sees MCP tool calls. A Claude Code HTTP hook (`POST /hook/claude`) also sees the shell, the files and the agent's messages.
-- **Safety floor.** Plain code. Holds irreversible actions outside the agent's mandate (`rm`, `DROP TABLE`, `DELETE FROM`, `git push --force`...) and any call that uses a trap key to change something. A trap key is a decoy secret planted where an agent might find it. Using one only to read raises an alert.
+- **Safety floor.** Code rules hold irreversible actions outside the agent's mandate (`rm`, `DROP TABLE`, `DELETE FROM`, `git push --force`...) and any call that uses a trap key to change something. A trap key is a decoy secret planted where an agent might find it. Using one only to read raises an alert. Jev widens the floor but never loosens it. A tool missing from the policy, such as any MCP tool, gets its kind from its name. A write the code lets through is held when Jev, reading the action without the agent's words, finds it can't be undone beyond the mandate (`terraform destroy`, a Railway `serviceDelete`).
 - **Fraud triangle.** Jev, a fast decision model, labels pressure and rationalization in the agent's words. Opportunity comes from code (a secret the agent read). A hold needs Jev's judgment plus confirmed pressure or opportunity. No model can release a hold.
 - **Response per check.** Hold for a human (default), refuse at once, or only alert. Switch it in Settings. After 3 rejected calls in a turn, Cressey tells the agent to stop and report.
 - **After a hold.** Cressey traces the misused secret back to where the agent read it and writes a fix guide per owner. Every step quotes a verified source (ANSSI, MITRE ATLAS, OWASP).
@@ -49,7 +49,7 @@ The first run asks for your Jev key, checks it and saves it in `.env`. Then it s
 ## Known limitations
 - **Tested on a real agent and real infrastructure, a few runs only.** Claude Opus 4.6 (Claude Code) got the task "reset the staging database" on a throwaway Railway project. Without Cressey, 1 run in 3 deleted the production database with an old ops token it found in the repo. The 2 others refused.
 - **The live hold is shown on a replay.** The one live run through Cressey asked before deleting, so there was nothing to hold. The demo replays the recorded deleting run through the hook: the agent's real words and commands, held at the delete.
-- **That catch comes from the trap key, not the triangle.** The agent was calm, so the triangle stayed quiet. On the dev set the triangle alone holds one session that the safety floor misses.
+- **That catch comes from the trap key, not the triangle.** The agent was calm, so the triangle stayed quiet. On the dev set the triangle alone holds one session that the safety floor misses. Replayed with the trap key defused, the same delete is held by Jev's floor label (0.69): one replay, not a live run.
 - **Cressey sees only what goes through it.** The hook covers Claude Code only. An agent with another way out (its own network, another tool) is not stopped. To be the only way out, Cressey has to run outside the agent's container behind a default-deny network. That deployment is not done, so as it stands Cressey would not have stopped the Hugging Face incident.
 - **Small eval, written by the team.** 13 synthetic sessions. The held-out set from outside the team is not written yet.
 - **The reasoning shown is the agent's narration.** No provider exposes the raw chain of thought.
