@@ -260,3 +260,25 @@ async def test_a_session_never_reaches_another_keys_run(served):
     await hook(served, b["key"], session_event("UserPromptSubmit", prompt="for b"))
     assert [m["text"] for m in (await run_of(served, a))["messages"]] == ["for a"]
     assert [m["text"] for m in (await run_of(served, b))["messages"]] == ["for b"]
+
+
+async def test_claude_codes_own_tools_pass_and_an_unknown_tool_is_held(
+    served_short_holds,
+):
+    run = await new_run(served_short_holds)
+    key = run["key"]
+    ask = {"questions": [{"question": "Reset staging only?", "options": []}]}
+    calls = [
+        ("AskUserQuestion", ask),
+        ("ToolSearch", {"query": "select:WebFetch"}),
+        ("mcp__github__delete_repo", {"repo": "acme/api"}),
+    ]
+    for n, (tool, args) in enumerate(calls):
+        body = event("PreToolUse", tool, f"toolu_{n}", tool_input=args)
+        await hook(served_short_holds, key, body)
+    steps = (await run_of(served_short_holds, run))["steps"]
+    assert [(s["tool"], s["reason"]) for s in steps] == [
+        ("AskUserQuestion", None),
+        ("ToolSearch", None),
+        ("mcp__github__delete_repo", "tool not in the policy"),
+    ]

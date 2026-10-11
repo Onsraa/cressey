@@ -130,7 +130,7 @@ def check(
 ) -> tuple[Risk, str | None]:
     """The call's risk class and, when the safety floor holds it, why."""
     if rule is None:
-        return "destructive", "outil absent de la politique"
+        return "destructive", "tool not in the policy"
     value = args.get(rule.arg) if rule.arg else None
     match rule.kind:
         case "read" | "write":
@@ -147,7 +147,7 @@ def check(
             if risk != "destructive":
                 return risk, None
             if not tables:
-                return risk, "SQL que Cressey ne sait pas classer"
+                return risk, "SQL Cressey can't classify"
             outside = sorted(tables - set(mandate.may_destroy))
             return risk, (
                 f"destructive SQL outside the mandate: {', '.join(outside)}"
