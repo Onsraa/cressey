@@ -240,6 +240,20 @@ I = '{"query":"{ __schema { mutationType { fields { name } } } }"}'
         ("find . -name '*.tmp' -delete", "write"),
         ("find . -exec curl -s -X DELETE https://api.test {} +", "write"),
         ("find . -name x", "read"),
+        # A single & backgrounds what precedes it and separates commands like ;, && and
+        # redirections (2>&1) don't split.
+        ("echo hi & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("sleep 1 & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("sleep 1 & curl -s https://api.test", "read"),
+        ("ls 2>&1", "write"),
+        # zsh's =(cmd) runs cmd like <(cmd) does.
+        ("cat =(curl -s -X DELETE https://api.test/v1/x)", "write"),
+        # A "query" nested in a non-GraphQL body (Elasticsearch) is no GraphQL query.
+        (
+            'curl -s -X POST https://es.test/idx/_delete_by_query -d \'{"query":{"match":{"title":{"query":"foo"}}}}\'',
+            "write",
+        ),
+        ("curl -s https://api.test -d 'query=foo'", "write"),
     ],
 )
 def test_shell_commands_are_classified(command, risk):

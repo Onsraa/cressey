@@ -3,6 +3,7 @@ leaving, outside the task's mandate. Anything it can't classify counts as destru
 A call that carries a trap key is held whatever the mandate."""
 
 import fnmatch
+import json
 import posixpath
 import re
 import shlex
@@ -29,18 +30,19 @@ DESTRUCTIVE_COMMAND = re.compile(
     r"|\bgit\s+push\b[^|;&]*(?:--force\b|\s-f\b)|\bgit\s+(?:reset\s+--hard|clean\s)",
     re.IGNORECASE,
 )
-SEGMENT = re.compile(r"\|\|?|&&|;|\n")
-# $(...), `...` and <(...) run a command wherever they sit, whatever the first word.
-SUBSTITUTION = re.compile(r"\$\(|`|<\(")
+# A single & backgrounds what precedes it and separates commands like `;` does; redirections
+# (2>&1, &>) don't split, and any `>` makes the command a write anyway.
+SEGMENT = re.compile(r"\|\|?|&&|;|\n|(?<![<>])&(?!>)")
+# $(...), `...`, <(...) and zsh's =(...) run a command wherever they sit, whatever the first
+# word.
+SUBSTITUTION = re.compile(r"\$\(|`|<\(|=\(")
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 # find's actions that run or delete something.
 FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
 MUTATION = re.compile(r"\bmutation\b", re.IGNORECASE)
-# GraphQL's {"query": "..."}: the query is a string, unlike an Elasticsearch {"query": {...}}.
-QUERY_FIELD = re.compile(r'"query"\s*:\s*"')
-# A body whose text isn't what the server sees: read from a file, expanded by the shell, or
-# JSON-escaped (\u006dutation).
-INDIRECT = re.compile(r"^@|\$|\\u")
+# A body whose text isn't what the server sees: expanded by the shell, or JSON-escaped
+# (\u006dutation).
+INDIRECT = re.compile(r"\$|\\u")
 WRITE_FLAGS = {"-F", "--form", "-T", "--upload-file", "--post-file", "--post-data"}
 METHOD_FLAGS = {"-X", "--request", "--method"}
 # curl's short options that take a value; in a cluster (-sXPOST, -sd) the first one ends it.
@@ -138,9 +140,15 @@ def _http_risk(words: list[str]) -> Risk:
 
 
 def _is_query(body: str) -> bool:
-    """An inline GraphQL query, not a mutation."""
-    return bool(
-        QUERY_FIELD.search(body)
+    """An inline GraphQL query, not a mutation: a JSON object whose top-level "query" is a
+    string (an Elasticsearch {"query": {...}} is not)."""
+    try:
+        parsed = json.loads(body)
+    except ValueError:
+        return False
+    return (
+        isinstance(parsed, dict)
+        and isinstance(parsed.get("query"), str)
         and not INDIRECT.search(body)
         and not MUTATION.search(body)
     )
