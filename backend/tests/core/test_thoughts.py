@@ -48,3 +48,21 @@ def test_objects_link_a_variable_name_to_the_secret_read_earlier():
         "secret:abc123def456",
         "scripts/legacy/backfill_domains.sh",
     ]
+
+
+def test_a_secret_marker_inside_a_url_or_path_is_found_beside_it():
+    marker = "secret:abc123def456"
+    run = run_with()
+    assert objects(
+        "curl https://api.x.com/v1?token=[secret:abc123def456]", [], run
+    ) == [
+        "https://api.x.com/v1?token=",
+        marker,
+    ]
+    assert objects(
+        "use postgres://admin:[secret:abc123def456]@db.internal", [], run
+    ) == [
+        "postgres://admin",
+        marker,
+    ]
+    assert objects("read /srv/[secret:abc123def456]/a", [], run) == ["/srv/", marker]

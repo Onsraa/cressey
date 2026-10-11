@@ -43,10 +43,12 @@ _OBJECT = re.compile(
         [
             r"`(?P<span>[^`\n]+)`",
             r"\[secret:(?P<marker>[0-9a-f]+)\]",
-            r"(?P<url>[a-zA-Z][a-zA-Z0-9+.-]*://[^\s`<>\"')\]]+)",
+            # A URL stops where a marker starts: the marker is its own object.
+            r"(?P<url>[a-zA-Z][a-zA-Z0-9+.-]*://(?:(?!\[secret:)[^\s`<>\"')\]])+)",
             # A token with a slash and a word character in it, cut before any punctuation
-            # that is not part of a name.
-            rf"(?<![\w.~$@%+/-])(?=[\w.~$@%+/-]*\w)(?P<path>{_PATH}*(?:/{_PATH}*)+)",
+            # that is not part of a name. It cannot start right after a marker (`]`): that
+            # is the tail of a URL or path the marker cut.
+            rf"(?<![\w.~$@%+/\]-])(?=[\w.~$@%+/-]*\w)(?P<path>{_PATH}*(?:/{_PATH}*)+)",
             r"\$\{?(?P<dollar>[A-Za-z_]\w*)",
             r"\b(?P<assign>[A-Z_][A-Z0-9_]*)=(?!=)",
             rf"\b(?P<id>{_HEX}{{8}}-{_HEX}{{4}}-{_HEX}{{4}}-{_HEX}{{4}}-{_HEX}{{12}}|{_HEX}{{8,}})\b",
