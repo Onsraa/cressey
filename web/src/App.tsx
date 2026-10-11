@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { LiveProvider, useLive, type View } from "@/api/live";
+import type { FleetSignal } from "@/api/types";
 import {
 	Activity,
 	ArrowRight,
@@ -19,6 +20,7 @@ import {
 	SlidersHorizontal,
 	Triangle,
 	Unplug,
+	X,
 } from "@/components/icons";
 import { useTooltips } from "@/components/tooltips";
 import { stage } from "@/lib/incident";
@@ -331,9 +333,18 @@ function HoldBanner() {
 }
 
 function AlertBanner() {
-	const { responses, go } = useLive();
-	const alerting = onAlert(responses);
-	if (!alerting.length) return null;
+	const alerting = onAlert(useLive().responses);
+	// Keyed by the checks on alert: a closed banner comes back when they change, or when
+	// alert mode is switched off and on again.
+	return alerting.length ? (
+		<AlertBar key={alerting.join()} alerting={alerting} />
+	) : null;
+}
+
+function AlertBar({ alerting }: { alerting: ReturnType<typeof onAlert> }) {
+	const { go } = useLive();
+	const [closed, setClosed] = useState(false);
+	if (closed) return null;
 	return (
 		<div
 			role="alert"
@@ -357,47 +368,68 @@ function AlertBanner() {
 				Settings
 				<ArrowRight size={14} />
 			</button>
+			<button
+				type="button"
+				aria-label="Close this banner"
+				onClick={() => setClosed(true)}
+				className="press inline-flex size-[30px] flex-none items-center justify-center text-warn-fg opacity-70 hover:opacity-100"
+			>
+				<X size={16} />
+			</button>
 		</div>
 	);
 }
 
 function SignalBanner() {
 	const { fleet, responses, go } = useLive();
-	return fleet.map((f) => (
-		<div
-			key={f.target}
-			role="alert"
-			className="flex min-h-11 flex-none items-center gap-3.5 overflow-hidden whitespace-nowrap border-black border-b bg-ink px-7 py-1.5 text-surface"
-		>
-			<span className="inline-flex size-6 flex-none items-center justify-center bg-surface text-ink">
-				<GitMerge size={14} strokeWidth={2.25} />
-			</span>
-			<strong className="font-semibold text-sm">Cross-run signal</strong>
-			<span className="min-w-0 truncate font-mono text-[12.5px] opacity-90">
-				{f.target}
-			</span>
-			<span
-				data-tip={`${f.runs.length} runs held outside the mandate:\n${f.runs.join("\n")}`}
-				// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
-				tabIndex={0}
-				className="cursor-help font-mono text-[11.5px] opacity-70"
+	// A closed signal comes back when another run is held on its target.
+	const [closed, setClosed] = useState<string[]>([]);
+	const id = (f: FleetSignal) => `${f.target}@${f.last_at}`;
+	return fleet
+		.filter((f) => !closed.includes(id(f)))
+		.map((f) => (
+			<div
+				key={f.target}
+				role="alert"
+				className="flex min-h-11 flex-none items-center gap-3.5 overflow-hidden whitespace-nowrap border-black border-b bg-ink px-7 py-1.5 text-surface"
 			>
-				{f.runs.length} runs · {time(f.first_at)} → {time(f.last_at)}
-			</span>
-			<div className="flex-1" />
-			<span className="inline-flex h-[22px] items-center border border-surface px-[7px] font-mono text-[11px]">
-				{responses?.fleet === "stop"
-					? "Stop: calls refused"
-					: "Alert: calls let through"}
-			</span>
-			<button
-				type="button"
-				onClick={() => go("connect")}
-				className="press inline-flex h-[30px] flex-none items-center gap-1.5 border-[1.2px] border-surface bg-surface px-3 font-medium text-[13px] text-ink"
-			>
-				Settings
-				<ArrowRight size={14} />
-			</button>
-		</div>
-	));
+				<span className="inline-flex size-6 flex-none items-center justify-center bg-surface text-ink">
+					<GitMerge size={14} strokeWidth={2.25} />
+				</span>
+				<strong className="font-semibold text-sm">Cross-run signal</strong>
+				<span className="min-w-0 truncate font-mono text-[12.5px] opacity-90">
+					{f.target}
+				</span>
+				<span
+					data-tip={`${f.runs.length} runs held outside the mandate:\n${f.runs.join("\n")}`}
+					// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+					tabIndex={0}
+					className="cursor-help font-mono text-[11.5px] opacity-70"
+				>
+					{f.runs.length} runs · {time(f.first_at)} → {time(f.last_at)}
+				</span>
+				<div className="flex-1" />
+				<span className="inline-flex h-[22px] items-center border border-surface px-[7px] font-mono text-[11px]">
+					{responses?.fleet === "stop"
+						? "Stop: calls refused"
+						: "Alert: calls let through"}
+				</span>
+				<button
+					type="button"
+					onClick={() => go("connect")}
+					className="press inline-flex h-[30px] flex-none items-center gap-1.5 border-[1.2px] border-surface bg-surface px-3 font-medium text-[13px] text-ink"
+				>
+					Settings
+					<ArrowRight size={14} />
+				</button>
+				<button
+					type="button"
+					aria-label="Close this signal"
+					onClick={() => setClosed((c) => [...c, id(f)])}
+					className="press inline-flex size-[30px] flex-none items-center justify-center opacity-70 hover:opacity-100"
+				>
+					<X size={16} />
+				</button>
+			</div>
+		));
 }
