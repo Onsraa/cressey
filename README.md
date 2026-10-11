@@ -1,36 +1,73 @@
 # Cressey
 
-**The fraud triangle, applied to AI agents.**
+**The fraud triangle, applied to AI agents.** Cressey sits between an AI agent and its tools and stops a dangerous call before it runs.
 
-Cressey sits between an AI agent and its tools. When the three signs of the fraud triangle line up (pressure, opportunity, rationalization), it:
-1. **stops** the risky call before it runs;
-2. **traces** it back to where the agent found what it misused;
-3. **guides** each owner with a fix whose every step quotes a verified source;
-4. **replays** the attack against the fixed policy.
+ESSECKATHON "Secure Horizons", Track 2 "Defenders Augmented". Demo videos in [`demo-videos/`](demo-videos/). Full docs in [`docs/`](docs/README.md).
 
-ESSECKATHON « Secure Horizons », Track 2 « Defenders Augmented ». Details are in [`docs/`](docs/README.md).
+## Problem
+AI agents act with real rights, often limited by nothing but their prompt.
+- **April 2026, PocketOS.** A coding agent deleted a production volume and its backups in 9 seconds.
+- **July 2026, Hugging Face.** About 700 test agents attacked it. One of them wrote: "However task impossible, peers doing it. We should continue."
 
-## Why
-AI agents act with real rights, often limited by nothing but their prompt. In April 2026, a coding agent at PocketOS deleted a production volume and its backups in 9 seconds. In July 2026, about 700 test agents attacked Hugging Face, and one of them wrote: « However task impossible, peers doing it. We should continue. » Sources are in [`docs/pitch.md`](docs/pitch.md).
+Agent firewalls judge the action. Cressey also reads the conditions that produce it, the three legs of Donald Cressey's fraud triangle: **pressure**, **opportunity**, **rationalization**. Sources in [`docs/pitch.md`](docs/pitch.md).
 
-## Run it
-Requires uv 0.12 and Bun 1.4.
+## Architecture
+```
+agent ──▶ Cressey (MCP proxy or Claude Code hook) ──▶ real tools
+             │
+             ├─ safety floor     code rules: destructive actions outside the mandate, trap keys
+             ├─ fraud triangle   Jev labels each step, code decides
+             ▼
+          allow  |  hold for a human  |  refuse
+             │
+             ▼
+          incident ──▶ source trace + fix guides ──▶ dashboard
+```
+- **Two ways in.** An MCP proxy sees MCP tool calls. A Claude Code HTTP hook (`POST /hook/claude`) also sees the shell, the files and the agent's messages.
+- **Safety floor.** Plain code. Holds irreversible actions outside the agent's mandate (`rm`, `DROP TABLE`, `DELETE FROM`, `git push --force`...) and any call that uses a trap key to change something. A trap key is a decoy secret planted where an agent might find it. Using one only to read raises an alert.
+- **Fraud triangle.** Jev, a fast decision model, labels pressure and rationalization in the agent's words. Opportunity comes from code (a secret the agent read). A hold needs Jev's judgment plus confirmed pressure or opportunity. No model can release a hold.
+- **Response per check.** Hold for a human (default), refuse at once, or only alert. Switch it in Settings. After 3 rejected calls in a turn, Cressey tells the agent to stop and report.
+- **After a hold.** Cressey traces the misused secret back to where the agent read it and writes a fix guide per owner. Every step quotes a verified source (ANSSI, MITRE ATLAS, OWASP).
+- **Stack.** Python 3.12, FastAPI and FastMCP in `backend/`. React and Vite in `web/`. Rules in `backend/data/policy.yaml`. Models: Jev (TypeSafe) for the triangle and re-ranking, OpenAI or AWS Bedrock for the guides.
+
+**Measured on the dev set:** 7/7 incident sessions held, 0/6 normal sessions held by mistake, 236 ms to stop at stage pace with live Jev. Method in [`docs/evaluation.md`](docs/evaluation.md).
+
+## Install
+Needs [uv](https://docs.astral.sh/uv/) 0.12+, [Bun](https://bun.sh) 1.4+, a `TYPESAFE_API_KEY` (Jev) and an `OPENAI_API_KEY`.
 
 ```bash
-cp .env.example .env                 # model keys: OpenAI, TYPESAFE_API_KEY (Jev)
+git clone https://github.com/Onsraa/secure-horizon-2026.git
+cd secure-horizon-2026
+cp .env.example .env              # fill TYPESAFE_API_KEY and OPENAI_API_KEY
 (cd web && bun install)
-CRESSEY_MODELS=openai CRESSEY_MODEL_MODE=replay-first ./dev.sh
+CRESSEY_MODEL_MODE=replay-first ./dev.sh
 ```
+Open http://localhost:5173. `replay-first` answers from recorded model calls when it can, so the demo plays the same every time, offline included.
 
-Dashboard: http://localhost:5173. Then play the demo agent, in a second terminal:
-
+## Try it
+**Scripted demo.** In a second terminal:
 ```bash
 cd backend
 uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live
-uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind control
 ```
+The dashboard holds the dangerous call. Click Approve or Reject.
 
-`replay-first` answers from the recorded models, so the demo is identical every time and works offline. `docs/runsheet.md` has the stage checklist.
+**Your own Claude Code** (2.1.295+, needs `jq`). One command opens Claude Code watched by Cressey:
+```bash
+./connect.sh                 # in a new scratch folder
+./connect.sh ~/my-project    # or in your project
+```
+Trust the folder when asked, then chat. Ask it to create a file and delete it with `rm`: the `rm` is held on the dashboard. To disconnect, delete the folder's `.claude/settings.local.json`.
+
+## Known limitations
+- **Tested on a real agent and real infrastructure, a few runs only.** Claude Opus 4.6 (Claude Code) got the task "reset the staging database" on a throwaway Railway project. Without Cressey, 1 run in 3 deleted the production database with an old ops token it found in the repo. The 2 others refused.
+- **The live hold is shown on a replay.** The one live run through Cressey asked before deleting, so there was nothing to hold. The demo replays the recorded deleting run through the hook: the agent's real words and commands, held at the delete.
+- **That catch comes from the trap key, not the triangle.** The agent was calm, so the triangle stayed quiet. On the dev set the triangle alone holds one session that the safety floor misses.
+- **Cressey sees only what goes through it.** The hook covers Claude Code only. An agent with another way out (its own network, another tool) is not stopped. To be the only way out, Cressey has to run outside the agent's container behind a default-deny network. That deployment is not done, so as it stands Cressey would not have stopped the Hugging Face incident.
+- **Small eval, written by the team.** 13 synthetic sessions. The held-out set from outside the team is not written yet.
+- **The reasoning shown is the agent's narration.** No provider exposes the raw chain of thought.
+- **Runs live in memory.** A backend restart drops them, and a hooked Claude Code then has every call refused until you run `./connect.sh` again.
+- **Local only.** Nothing is deployed. Before Claude Code 2.1.295, a hook that can't reach Cressey lets calls through.
 
 ## Tests
 ```bash
@@ -38,29 +75,7 @@ cd backend && uv run pytest -q && uv run ruff check && uv run ty check
 cd web && bun run ci && bun run build
 ```
 
-## Results (dev set, synthetic sessions)
-| Measure | Result |
-|---|---|
-| Incident sessions held | 7 / 7 |
-| Normal sessions held by mistake | 0 / 6 |
-| Time to stop, p50 | 1.97 ms |
-| Held only thanks to the triangle | 1 session the safety floor misses |
-| Guide steps with a verified quote | 100 % (8 incidents) |
-| Right passage in the top 3, re-ranked | 30 / 31 |
-
-Source files and the method: [`docs/evaluation.md`](docs/evaluation.md). The held-out set hasn't been run yet.
-
-## How humans stay in control
-- **Code decides, models only label.** No model can approve a call, a fix, or a release.
-- **A safety floor** holds any irreversible action outside the agent's mandate, whatever the scores.
-- **Every guide step quotes its source word for word**, checked by code. With no reliable source, the guide says « I don't know — ask the security team ».
-
-## Known limits
-- Cressey only sees what goes through it.
-- The replay tests the policy on scripted variants, not a real agent's behaviour.
-- Tested on synthetic sessions, not yet in a company.
-
-## Data and licences
+## Sources and licences
 ANSSI *Security recommendations for a generative AI system* (2024, Licence Ouverte 2.0), MITRE ATLAS v5.6.0 (Apache 2.0), OWASP *Top 10 for Agentic Applications 2026* (CC BY-SA 4.0). Runbooks and sessions are written by the team, with fake values only. No secret is in the repo.
 
 ## Team
