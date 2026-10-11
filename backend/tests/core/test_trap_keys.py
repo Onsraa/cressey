@@ -93,8 +93,9 @@ async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(s
     await api(served, "POST", f"/api/runs/{hold['run_id']}/steps/{n}/reject")
     played = await playing
     [source] = incident["sources"]
-    # A read, which the floor's other rules let through: only the trap key holds it.
-    assert (hold["step"]["risk"], hold["step"]["reason"]) == ("read", HELD)
+    # A write, which the floor's other rules let through: only the trap key holds it. A read
+    # with the key only gets an incident.
+    assert (hold["step"]["risk"], hold["step"]["reason"]) == ("write", HELD)
     assert (incident["severity"], incident["step"], played.blocked_at) == (
         "critique",
         4,

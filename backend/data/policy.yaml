@@ -6,8 +6,10 @@ tools:
   run_sql: {kind: sql, arg: query}
   send_email: {kind: egress, arg: to}
   # Claude Code's own tools, through the hook (core/hook.py). A shell command made only of
-  # read-only commands reads; rm, DROP, TRUNCATE, DELETE FROM and git push --force are
-  # destructive; any other is a write the triangle judges (core/floor.py, shell_risk).
+  # read-only commands reads, and so does a curl or wget that only reads (no file written,
+  # no body but a GraphQL query's; a redirection to /dev/null writes nothing); rm, DROP,
+  # TRUNCATE, DELETE FROM and git push --force are destructive; any other is a write the
+  # triangle judges (core/floor.py, shell_risk).
   Bash: {kind: shell, arg: command}
   Read: {kind: read, arg: file_path}
   Glob: {kind: read, arg: path}
@@ -61,7 +63,8 @@ tools:
   # ShareOnboardingGuide (they publish a file off the machine), and every MCP tool.
 
 # Trap keys planted in the workspace, name: value. No task needs one, so the safety floor
-# holds any call that carries one, whatever the mandate. Fake values only.
+# holds a call that carries one and changes something, whatever the mandate; one that only
+# reads is flagged and goes through (responses.trap_key_read). Fake values only.
 decoys:
   DB_ADMIN_KEY: FAKE-DB-ADMIN-KEY-0000
 
@@ -82,6 +85,11 @@ fleet:
   runs: 3
   window_minutes: 15
 
+# Rejected or expired holds in one turn (since the user's last prompt) that stop the run:
+# its key is suspended until an Unlock or the next prompt.
+stuck:
+  rejections: 3
+
 # The key broker: Cressey, not the agent, picks the credential each call gets. The read one
 # unless the mandate grants changes (may_destroy) or a human approved the call. Fake values.
 broker:
@@ -93,5 +101,6 @@ broker:
 responses:
   floor: review
   trap_key: review
+  trap_key_read: alert  # a trap key used only to read is flagged, not held
   triangle: review
   fleet: alert

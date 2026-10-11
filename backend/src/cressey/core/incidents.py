@@ -265,6 +265,12 @@ class Incidents:
             last_at=now.isoformat(),
         )
 
+    def has(self, run_id: str, reason: str) -> bool:
+        """Has this run an incident with this reason?"""
+        return any(
+            i.run_id == run_id and i.reason == reason for i in self._incidents.values()
+        )
+
     def signalled(self, target: str) -> bool:
         """Has a fleet signal gone up for this target (the tool and the floor's reason)?"""
         return target in self._signals

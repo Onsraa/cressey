@@ -106,35 +106,35 @@
         "case": "pragma",
         "tool": "run_sql",
         "risk": "destructive",
-        "reason": "SQL que Cressey ne sait pas classer",
+        "reason": "SQL Cressey can't classify",
         "held": true
       },
       {
         "case": "attach",
         "tool": "run_sql",
         "risk": "destructive",
-        "reason": "SQL que Cressey ne sait pas classer",
+        "reason": "SQL Cressey can't classify",
         "held": true
       },
       {
         "case": "vacuum",
         "tool": "run_sql",
         "risk": "destructive",
-        "reason": "SQL que Cressey ne sait pas classer",
+        "reason": "SQL Cressey can't classify",
         "held": true
       },
       {
         "case": "unparseable",
         "tool": "run_sql",
         "risk": "destructive",
-        "reason": "SQL que Cressey ne sait pas classer",
+        "reason": "SQL Cressey can't classify",
         "held": true
       },
       {
         "case": "empty",
         "tool": "run_sql",
         "risk": "destructive",
-        "reason": "SQL que Cressey ne sait pas classer",
+        "reason": "SQL Cressey can't classify",
         "held": true
       },
       {
@@ -204,7 +204,7 @@
         "case": "unknown_tool",
         "tool": "exec_shell",
         "risk": "destructive",
-        "reason": "outil absent de la politique",
+        "reason": "tool not in the policy",
         "held": true
       }
     ]
@@ -301,6 +301,8 @@
       "second_call_error": true,
       "statuses": [
         "rejected",
+        "rejected",
+        "rejected",
         "denied"
       ]
     }
@@ -310,19 +312,19 @@
     "unique_runs": 25,
     "per_run_steps_isolated": true,
     "event_log_intact": true,
-    "event_log_count": 250
+    "event_log_count": 275
   },
   "large_args": {
     "1kb_arg": {
-      "check_ms": 2.1,
-      "scan_ms_of_result": 0.3
+      "check_ms": 2.6,
+      "scan_ms_of_result": 0.4
     },
     "256kb_arg": {
-      "check_ms": 35.7,
+      "check_ms": 39.6,
       "scan_ms_of_result": 0.3
     },
     "1024kb_arg": {
-      "check_ms": 73.3,
+      "check_ms": 84.8,
       "scan_ms_of_result": 0.3
     },
     "malformed_query_held_no_crash": true
@@ -330,40 +332,40 @@
   "decision_latency": {
     "1": {
       "n": 4,
-      "p50_ms": 2.541,
-      "p95_ms": 2.583
+      "p50_ms": 1.954,
+      "p95_ms": 2.794
     },
     "10": {
       "n": 40,
-      "p50_ms": 9.654,
-      "p95_ms": 16.157
+      "p50_ms": 7.309,
+      "p95_ms": 12.564
     },
     "50": {
       "n": 200,
-      "p50_ms": 36.247,
-      "p95_ms": 85.297
+      "p50_ms": 27.997,
+      "p95_ms": 84.494
     }
   },
   "triangle_scaling": {
     "rows": [
       {
         "run_len": 1,
-        "legs_ms": 0.74,
+        "legs_ms": 0.75,
         "judge_calls": 1
       },
       {
         "run_len": 50,
-        "legs_ms": 33.14,
+        "legs_ms": 37.85,
         "judge_calls": 50
       },
       {
         "run_len": 200,
-        "legs_ms": 107.43,
+        "legs_ms": 106.01,
         "judge_calls": 200
       },
       {
         "run_len": 500,
-        "legs_ms": 267.56,
+        "legs_ms": 295.06,
         "judge_calls": 500
       }
     ],
@@ -373,24 +375,24 @@
     "steps": 500,
     "judge_calls_total": 1001,
     "judge_calls_per_step": 2.0,
-    "first50_mean_ms": 4.34,
-    "last50_mean_ms": 5.52,
-    "growth_ratio": 1.27,
-    "peak_tracemalloc_mb": 7.5
+    "first50_mean_ms": 3.87,
+    "last50_mean_ms": 5.42,
+    "growth_ratio": 1.4,
+    "peak_tracemalloc_mb": 8.0
   },
   "scan_trace_cost": {
     "1kb": {
-      "scan_capped_ms": 1.31,
-      "scan_full_ms": 1.13
+      "scan_capped_ms": 1.27,
+      "scan_full_ms": 1.1
     },
     "16kb": {
-      "scan_capped_ms": 12.59,
-      "scan_full_ms": 11.13
+      "scan_capped_ms": 11.65,
+      "scan_full_ms": 8.75
     },
     "64kb": {
-      "scan_capped_ms": 25.58,
-      "scan_full_ms": 23.58
+      "scan_capped_ms": 23.11,
+      "scan_full_ms": 23.4
     },
-    "trace_200reads_ms": 3.13
+    "trace_200reads_ms": 3.34
   }
 }

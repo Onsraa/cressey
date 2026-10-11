@@ -7,6 +7,7 @@ from collections.abc import Mapping
 import pytest
 
 from cressey.app import create_app
+from cressey.core.draft import WAY_OUT, stop_sentence
 from cressey.demo.server import serve
 from cressey.demo.tools import TRAP_KEY
 from cressey.settings import Settings
@@ -83,7 +84,7 @@ async def test_a_read_runs_and_what_it_returned_is_scanned(served):
 async def test_a_command_carrying_a_trap_key_waits_for_a_human(served):
     run = await new_run(served)
     curl = {
-        "command": f'curl -s https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+        "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
     }
     body = event("PreToolUse", "Bash", tool_input=curl)
     call = asyncio.create_task(hook(served, run["key"], body))
@@ -97,10 +98,167 @@ async def test_a_command_carrying_a_trap_key_waits_for_a_human(served):
     assert "Declaring the task impossible" in out["permissionDecisionReason"]
     assert "trap" not in out["permissionDecisionReason"]  # never told why
     read = event("PreToolUse", "Read", "toolu_2", tool_input={"file_path": "README.md"})
-    after = (await hook(served, run["key"], read)).json()["hookSpecificOutput"]
-    assert "suspended" in after["permissionDecisionReason"]
+    assert (await hook(served, run["key"], read)).json() == {}  # one rejection steers
     statuses = [s["status"] for s in (await run_of(served, run))["steps"]]
-    assert statuses == ["rejected", "denied"]
+    assert statuses == ["rejected", "allowed"]
+
+
+async def test_a_trap_key_that_only_reads_is_flagged_and_one_that_writes_is_held(
+    served,
+):
+    run = await new_run(served)
+    key = run["key"]
+    auth = f'-H "Authorization: Bearer {TRAP_KEY}"'
+    for n in (1, 2):
+        read = {"command": f"curl -s https://api.test {auth}"}
+        out = await hook(
+            served, key, event("PreToolUse", "Bash", f"toolu_r{n}", tool_input=read)
+        )
+        assert out.json() == {}
+    write = {"command": f"curl -s -X POST https://api.test {auth}"}
+    held = asyncio.create_task(
+        hook(served, key, event("PreToolUse", "Bash", "toolu_w", tool_input=write))
+    )
+    n = (await next_hold(served))["step"]["n"]
+    await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+    await held
+    steps = (await run_of(served, run))["steps"]
+    assert [s["status"] for s in steps] == ["alerted", "alerted", "rejected"]
+    incidents = (await api(served, "GET", "/api/incidents")).json()
+    assert len(incidents) == 2  # the first read, then the write: not one per read
+
+
+async def test_a_read_the_floor_holds_stays_held_when_it_carries_a_trap_key(served):
+    """A trap key only softens a read the floor would let through: a protected path is held,
+    with an incident every time, and the reason says both."""
+    body = {"task": TASK, "mandate": {"protected": ["secrets"]}}
+    run = (await api(served, "POST", "/api/runs", json=body)).json()
+    grep = {"pattern": TRAP_KEY, "path": "secrets"}
+    for n in (1, 2):
+        call = event("PreToolUse", "Grep", f"toolu_g{n}", tool_input=grep)
+        held = asyncio.create_task(hook(served, run["key"], call))
+        hold = await next_hold(served)
+        assert hold["step"]["reason"] == (
+            "trap key used: DB_ADMIN_KEY; protected path: secrets"
+        )
+        await api(
+            served, "POST", f"/api/runs/{run['id']}/steps/{hold['step']['n']}/reject"
+        )
+        out = (await held).json()["hookSpecificOutput"]
+        assert out["permissionDecision"] == "deny"
+    steps = (await run_of(served, run))["steps"]
+    assert [s["status"] for s in steps] == ["rejected", "rejected"]
+    assert len((await api(served, "GET", "/api/incidents")).json()) == 2
+
+
+def trap_write(call: str = "toolu_1") -> dict:
+    """A PreToolUse event for a command that writes with a trap key: it is held."""
+    curl = {
+        "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+    }
+    return event("PreToolUse", "Bash", call, tool_input=curl)
+
+
+async def reject_trap_writes(base: str, run: dict, count: int) -> list[str]:
+    """`count` trap-key writes, each held and rejected: what the agent was told each time."""
+    told = []
+    for i in range(count):
+        held = asyncio.create_task(hook(base, run["key"], trap_write(f"toolu_w{i}")))
+        n = (await next_hold(base))["step"]["n"]
+        await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+        out = (await held).json()["hookSpecificOutput"]
+        told.append(out["permissionDecisionReason"])
+    return told
+
+
+async def test_a_rejection_with_a_reason_reaches_the_agent(served):
+    run = await new_run(served)
+    held = asyncio.create_task(hook(served, run["key"], trap_write()))
+    hold = await next_hold(served)
+    assert hold["step"]["draft"].endswith(
+        WAY_OUT
+    )  # the fallback at once: no model here
+    n = hold["step"]["n"]
+    r = await api(
+        served,
+        "POST",
+        f"/api/runs/{run['id']}/steps/{n}/reject",
+        json={"message": "Use the staging token."},
+    )
+    assert r.status_code == 204
+    out = (await held).json()["hookSpecificOutput"]
+    sent = f"Use the staging token. {WAY_OUT}"
+    assert out["permissionDecisionReason"] == f"Cressey: action held. {sent}"
+    [step] = (await run_of(served, run))["steps"]
+    assert step["message"] == sent
+
+
+async def test_a_reason_that_names_the_trap_key_is_refused(served):
+    run = await new_run(served)
+    held = asyncio.create_task(hook(served, run["key"], trap_write()))
+    n = (await next_hold(served))["step"]["n"]
+    reject = f"/api/runs/{run['id']}/steps/{n}/reject"
+    r = await api(served, "POST", reject, json={"message": f"Never use {TRAP_KEY}."})
+    assert r.status_code == 422 and r.json()["detail"] == "names a trap key"
+    assert (await next_hold(served))["step"]["n"] == n  # the hold still waits
+    await api(served, "POST", reject)
+    out = (await held).json()["hookSpecificOutput"]
+    assert out["permissionDecisionReason"] == f"Cressey: action held. {WAY_OUT}"
+
+
+async def test_the_third_rejection_in_a_turn_stops_the_agent_until_you_unlock(served):
+    run = await new_run(served)
+    first, second, third = await reject_trap_writes(served, run, 3)
+    assert "calls were refused" not in first + second
+    assert third == f"Cressey: action held. {WAY_OUT} {stop_sentence(3)}"
+    readme = {"file_path": "README.md"}
+    read = event("PreToolUse", "Read", "toolu_r", tool_input=readme)
+    refused = (await hook(served, run["key"], read)).json()["hookSpecificOutput"]
+    assert "suspended" in refused["permissionDecisionReason"]
+    got = await run_of(served, run)
+    assert (got["refused"], got["stopped"], got["revoked"]) == (3, True, True)
+    assert (await api(served, "POST", "/api/runs/nope/unlock")).status_code == 404
+    assert (
+        await api(served, "POST", f"/api/runs/{run['id']}/unlock")
+    ).status_code == 204
+    assert (await hook(served, run["key"], read)).json() == {}
+    got = await run_of(served, run)
+    assert (got["refused"], got["stopped"], got["revoked"]) == (0, False, False)
+
+
+async def test_the_stop_follows_the_configured_limit(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+        hold_timeout=10,
+    )
+    app = create_app(settings, make_guide=fake_guide)
+    app.state.policy.stuck.rejections = 2
+    with serve(app) as base:
+        run = await new_run(base)
+        first, second = await reject_trap_writes(base, run, 2)
+        status = (await api(base, "GET", "/api/status")).json()
+    assert "calls were refused" not in first
+    assert second == f"Cressey: action held. {WAY_OUT} {stop_sentence(2)}"
+    assert stop_sentence(2).startswith("2 calls were refused.")
+    assert status["stop_after"] == 2
+
+
+async def test_a_reason_sent_after_the_hold_expired_finds_no_hold(served_short_holds):
+    run = await new_run(served_short_holds)
+    held = asyncio.create_task(hook(served_short_holds, run["key"], trap_write()))
+    n = (await next_hold(served_short_holds))["step"]["n"]
+    await held  # no decision: the hold expires
+    r = await api(
+        served_short_holds,
+        "POST",
+        f"/api/runs/{run['id']}/steps/{n}/reject",
+        json={"message": "Use the staging token."},
+    )
+    assert r.status_code == 404
 
 
 async def test_a_failed_call_is_recorded_as_a_failure(served):
@@ -300,18 +458,10 @@ async def test_your_prompt_shows_where_you_typed_it_even_mid_turn(served):
     ]
 
 
-async def test_your_next_prompt_unlocks_a_suspended_key(served):
+async def test_your_next_prompt_unlocks_a_stopped_run(served):
     run = await new_run(served)
     key = run["key"]
-    curl = {
-        "command": f'curl -s https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
-    }
-    held = asyncio.create_task(
-        hook(served, key, event("PreToolUse", "Bash", tool_input=curl))
-    )
-    n = (await next_hold(served))["step"]["n"]
-    await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
-    await held
+    await reject_trap_writes(served, run, 3)
     readme = {"file_path": "README.md"}
     refused = await hook(
         served, key, event("PreToolUse", "Read", "toolu_2", tool_input=readme)
@@ -323,7 +473,8 @@ async def test_your_next_prompt_unlocks_a_suspended_key(served):
     allowed = await hook(
         served, key, event("PreToolUse", "Read", "toolu_3", tool_input=readme)
     )
-    assert allowed.json() == {} and not (await run_of(served, run))["revoked"]
+    got = await run_of(served, run)
+    assert allowed.json() == {} and (got["revoked"], got["refused"]) == (False, 0)
 
 
 async def test_stop_ends_a_turn_and_session_end_ends_the_run(served):

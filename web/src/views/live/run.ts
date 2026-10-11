@@ -112,6 +112,30 @@ export const levels = (legs: Legs) => ({
 
 export const fmt = (v: number) => v.toFixed(2);
 
+// What the stopped run shows: since the user's last prompt (a message said after k calls
+// sits before call #k+1), or since its start, the calls refused or expired by a human and
+// those that failed, the agent's last words, and the pre-run estimate that the task can
+// fail even when done honestly.
+export function turnEvidence(run: Run): {
+	estimate?: number;
+	refused: Step[];
+	failed: Step[];
+	said?: string;
+} {
+	const prompt = run.messages.findLastIndex((m) => m.role === "user");
+	const since = run.messages[prompt]?.after ?? 0;
+	const turn = run.steps.filter((s) => s.n > since);
+	return {
+		estimate: run.preflight?.scores.impossible,
+		refused: turn.filter(
+			(s) => s.status === "rejected" || s.status === "expired",
+		),
+		failed: turn.filter((s) => s.is_error),
+		said: run.messages.slice(prompt + 1).findLast((m) => m.role === "agent")
+			?.text,
+	};
+}
+
 // The design's grey ramp: a darker cell is a higher score.
 const STOPS = [0.3, 0.46, 0.62, 0.78];
 export const RAMP = ["#f3f3f1", "#d6d6d3", "#a3a3a0", "#5c5c5a", "#1e1e1e"];

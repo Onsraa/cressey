@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as real from "@/api/live";
 import type { Incident, Legs, Run, Step } from "@/api/types";
 import { time } from "@/lib/labels";
+import type { Decision } from "./decide";
 
 // The demo session as the backend serves it, held at #4 (data/sessions/demo-tests-impossibles).
 const NOW = Date.parse("2026-10-10T20:00:00Z");
@@ -65,6 +66,8 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 	kind: "live",
 	started_at: at(-60),
 	revoked: true,
+	refused: 0,
+	stopped: false,
 	way_out_step: 3,
 	read_only_step: 4,
 	steps: [
@@ -121,12 +124,17 @@ const incident: Incident = {
 };
 
 let state: real.Live;
-const live = (runs: Run[], focus: real.Focus = {}): real.Live => ({
+const live = (
+	runs: Run[],
+	focus: real.Focus = {},
+	stop_after = 3,
+): real.Live => ({
 	status: {
 		mode: "guard",
 		model_mode: "live",
 		mcp_path: "/mcp",
 		hook_path: "/hook/claude",
+		stop_after,
 		log: { hash: "h", count: 1, intact: true },
 	},
 	runs,
@@ -144,6 +152,7 @@ const live = (runs: Run[], focus: real.Focus = {}): real.Live => ({
 });
 mock.module("@/api/live", () => ({ ...real, useLive: () => state }));
 const { LiveView } = await import("./LiveView");
+const { Hold, ReasonBox, reasonMax } = await import("./Hold");
 const html = () =>
 	renderToStaticMarkup(<LiveView />).replaceAll("<!-- -->", "");
 
@@ -185,6 +194,9 @@ test("a held call: trace, gauges and the hold with its countdown", () => {
 		"Way out sent to the agent",
 	])
 		expect(out).toContain(s);
+	// Nothing refused, nothing stopped: no count, no stop panel.
+	expect(out).not.toContain(" of 3 refused");
+	expect(out).not.toContain("No path within the mandate so far");
 	expect(out).toMatch(/aria-current="true"[^>]*>\+ Messages</);
 	// Agent text is plain text, never markup.
 	expect(out).toContain("users &lt;b&gt;vide&lt;/b&gt;.");
@@ -216,13 +228,16 @@ test("after the decision: the outcome, the incident link, the contradicted repor
 	for (const s of [
 		"Ended",
 		"Rejected at",
-		"The call did not go through. The run key stays suspended.",
+		"The call did not go through.",
 		"Open incident inc0412",
 		"Final report",
 		"report contradicted by the log",
 	])
 		expect(out).toContain(s);
 	expect(out).not.toContain("safe cancel in");
+	// The session is over: nothing about going on, or about unlocking.
+	expect(out).not.toContain("keep working");
+	expect(out).not.toContain("Unlock");
 });
 
 test("a link to a step selects it in the inspector", () => {
@@ -510,7 +525,7 @@ test("Claude Code: your prompt in the trace and its status in the header", () =>
 	expect(header).toContain("Thinking");
 });
 
-test("Claude Code: after a rejection, your next prompt unlocked the key; the turn's answer is not final", () => {
+test("Claude Code: after a rejection the agent can keep working; the turn's answer is not final", () => {
 	state = live([
 		demo(
 			{ status: "rejected", decided_at: at(-5) },
@@ -518,8 +533,201 @@ test("Claude Code: after a rejection, your next prompt unlocked the key; the tur
 		),
 	]);
 	const out = html();
-	expect(out).toContain("Your prompt unlocked the run key.");
+	expect(out).toContain(
+		"The call did not go through. The agent can keep working within its mandate.",
+	);
+	expect(out).not.toContain("unlocked");
 	expect(out).not.toContain("stays suspended");
 	expect(out).toContain("Last answer");
 	expect(out).not.toContain("Final report");
+});
+
+test("a held call offers Reject, Reject + add reason and Approve", () => {
+	state = live([demo({})]);
+	const out = html();
+	const at = (s: string) => out.indexOf(s);
+	for (const s of ["Reject", "Reject + add reason", "Approve…", "⇧R"])
+		expect(out).toContain(s);
+	expect(at("Reject")).toBeLessThan(at("Reject + add reason"));
+	expect(at("Reject + add reason")).toBeLessThan(at("Approve…"));
+	// The reason box opens on demand.
+	expect(out).not.toContain("<textarea");
+});
+
+// A decision as the box reads it: the reason lives in the hook, not in the box.
+const decision = (over: Partial<Decision> = {}): Decision => ({
+	armed: false,
+	busy: false,
+	error: "",
+	composing: true,
+	text: "",
+	fresh: false,
+	compose: () => {},
+	edit: () => {},
+	focused: () => {},
+	reject: () => {},
+	rejectWith: () => {},
+	approve: () => {},
+	...over,
+});
+const WAY_OUT = "Declaring the task impossible is an accepted answer.";
+// `n` characters, ending with the way out when asked: the backend sees n + 53 characters.
+const ending = (k: number) => `${"x".repeat(k)} ${WAY_OUT}`;
+
+test("the reason box shows what the hook holds, counts it, and gates Send", () => {
+	const box = (text: string, over: Partial<Decision> = {}) => {
+		const out = renderToStaticMarkup(
+			<ReasonBox decision={decision({ text, ...over })} />,
+		).replaceAll("<!-- -->", "");
+		return { out, button: /<button[^>]*>Send/.exec(out)?.[0] ?? "" };
+	};
+	const typed = box("Use the staging token. Stay within the mandate.");
+	expect(typed.out).toContain(
+		"Use the staging token. Stay within the mandate.",
+	);
+	expect(typed.out).toContain("47 / 447");
+	expect(typed.out).toContain('aria-label="Reason sent to the agent"');
+	expect(typed.button).not.toContain("disabled");
+	// Without the way out the backend adds it and a space: 447 of ours fit.
+	expect(box("x".repeat(447)).button).not.toContain("disabled");
+	const over = box("x".repeat(448));
+	expect(over.button).toContain("disabled");
+	expect(over.out).toContain("448 / 447");
+	// With the way out already at the end, the backend adds nothing: 500 fit, as for a draft.
+	const drafted = box(ending(400));
+	expect(drafted.out).toContain("453 / 500");
+	expect(drafted.button).not.toContain("disabled");
+	expect(box(ending(447)).button).not.toContain("disabled");
+	const past = box(ending(448));
+	expect(past.button).toContain("disabled");
+	expect(past.out).toContain("501 / 500");
+	// Trailing space does not count, nor hide the way out.
+	expect(box(`${ending(447)}  `).button).not.toContain("disabled");
+	// Blank is the plain Reject; a send in flight waits.
+	expect(box("  ").button).toContain("disabled");
+	expect(box("Stay.", { busy: true }).button).toContain("disabled");
+});
+
+test("the cap mirrors the backend: 500 with the way out at the end, else 447", () => {
+	expect(reasonMax("Stay within the mandate.")).toBe(447);
+	expect(reasonMax(`Stay within the mandate. ${WAY_OUT}`)).toBe(500);
+	expect(reasonMax(WAY_OUT)).toBe(500);
+	expect(reasonMax(`${WAY_OUT} Stay.`)).toBe(447);
+});
+
+test("back on the HELD tab, the box shows what was typed, not the draft again", () => {
+	const run = demo({ draft: "A model draft." });
+	state = live([run]);
+	const step = run.steps[3];
+	const render = (d: Decision) =>
+		renderToStaticMarkup(
+			<Hold run={run} step={step} decision={d} />,
+		).replaceAll("<!-- -->", "");
+	const out = render(decision({ text: "What the human typed." }));
+	expect(out).toContain("What the human typed.");
+	expect(out).not.toContain("A model draft.");
+	// Closed, no box at all.
+	expect(render(decision({ composing: false }))).not.toContain("<textarea");
+});
+
+test("the reason sent is shown in the outcome", () => {
+	const message =
+		"Use the staging token. Declaring the task impossible is an accepted answer.";
+	state = live([
+		demo(
+			{ status: "rejected", decided_at: at(-5), message },
+			{ revoked: false },
+		),
+	]);
+	const out = html();
+	expect(out).toContain("reason sent to the agent");
+	expect(out).toContain(message);
+	// A plain rejection sent no reason of its own.
+	state = live([
+		demo({ status: "rejected", decided_at: at(-5) }, { revoked: false }),
+	]);
+	expect(html()).not.toContain("reason sent to the agent");
+});
+
+// Three calls refused in a turn: the run stopped.
+const refused = (n: number, query: string) =>
+	call(n, "run_sql", JSON.stringify({ query }), {
+		risk: "destructive",
+		status: "rejected",
+		held_until: at(n - 30),
+		decided_at: at(n - 20),
+		legs: held,
+	});
+const stopped = (stop_after = 3) =>
+	live(
+		[
+			demo(
+				{},
+				{
+					stopped: true,
+					refused: 3,
+					preflight: { scores: { impossible: 0.8 }, facts: [] },
+					steps: [
+						call(1, "run_tests", "{}", { is_error: true, legs: legs(leg(0)) }),
+						call(2, "run_tests", "{}", {
+							is_error: true,
+							legs: legs(leg(0.45)),
+						}),
+						refused(3, "DELETE FROM users"),
+						refused(4, "DROP TABLE users"),
+						refused(5, "TRUNCATE users"),
+					],
+					messages: [
+						{
+							after: 5,
+							text: "I cannot make the tests pass without touching production.",
+							role: "agent" as const,
+							streaming: false,
+							flagged: [],
+						},
+					],
+				},
+			),
+		],
+		{},
+		stop_after,
+	);
+
+test("a stopped run shows why, with Unlock", () => {
+	state = stopped();
+	const out = html();
+	for (const s of ["Stopped", "3 of 3 refused", "Unlock"])
+		expect(out).toContain(s);
+	const panel = out.slice(out.indexOf("No path within the mandate so far"));
+	expect(panel.startsWith("No path")).toBe(true);
+	for (const s of [
+		"0.80",
+		"DELETE FROM users",
+		"DROP TABLE users",
+		"run_tests {}",
+		"I cannot make the tests pass without touching production.",
+	])
+		expect(panel).toContain(s);
+	// Unlock sits under the title, above the evidence, so it shows without scrolling.
+	for (const evidence of ["estimated before the run", "DELETE FROM users"])
+		expect(panel.indexOf("Unlock")).toBeLessThan(panel.indexOf(evidence));
+	// The hold's outcome says the run is stopped and points to Unlock.
+	expect(out).toContain(
+		"The call did not go through. The run is stopped: press Unlock to give the agent its key back.",
+	);
+	expect(out).not.toContain("keep working");
+});
+
+test("the limit shown is the policy's, not three", () => {
+	state = stopped(5);
+	expect(html()).toContain("3 of 5 refused");
+});
+
+test("a run that ended while stopped reads Ended, with no Unlock", () => {
+	state = live([demo({}, { ...stopped().runs[0], ended_at: at(-1) })]);
+	const out = html();
+	expect(out).toContain("Ended");
+	expect(out).not.toContain("Stopped");
+	expect(out).toContain("No path within the mandate so far");
+	expect(out).not.toContain("Unlock");
 });

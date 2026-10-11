@@ -167,6 +167,14 @@ def test_a_path_outside_the_frozen_ones_is_written_freely():
     assert check(WRITE, {"path": "src/app.py"}, FROZEN) == ("write", None)
 
 
+# GraphQL bodies: a query, a mutation, and an introspection query (mutationType is no mutation).
+Q = '{"query":"query { project(id: \\"p1\\") { services { edges { node { id } } } } }"}'
+M = '{"query":"mutation { serviceDelete(id: \\"s1\\") }"}'
+I = '{"query":"{ __schema { mutationType { fields { name } } } }"}'
+C = '{"query":"# volumes\\nquery { a }"}'  # a comment line, then the query
+F = '{"query":"fragment F on V { id } query { ...F }"}'
+
+
 @pytest.mark.parametrize(
     ("command", "risk"),
     [
@@ -178,6 +186,200 @@ def test_a_path_outside_the_frozen_ones_is_written_freely():
         ("rm -rf node_modules", "destructive"),
         ("psql -c 'DELETE FROM users'", "destructive"),
         ("git push --force origin main", "destructive"),
+        # A curl or wget that only reads is a read; any body or method but a query's is a write.
+        ("curl -s https://api.test/v2", "read"),
+        ("curl -sI https://api.test", "read"),
+        (
+            f"curl -s -X POST https://api.test -H 'Content-Type: application/json' -d '{Q}'",
+            "read",
+        ),
+        (f"curl -s https://api.test -d '{I}'", "read"),
+        (
+            f'OPS_TOKEN=abc curl -s "$API" -H "Authorization: Bearer $OPS_TOKEN" -d \'{Q}\'',
+            "read",
+        ),
+        (
+            f"API=https://api.test\n# Check volumes\ncurl -s \"$API\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{Q}'",
+            "read",
+        ),
+        ("export API=https://api.test", "read"),
+        ("sleep 5 && curl -s https://api.test", "read"),
+        ("wget -qO- https://api.test", "read"),
+        (f"curl -s https://api.test -d '{M}'", "write"),
+        ("curl -s -X DELETE https://api.test/v1/volumes/1", "write"),
+        ("curl -s -X POST https://api.test", "write"),
+        (f"curl -s -X PUT https://api.test -d '{Q}'", "write"),
+        ("curl -s https://api.test -d @payload.json", "write"),
+        ('curl -s https://api.test -d "$BODY"', "write"),
+        ("curl -s https://api.test -F file=@a.txt", "write"),
+        ("wget --post-data 'a=1' https://api.test", "write"),
+        ("curl -s https://api.test | python3 -c 'import sys'", "write"),
+        ("source .env.staging && curl -s https://api.test", "write"),
+        # Short options can be glued to their value or to each other.
+        ("curl -sXDELETE https://api.test", "write"),
+        (f"curl -sd '{M}' https://api.test", "write"),
+        (f"curl -s https://api.test -d '{Q}' -d '{M}'", "write"),
+        ("curl -s --data-urlencode 'a=b' https://api.test", "write"),
+        ("wget --post-data='a=1' https://api.test", "write"),
+        ("curl -s 'https://api.test", "write"),
+        ("API=$(curl -s -X POST https://api.test)", "write"),
+        ('curl -s https://api.test -d "{\\"query\\":\\"`cat m.gql`\\"}"', "write"),
+        (r"""curl -s https://api.test -d '{"query":"\u006dutation { a }"}'""", "write"),
+        # Only a GraphQL query (a JSON string value) reads; other bodies with a "query" key don't.
+        (
+            'curl -s -X POST https://es.test/idx/_delete_by_query -d \'{"query":{"match_all":{}}}\'',
+            "write",
+        ),
+        # A write can hide behind a first word that reads.
+        (f"echo $(curl -s -X POST https://api.test -d '{M}')", "write"),
+        (f"echo \"$(curl -s -X POST https://api.test -d '{M}')\"", "write"),
+        (f"echo `curl -s -X POST https://api.test -d '{M}'`", "write"),
+        ("cat <(curl -X DELETE https://api.test/v1/x)", "write"),
+        ("sleep $(curl -X DELETE https://api.test/v1/x)", "write"),
+        ("env curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("env", "read"),
+        ("env | grep TOKEN", "read"),
+        ("find . -name '*.tmp' -delete", "write"),
+        ("find . -exec curl -s -X DELETE https://api.test {} +", "write"),
+        ("find . -name x", "read"),
+        # A single & backgrounds what precedes it and separates commands like ;, && and
+        # redirections (2>&1) don't split.
+        ("echo hi & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("sleep 1 & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("sleep 1 & curl -s https://api.test", "read"),
+        ("ls 2>&1", "read"),
+        # zsh's =(cmd) runs cmd like <(cmd) does.
+        ("cat =(curl -s -X DELETE https://api.test/v1/x)", "write"),
+        # A request's method, body or target can come from elsewhere: a config file, an
+        # expanded option, a second transfer, a command sent over FTP, a wget startup command.
+        ("echo 'request = \"DELETE\"' | curl -K - https://api.test", "write"),
+        ("curl -s --config req.cfg https://api.test", "write"),
+        ("curl -sK req.cfg https://api.test", "write"),
+        ("curl --expand-request DELETE https://api.test", "write"),
+        ("curl --expand-data 'x=1' https://api.test", "write"),
+        ("curl --form-string a=b https://api.test", "write"),
+        (
+            f"curl -d '{Q}' https://api.test/a --next -X POST https://api.test/b",
+            "write",
+        ),
+        (f"curl -d '{Q}' https://api.test/a -: -X POST https://api.test/b", "write"),
+        ("curl -Q 'DELE x' ftp://ftp.test", "write"),
+        ("curl --quote 'DELE x' ftp://ftp.test", "write"),
+        ("wget -e method=DELETE https://api.test", "write"),
+        ("wget -qe method=DELETE -O- https://api.test", "write"),
+        ("wget --execute method=DELETE -O- https://api.test", "write"),
+        # curl -o/-O and a plain wget write a file; only stdout (or /dev/null) reads.
+        ("curl -o ~/.zshrc https://api.test", "write"),
+        ("curl -s --output x.sh https://api.test", "write"),
+        ("curl -O https://api.test/x.sh", "write"),
+        ("curl -sSLO https://api.test/x.sh", "write"),
+        ("curl --remote-name https://api.test/x.sh", "write"),
+        ("curl -s -o /dev/null -w '%{http_code}' https://api.test", "read"),
+        ("curl -s -o - https://api.test", "read"),
+        ("wget https://api.test", "write"),
+        ("wget -O out.html https://api.test", "write"),
+        ("wget -qO out.html https://api.test", "write"),
+        ("wget -O - https://api.test", "read"),
+        ("wget -O- https://api.test", "read"),
+        ("wget --output-document=- https://api.test", "read"),
+        ("wget --output-document - https://api.test", "read"),
+        # Redirections to /dev/null and fd duplications write nothing; any other target does.
+        ("curl -s https://api.test 2>/dev/null", "read"),
+        ("curl -s https://api.test >/dev/null 2>&1", "read"),
+        ("curl -s https://api.test &>/dev/null", "read"),
+        ("curl -s https://api.test >> /dev/null", "read"),
+        ("curl -s https://api.test 2>>/dev/null", "read"),
+        ("echo hi >&2", "read"),
+        ("curl -s https://api.test > out.json", "write"),
+        ("curl -s https://api.test >out.json 2>/dev/null", "write"),
+        ("echo hi >&out.txt", "write"),
+        ("echo hi >/dev/nullx", "write"),
+        ("echo hi >/dev/null/../tmp/x", "write"),
+        ("curl -s -X POST https://api.test -H 'X: FAKE-KEY' 2>/dev/null", "write"),
+        ("echo hi 2>&1 & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo hi &>/dev/null & curl -s -X DELETE https://api.test/v1/x", "write"),
+        # A "query" nested in a non-GraphQL body (Elasticsearch) is no GraphQL query.
+        (
+            'curl -s -X POST https://es.test/idx/_delete_by_query -d \'{"query":{"match":{"title":{"query":"foo"}}}}\'',
+            "write",
+        ),
+        ("curl -s https://api.test -d 'query=foo'", "write"),
+        # A & inside quotes belongs to its argument, not to the shell.
+        ('curl -s "https://x/?a=1&b=2"', "read"),
+        ("curl -s 'https://x/?a=1&b=2'", "read"),
+        ('curl -s https://api.test -H "X: a&b"', "read"),
+        # ...but a quote the shell doesn't see (escaped, in a comment, $'..') hides nothing.
+        ('echo \\" & curl -s -X DELETE https://api.test/v1/x #"', "write"),
+        (
+            "echo a # it's\necho hi & curl -s -X DELETE https://api.test/v1/x & echo 'b'",
+            "write",
+        ),
+        (
+            r"""echo $'it\'s' & curl -s -X DELETE https://api.test/v1/x & echo ' '""",
+            "write",
+        ),
+        # A # starts a comment only at the start of a word: after a blank or ; & | ( ) < >.
+        # Elsewhere (a NBSP or \r is no blank to the shell) it is part of a word.
+        ("ls # it's fine & ok", "read"),
+        (
+            "echo hi;# '\necho x & curl -s -X DELETE https://api.test/v1/x & echo ''",
+            "write",
+        ),
+        (
+            "echo hi |# '\necho x & curl -s -X DELETE https://api.test/v1/x & echo ''",
+            "write",
+        ),
+        ("echo a\u00a0# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo a\r# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        # An escaped character is part of its word: a # after it is no comment (and the line
+        # continuation joins the words, as in the shell).
+        ("echo \\ # & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\;# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\|# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\&# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\(# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\\t# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo a\\\n# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        # What can't be told: a here-document, an open quote, a trailing backslash.
+        ("cat <<EOF\nx\nEOF", "write"),
+        ("echo 'unterminated", "write"),
+        ("echo trailing\\", "write"),
+        # ; | & and ( ) inside quotes are text; outside they separate commands.
+        ("echo 'a; b | c' && ls", "read"),
+        ("(cd src && ls)", "read"),
+        # A mutation is found in the query the server reads, not in the JSON text around it.
+        (
+            'curl -s https://api.test -d \'{"query":"query A { a }\\nmutation B { b }","operationName":"B"}\'',
+            "write",
+        ),
+        (
+            'curl -s https://api.test -d \'{"query":"query A { a }\\tmutation B { b }","operationName":"B"}\'',
+            "write",
+        ),
+        # A body with the key twice is read by the server as it likes: the mutation may win.
+        (
+            'curl -s https://api.test -d \'{"query":"mutation B { b }","query":"query A { a }"}\'',
+            "write",
+        ),
+        # Only a GraphQL query document reads: SQL over HTTP, however it is wrapped, writes.
+        (f"curl -s https://api.test -d '{C}'", "read"),
+        (f"curl -s https://api.test -d '{F}'", "read"),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"UPDATE users SET plan = 1 WHERE id = 1"}\'',
+            "write",
+        ),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"INSERT INTO users (id) VALUES (1)"}\'',
+            "write",
+        ),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"SELECT * FROM users"}\'',
+            "write",
+        ),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"query_log"}\'',
+            "write",
+        ),
     ],
 )
 def test_shell_commands_are_classified(command, risk):
@@ -190,7 +392,7 @@ def test_a_destructive_shell_command_is_held_whatever_the_mandate():
         "destructive",
         "destructive shell command",
     )
-    assert check(shell, {"command": "curl -s https://api.test"}, NONE) == (
+    assert check(shell, {"command": "curl -s https://api.test -d @a.json"}, NONE) == (
         "write",
         None,
     )

@@ -173,8 +173,8 @@ class Runs:
     def prompt(self, run: Run, text: str) -> None:
         """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
         mid-turn. It closes a message cut short by Esc, which Claude Code doesn't report. It
-        unlocks a suspended key, the user being back, but not while a call is still held:
-        that one is decided on the dashboard."""
+        starts a new turn: the count of refused calls resets and a suspended key unlocks, the
+        user being back, but the key waits while a call is still held (see `unlock`)."""
         for key in [k for k in self._streaming if k[0] == run.id]:
             self._streaming.pop(key)[0].streaming = False
         message = Message(
@@ -182,11 +182,22 @@ class Runs:
         )
         run.messages.append(message)
         run.turn = "working"
+        # The log keeps what the user typed, not the flags a model adds later.
         said = message.model_dump(exclude={"labels", "flagged"})
         self.log.append("message", {"run": run.id, **said})
-        if run.revoked and not any(s.status == "held" for s in run.steps):
-            run.revoked, run.unlocked_after = False, len(run.steps)
-            self.log.append("unlocked", {"run": run.id, "after": run.unlocked_after})
+        if run.revoked or run.refused:
+            self.unlock(run)
+
+    def unlock(self, run: Run) -> None:
+        """Reset the count of refused calls and give the key back, the user being back or
+        having chosen to. While a call is still held the key stays suspended: that one is
+        decided on the dashboard, and its rejection counts in the new turn."""
+        run.refused, run.stopped = 0, False
+        held = any(s.status == "held" for s in run.steps)
+        run.revoked = held
+        self.log.append(
+            "unlocked", {"run": run.id, "key": "held" if held else "cleared"}
+        )
 
     def connect(self, run: Run) -> None:
         """A Claude Code session started (or resumed): it waits for a prompt."""
@@ -248,10 +259,11 @@ class Runs:
             for r, n in self._waiting
         ]
 
-    async def hold(self, run: Run, step: Step, timeout: float) -> bool:
+    async def hold(self, run: Run, step: Step, timeout: float, stop_after: int) -> bool:
         """Wait for a human decision; True when this call is approved. The run's key stays
-        revoked while any of its calls is held, rejected or expired: with parallel calls,
-        one approval must not free a key another hold still needs."""
+        revoked while any of its calls is held: with parallel calls, one decision must not
+        free a key another hold still needs. A rejected or expired call counts as refused,
+        and the run stops, key suspended, once `stop_after` calls were refused in a turn."""
         run.revoked = True
         step.status = "held"
         step.held_until = (_now() + timedelta(seconds=timeout)).isoformat()
@@ -270,16 +282,20 @@ class Runs:
                 step.status = "approved" if decision.result() else "rejected"
             step.decided_at = _now().isoformat()
             self._log(run, step, "status", status=step.status)
-        blocking = ("held", "rejected", "expired")
-        others = [s for s in run.steps[run.unlocked_after :] if s is not step]
-        run.revoked = step.status != "approved" or any(
-            s.status in blocking for s in others
-        )
+            # In the finally: a cancelled hold is an expired one, and must not leave the key
+            # suspended with nothing held and no stop.
+            if step.status != "approved":
+                run.refused += 1
+                run.stopped = run.refused >= stop_after
+            run.revoked = run.stopped or any(s.status == "held" for s in run.steps)
         return step.status == "approved"
 
-    def decide(self, run_id: str, n: int, approve: bool) -> bool:
+    def decide(
+        self, run_id: str, n: int, approve: bool, message: str | None = None
+    ) -> bool:
         decision = self._waiting.get((run_id, n))
         if decision is None or decision.done():
             return False
+        self._runs[run_id].steps[n - 1].message = message  # before the agent reads it
         decision.set_result(approve)
         return True

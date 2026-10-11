@@ -3,6 +3,7 @@ leaving, outside the task's mandate. Anything it can't classify counts as destru
 A call that carries a trap key is held whatever the mandate."""
 
 import fnmatch
+import json
 import posixpath
 import re
 from collections.abc import Mapping
@@ -15,12 +16,13 @@ from cressey.core.models import Mandate, Risk, ToolRule
 from cressey.core.trace import decoded, strings
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
-# Shell commands (the Claude Code hook). A command made only of these, with no redirection,
-# reads; one that deletes files, rows or tables, or rewrites history, is destructive; any
-# other is a write the triangle judges.
+# Shell commands (the Claude Code hook). A command made only of these, with no redirection
+# to a file, reads; one that deletes files, rows or tables, or rewrites history, is
+# destructive; any other is a write the triangle judges. A curl or wget that only reads is
+# a read too.
 READ_COMMANDS = {
     "cat", "cd", "diff", "echo", "env", "file", "find", "grep", "head", "jq", "ls",
-    "printenv", "pwd", "rg", "sort", "stat", "tail", "tree", "uniq", "wc", "which",
+    "printenv", "pwd", "rg", "sleep", "sort", "stat", "tail", "tree", "uniq", "wc", "which",
     "git status", "git diff", "git log", "git show", "git branch", "sed -n",
 }  # fmt: skip
 DESTRUCTIVE_COMMAND = re.compile(
@@ -28,7 +30,36 @@ DESTRUCTIVE_COMMAND = re.compile(
     r"|\bgit\s+push\b[^|;&]*(?:--force\b|\s-f\b)|\bgit\s+(?:reset\s+--hard|clean\s)",
     re.IGNORECASE,
 )
-SEGMENT = re.compile(r"\|\|?|&&|;|\n")
+# $(...), `...`, <(...), >(...) and zsh's =(...) run a command wherever they sit, whatever
+# the first word.
+SUBSTITUTION = re.compile(r"\$\(|`|[<>=]\(")
+ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
+# find's actions that run or delete something.
+FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
+MUTATION = re.compile(r"\bmutation\b", re.IGNORECASE)
+GRAPHQL_DOCUMENT = re.compile(r"\{|(?:query|fragment)\b")
+# A body whose text isn't what the server sees: expanded by the shell, or JSON-escaped
+# (\u006dutation). MUTATION is looked for in the decoded query, where \nmutation has a
+# word boundary that the raw JSON hides.
+INDIRECT = re.compile(r"\$|\\u")
+# Options that send a body or a file, or take the request from elsewhere (-K reads a config
+# file, --expand-* expands variables, --next starts a second transfer, -Q runs commands over
+# FTP) or write a local file (--remote-name; -o and -O are read below).
+WRITE_FLAGS = {
+    "-F", "--form", "--form-string", "-T", "--upload-file", "--post-file", "--post-data",
+    "-K", "--config", "-Q", "--quote", "--next", "--remote-name", "--remote-name-all",
+}  # fmt: skip
+WGET_WRITE_FLAGS = {"-e", "--execute"}  # a startup command can set the method or body
+METHOD_FLAGS = {"-X", "--request", "--method"}
+# curl's short options that take a value; in a cluster (-sXPOST, -sd) the first one ends it.
+VALUE_OPTIONS = set("AbcCdDeEFHKmoPQrtTuUwxXyYz")
+WGET_VALUE_OPTIONS = set("eoaiBtOTwQPUlARDIX")
+# curl's short options that write a file (-O) or start a second transfer (-:), with no value.
+BARE_WRITES = set("O:")
+# A redirection that writes nothing: to /dev/null, or duplicating a file descriptor (2>&1).
+HARMLESS_REDIRECT = re.compile(
+    r"(?:&|\d*)>>?\s*/dev/null(?![^\s;&|()])|\d*>&\d+(?![^\s;&|()])"
+)
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
 REPLACE_INTO = re.compile(r"(^|;)(\s*)REPLACE\s+INTO\b", re.IGNORECASE)
 
@@ -81,15 +112,181 @@ def sql_risk(sql: str) -> tuple[Risk, set[str] | None]:
     return risk, tables
 
 
+def _command(words: list[str]) -> list[str]:
+    """The words from the command itself: `export` and NAME=value prefixes dropped."""
+    skip = 0
+    while skip < len(words) and (
+        words[skip] == "export" or ASSIGNMENT.match(words[skip])
+    ):
+        skip += 1
+    return words[skip:]
+
+
+def _http_risk(words: list[str]) -> Risk:
+    """Risk of a curl or wget call: a read unless it uploads, writes a file (a wget reads only
+    into stdout, -O -), or sends a body or method that isn't a GraphQL query's (those travel
+    as POST, so POST alone is not enough to write)."""
+    wget = words[0] == "wget"
+    value_options = WGET_VALUE_OPTIONS if wget else VALUE_OPTIONS
+    output = ("-O", "--output-document") if wget else ("-o", "--output")
+    bodies: list[str] = []
+    post = to_stdout = False
+    rest = iter(words[1:])
+    for word in rest:
+        if word.startswith("--"):
+            flag, _, value = word.partition("=")
+            if flag.startswith("--expand-"):
+                return "write"
+        elif word.startswith("-"):
+            i = next(
+                (i for i, c in enumerate(word) if i and c in value_options), len(word)
+            )
+            if not wget and BARE_WRITES & set(word[1:i]):
+                return "write"
+            if i == len(word):
+                continue
+            flag, value = "-" + word[i], word[i + 1 :]
+        else:
+            continue
+        if flag in WRITE_FLAGS or (wget and flag in WGET_WRITE_FLAGS):
+            return "write"
+        if flag in output:
+            if (value or next(rest, "")) not in ("-", "/dev/null"):
+                return "write"
+            to_stdout = True
+        elif flag in METHOD_FLAGS:
+            method = (value or next(rest, "")).upper()
+            if method not in ("GET", "HEAD", "POST"):
+                return "write"
+            post = post or method == "POST"
+        elif flag in ("-d", "--json") or flag.startswith("--data"):
+            bodies.append(value or next(rest, ""))
+    if (wget and not to_stdout) or (post and not bodies):
+        return "write"
+    return "read" if all(map(_is_query, bodies)) else "write"
+
+
+def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """json.loads's object hook for a body: a key given twice is read as the server likes."""
+    if len({key for key, _ in pairs}) != len(pairs):
+        raise ValueError("duplicate key")
+    return dict(pairs)
+
+
+def _is_document(text: str) -> bool:
+    """Whether a string opens like a GraphQL query document: after blank and `#` comment
+    lines, a `{`, `query` or `fragment`. SQL sent over HTTP ({"query": "UPDATE ..."}) doesn't."""
+    lines = (line.strip() for line in text.splitlines())
+    first = next((line for line in lines if line and not line.startswith("#")), "")
+    return bool(GRAPHQL_DOCUMENT.match(first))
+
+
+def _is_query(body: str) -> bool:
+    """An inline GraphQL query, not a mutation: a JSON object whose top-level "query" is a
+    query document (an Elasticsearch {"query": {...}} is not)."""
+    try:
+        parsed = json.loads(body, object_pairs_hook=_unique)
+    except ValueError:
+        return False
+    return (
+        isinstance(parsed, dict)
+        and isinstance(parsed.get("query"), str)
+        and _is_document(parsed["query"])
+        and not INDIRECT.search(body)
+        and not MUTATION.search(parsed["query"])
+    )
+
+
+def _reads(words: list[str]) -> bool:
+    """Whether a command other than curl or wget only reads (see READ_COMMANDS)."""
+    if not {words[0], " ".join(words[:2])} & READ_COMMANDS:
+        return False
+    if words[0] == "env":  # env running a command
+        return not _command(words[1:])
+    if words[0] == "find":
+        return not FIND_ACTIONS & set(words)
+    return True
+
+
+def _simple_commands(command: str) -> list[list[str]] | None:
+    """The words of each simple command of a shell command line, read as POSIX shells do:
+    blanks are space and tab; newline ; & | ( ) end a command; backslash, '...', "..." and
+    $'...' quote; backslash-newline joins; a # starts a comment only at the start of a word.
+    None when the line can't be told: a here-document, an open quote, a trailing backslash,
+    an escape in $'...'. (shlex won't do: it reads a#b, and a # after an escaped blank,
+    as comments.)"""
+    commands: list[list[str]] = [[]]
+    word: str | None = None  # the word being read; '' is a word too
+    i, n = 0, len(command)
+    while i < n:
+        c = command[i]
+        # >& and &> are redirections, not a separator (bash and zsh read &> that way).
+        if command.startswith(("&>", ">&"), i):
+            word = (word or "") + command[i : i + 2]
+            i += 2
+        elif c in " \t\n;&|()":
+            if word is not None:
+                commands[-1].append(word)
+                word = None
+            if c not in " \t":
+                commands.append([])
+            i += 1
+        elif c == "#" and word is None:
+            end = command.find("\n", i)
+            i = n if end < 0 else end
+        elif command.startswith("<<", i):
+            return None
+        elif c == "\\":
+            if i + 1 == n:
+                return None
+            if command[i + 1] != "\n":
+                word = (word or "") + command[i + 1]
+            i += 2
+        elif c == "'" or command.startswith("$'", i):
+            ansi = c == "$"
+            start = i + (2 if ansi else 1)
+            end = command.find("'", start)
+            if end < 0 or (ansi and "\\" in command[start:end]):
+                return None
+            word = (word or "") + command[start:end]
+            i = end + 1
+        elif c == '"':
+            word = word or ""
+            i += 1
+            while i < n and command[i] != '"':
+                ch = command[i]
+                if ch == "\\" and i + 1 < n and command[i + 1] in '"\\$`\n':
+                    i += 1
+                    ch = "" if command[i] == "\n" else command[i]
+                word += ch
+                i += 1
+            if i == n:
+                return None
+            i += 1
+        else:
+            word = (word or "") + c
+            i += 1
+    if word is not None:
+        commands[-1].append(word)
+    return [words for words in commands if words]
+
+
 def shell_risk(command: str) -> Risk:
     """Risk of a shell command, from the commands it runs (see READ_COMMANDS)."""
     if DESTRUCTIVE_COMMAND.search(command):
         return "destructive"
-    if ">" in command:
+    simple = _simple_commands(command)
+    redirects = HARMLESS_REDIRECT.sub(" ", command)
+    if simple is None or ">" in redirects or SUBSTITUTION.search(command):
         return "write"
-    for segment in SEGMENT.split(command):
-        words = segment.split()
-        if words and not {words[0], " ".join(words[:2])} & READ_COMMANDS:
+    for words in map(_command, simple):
+        if not words:
+            continue
+        if words[0] in ("curl", "wget"):
+            risk = _http_risk(words)
+            if risk != "read":
+                return risk
+        elif not _reads(words):
             return "write"
     return "read"
 

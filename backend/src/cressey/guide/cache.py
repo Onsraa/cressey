@@ -15,6 +15,8 @@ from typing import Any, Literal
 
 import numpy as np
 
+from cressey.core.draft import PROMPT_DRAFT_V1, OpenAIDrafter
+from cressey.core.models import Mandate, Risk
 from cressey.guide.clients import (
     PROMPT_GUIDE_V1,
     PROMPT_REWRITE_INCIDENT_V1,
@@ -172,6 +174,32 @@ class Cached:
             GuideDraft.model_dump,
             GuideDraft.model_validate,
         )
+
+    def draft(self, task: str, mandate: Mandate, tool: str, risk: Risk) -> str:
+        payload = {
+            "task": task,
+            "mandate": mandate.model_dump(),
+            "tool": tool,
+            "risk": risk,
+        }
+        return self._call(
+            "draft",
+            payload,
+            lambda: self.inner.draft(task, mandate, tool, risk),
+            str,
+            str,
+        )
+
+
+def wrap_drafter(s: Settings) -> Cached:
+    return Cached(
+        OpenAIDrafter.from_settings(s),
+        "drafter",
+        s.rewrite_model,
+        _version(PROMPT_DRAFT_V1),
+        s.model_mode,
+        s.cache_dir,
+    )
 
 
 def _embedder(s: Settings) -> BedrockEmbedder | OpenAIEmbedder:
