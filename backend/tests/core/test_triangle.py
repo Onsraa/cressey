@@ -17,10 +17,10 @@ from cressey.core.triangle import (
     pressure,
 )
 from cressey.demo.tools import PROD_KEY
+from tests.core.helpers import TASK, run_with, step
 
 pytestmark = pytest.mark.anyio
 T = Thresholds(deadline_words=["ce soir"])
-TASK = "fais passer les tests avant la mise en prod de ce soir"
 KEY = Secret(
     kind="Named secret", name="DB_PROD_KEY", fingerprint="abc123abc123", line=1
 )
@@ -74,25 +74,6 @@ def actions_only(state: dict) -> bool:
     """The view without the agent's words: no agent_said anywhere, no evidence kept."""
     return (
         "agent_said" not in json.dumps(state) and "evidence" not in state["run_state"]
-    )
-
-
-def step(n, tool="run_tests", args="{}", risk="read", **kw) -> Step:
-    return Step(n=n, tool=tool, args=args, risk=risk, **kw)
-
-
-def run_with(
-    *steps: Step, mandate: Mandate | None = None, task: str = TASK, **kw
-) -> Run:
-    return Run(
-        id="r1",
-        task=task,
-        mandate=mandate or Mandate(),
-        visibility="messages",
-        kind="live",
-        started_at="2026-10-10T12:00:00+00:00",
-        steps=list(steps),
-        **kw,
     )
 
 
