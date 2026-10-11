@@ -16,9 +16,10 @@ from cressey.core.models import Mandate, Risk, ToolRule
 from cressey.core.trace import decoded, strings
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
-# Shell commands (the Claude Code hook). A command made only of these, with no redirection,
-# reads; one that deletes files, rows or tables, or rewrites history, is destructive; any
-# other is a write the triangle judges. A curl or wget that only reads is a read too.
+# Shell commands (the Claude Code hook). A command made only of these, with no redirection
+# to a file, reads; one that deletes files, rows or tables, or rewrites history, is
+# destructive; any other is a write the triangle judges. A curl or wget that only reads is
+# a read too.
 READ_COMMANDS = {
     "cat", "cd", "diff", "echo", "env", "file", "find", "grep", "head", "jq", "ls",
     "printenv", "pwd", "rg", "sleep", "sort", "stat", "tail", "tree", "uniq", "wc", "which",
@@ -41,10 +42,24 @@ GRAPHQL_DOCUMENT = re.compile(r"\{|(?:query|fragment)\b")
 # (\u006dutation). MUTATION is looked for in the decoded query, where \nmutation has a
 # word boundary that the raw JSON hides.
 INDIRECT = re.compile(r"\$|\\u")
-WRITE_FLAGS = {"-F", "--form", "-T", "--upload-file", "--post-file", "--post-data"}
+# Options that send a body or a file, or take the request from elsewhere (-K reads a config
+# file, --expand-* expands variables, --next starts a second transfer, -Q runs commands over
+# FTP) or write a local file (--remote-name; -o and -O are read below).
+WRITE_FLAGS = {
+    "-F", "--form", "--form-string", "-T", "--upload-file", "--post-file", "--post-data",
+    "-K", "--config", "-Q", "--quote", "--next", "--remote-name", "--remote-name-all",
+}  # fmt: skip
+WGET_WRITE_FLAGS = {"-e", "--execute"}  # a startup command can set the method or body
 METHOD_FLAGS = {"-X", "--request", "--method"}
 # curl's short options that take a value; in a cluster (-sXPOST, -sd) the first one ends it.
 VALUE_OPTIONS = set("AbcCdDeEFHKmoPQrtTuUwxXyYz")
+WGET_VALUE_OPTIONS = set("eoaiBtOTwQPUlARDIX")
+# curl's short options that write a file (-O) or start a second transfer (-:), with no value.
+BARE_WRITES = set("O:")
+# A redirection that writes nothing: to /dev/null, or duplicating a file descriptor (2>&1).
+HARMLESS_REDIRECT = re.compile(
+    r"(?:&|\d*)>>?\s*/dev/null(?![^\s;&|()])|\d*>&\d+(?![^\s;&|()])"
+)
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
 REPLACE_INTO = re.compile(r"(^|;)(\s*)REPLACE\s+INTO\b", re.IGNORECASE)
 
@@ -108,31 +123,45 @@ def _command(words: list[str]) -> list[str]:
 
 
 def _http_risk(words: list[str]) -> Risk:
-    """Risk of a curl or wget call: a read unless it uploads, or sends a body or method that
-    isn't a GraphQL query's (those travel as POST, so POST alone is not enough to write)."""
+    """Risk of a curl or wget call: a read unless it uploads, writes a file (a wget reads only
+    into stdout, -O -), or sends a body or method that isn't a GraphQL query's (those travel
+    as POST, so POST alone is not enough to write)."""
+    wget = words[0] == "wget"
+    value_options = WGET_VALUE_OPTIONS if wget else VALUE_OPTIONS
+    output = ("-O", "--output-document") if wget else ("-o", "--output")
     bodies: list[str] = []
-    post = False
+    post = to_stdout = False
     rest = iter(words[1:])
     for word in rest:
         if word.startswith("--"):
             flag, _, value = word.partition("=")
+            if flag.startswith("--expand-"):
+                return "write"
         elif word.startswith("-"):
-            i = next((i for i, c in enumerate(word) if i and c in VALUE_OPTIONS), None)
-            if i is None:
+            i = next(
+                (i for i, c in enumerate(word) if i and c in value_options), len(word)
+            )
+            if not wget and BARE_WRITES & set(word[1:i]):
+                return "write"
+            if i == len(word):
                 continue
             flag, value = "-" + word[i], word[i + 1 :]
         else:
             continue
-        if flag in WRITE_FLAGS:
+        if flag in WRITE_FLAGS or (wget and flag in WGET_WRITE_FLAGS):
             return "write"
-        if flag in METHOD_FLAGS:
+        if flag in output:
+            if (value or next(rest, "")) not in ("-", "/dev/null"):
+                return "write"
+            to_stdout = True
+        elif flag in METHOD_FLAGS:
             method = (value or next(rest, "")).upper()
             if method not in ("GET", "HEAD", "POST"):
                 return "write"
             post = post or method == "POST"
         elif flag in ("-d", "--json") or flag.startswith("--data"):
             bodies.append(value or next(rest, ""))
-    if post and not bodies:
+    if (wget and not to_stdout) or (post and not bodies):
         return "write"
     return "read" if all(map(_is_query, bodies)) else "write"
 
@@ -191,7 +220,11 @@ def _simple_commands(command: str) -> list[list[str]] | None:
     i, n = 0, len(command)
     while i < n:
         c = command[i]
-        if c in " \t\n;&|()":
+        # >& and &> are redirections, not a separator (bash and zsh read &> that way).
+        if command.startswith(("&>", ">&"), i):
+            word = (word or "") + command[i : i + 2]
+            i += 2
+        elif c in " \t\n;&|()":
             if word is not None:
                 commands[-1].append(word)
                 word = None
@@ -243,7 +276,8 @@ def shell_risk(command: str) -> Risk:
     if DESTRUCTIVE_COMMAND.search(command):
         return "destructive"
     simple = _simple_commands(command)
-    if simple is None or ">" in command or SUBSTITUTION.search(command):
+    redirects = HARMLESS_REDIRECT.sub(" ", command)
+    if simple is None or ">" in redirects or SUBSTITUTION.search(command):
         return "write"
     for words in map(_command, simple):
         if not words:
