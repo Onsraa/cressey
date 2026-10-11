@@ -300,7 +300,7 @@ function Text({
 				<Kicker pinned={pinned} />
 				<div className="flex min-w-0 items-baseline gap-2.5">
 					<span className="truncate font-medium font-mono text-[15px]">
-						{row.kind === "report" ? reportLabel(run) : you ? "You" : "Message"}
+						{row.kind === "report" ? reportLabel(run) : you ? "You" : "Thought"}
 					</span>
 				</div>
 			</div>

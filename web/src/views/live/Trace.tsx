@@ -99,7 +99,7 @@ export function Trace({
 						</span>
 						<span className="font-medium text-[15px]">No calls yet</span>
 						<span className="max-w-[230px] text-[13px] text-mute-2 leading-[1.45]">
-							Every call, message and report lands here; calls are scored on the
+							Every call, thought and report lands here; calls are scored on the
 							three legs.
 						</span>
 					</div>
@@ -202,7 +202,7 @@ function TextRow({
 			<span className="flex min-w-0 flex-col gap-[3px]">
 				<span className="flex min-w-0 items-center gap-1.5">
 					<span className="truncate font-medium font-mono text-[12.5px]">
-						{report ? reportLabel(run) : you ? "You" : "Message"}
+						{report ? reportLabel(run) : you ? "You" : "Thought"}
 					</span>
 					{!focusMode && (
 						<span

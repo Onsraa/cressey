@@ -40,6 +40,16 @@ Consequences:
 
 A thought is scored as soon as its sentence ends, while the agent is still streaming. The call that follows waits only for its last thought.
 
+**One "Thought" for every source of the agent's words** (decided 2026-10-11; the dashboard already labels the rows "Thought"). Whatever the platform exposes becomes the same kind of row, tagged by where it came from:
+
+| Source | Example | Trust |
+|---|---|---|
+| `narration` | Claude Code's visible text (`MessageDisplay`) | what the agent chose to show |
+| `summary` | a provider's summary of the hidden reasoning (Claude's `summarized` display, OpenAI's reasoning summary) | rewritten by the provider, weighted below raw reasoning (Meinke24) |
+| `reasoning` | the raw chain of thought of an open-weight model (gpt-oss on Bedrock returns it, measured 2026-10-11) | the closest to what drove the act, still not complete (Chen25) |
+
+The indicators, the case file and the decision are the same for every source. The tag is shown on the row and kept with each event. No source can clear an act.
+
 ## 4. The model: Cressey's sequence, not three gauges
 
 Cressey (1953) found that trusted people became violators when three things held, in this order:
