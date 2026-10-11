@@ -1,11 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import type { Legs, Run, Step } from "@/api/types";
+import { byWords, level } from "@/lib/labels";
 import { phaseOf } from "./Header";
 import { layout, pos } from "./pixels";
-import { agg, bar, callText, carried, originText, RAMP, rows } from "./run";
+import {
+	agg,
+	bar,
+	callText,
+	carried,
+	levels,
+	originText,
+	RAMP,
+	rows,
+} from "./run";
 
 // A message's fields beyond its text, role and streaming: where the words come from, and the thoughts cut from them.
-const words = { source: "narration" as const, thoughts: [], read: 0 };
+const words = {
+	source: "narration" as const,
+	thoughts: [],
+	read: 0,
+	labels: null,
+	flagged: [],
+};
 
 const step = (
 	n: number,
@@ -165,10 +181,16 @@ describe("triangle", () => {
 });
 
 describe("the gauges", () => {
-	const leg = (score: number, confirmed = false, facts: string[] = []) => ({
+	const leg = (
+		score: number,
+		confirmed = false,
+		facts: string[] = [],
+		words: number | null = null,
+	) => ({
 		score,
 		confirmed,
 		facts,
+		words,
 	});
 	const scored = (n: number, l: Legs) => ({
 		step: step(n, "t", "{}"),
@@ -196,6 +218,29 @@ describe("the gauges", () => {
 		expect(a.opportunity.score).toBe(0.9);
 		expect(a.opportunity.confirmed).toBe(false);
 	});
+	test("each leg's highest words, kept apart from its score and never lowered", () => {
+		const a = agg([
+			scored(1, {
+				pressure: leg(0, false, [], 0.4),
+				opportunity: leg(0),
+				rationalization: leg(0, false, [], 0.7),
+			}),
+			scored(2, {
+				pressure: leg(0, false, [], 0.9),
+				opportunity: leg(0),
+				rationalization: leg(0),
+			}),
+			scored(3, {
+				pressure: leg(0.1, false, [], 0.2),
+				opportunity: leg(0),
+				rationalization: leg(0),
+			}),
+		]);
+		expect(a.pressure.words).toBe(0.9);
+		expect(a.pressure.score).toBe(0.1);
+		expect(a.rationalization.words).toBe(0.7);
+		expect(a.opportunity.words).toBe(0);
+	});
 	test("a bar fills up to the score, darker toward its end", () => {
 		const b = bar(0.5, 10);
 		expect(b.filter(Boolean)).toHaveLength(5);
@@ -203,6 +248,36 @@ describe("the gauges", () => {
 		expect(b[4]).toBe(RAMP[2]);
 		expect(b[5]).toBeNull();
 		expect(bar(1, 10)[9]).toBe(RAMP[4]);
+	});
+});
+
+describe("what a leg shows", () => {
+	const of = (score: number, words?: number | null) => ({ score, words });
+	test("the higher of its score and the agent's words, tagged only when the words lead", () => {
+		expect(level(of(0, 0.9))).toBe(0.9);
+		expect(level(of(0.8, 0.2))).toBe(0.8);
+		expect(level(of(0.3))).toBe(0.3);
+		expect(level(of(0.3, null))).toBe(0.3);
+		expect(byWords(of(0, 0.9))).toBe(true);
+		expect(byWords(of(0.8, 0.2))).toBe(false);
+		expect(byWords(of(0.5, 0.5))).toBe(false); // a tie is the facts'
+		expect(byWords(of(0.3))).toBe(false);
+		expect(byWords(of(0, null))).toBe(false);
+	});
+	test("a call lands and is charted at those levels", () => {
+		const leg = (score: number, words?: number | null) => ({
+			score,
+			confirmed: false,
+			facts: [],
+			words,
+		});
+		expect(
+			levels({
+				pressure: leg(0, 0.9),
+				opportunity: leg(0.1),
+				rationalization: leg(0.6, 0.4),
+			}),
+		).toEqual({ p: 0.9, o: 0.1, r: 0.6 });
 	});
 });
 
@@ -253,6 +328,7 @@ describe("the run's status", () => {
 			text: "I'll",
 			role: "agent" as const,
 			streaming: true,
+			flagged: [],
 		};
 		expect(phaseOf(quiet({ turn: "working", messages: [writing] }))).toBe(
 			"writing",

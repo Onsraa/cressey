@@ -139,16 +139,23 @@ class Runs:
         step.status = status
         self._log(run, step, "status", status=status)
 
-    def say(self, run: Run, text: str) -> None:
+    def say(self, run: Run, text: str) -> Message:
         message = Message(after=len(run.steps), text=redact(text, run.known))
         run.messages.append(message)
-        self.log.append("message", {"run": run.id, **message.model_dump()})
+        # The log keeps what the agent said, not the flags a model adds later.
+        said = message.model_dump(
+            exclude={"labels", "flagged", "source", "thoughts", "read"}
+        )
+        self.log.append("message", {"run": run.id, **said})
+        return message
 
-    def stream(self, run: Run, message_id: str, delta: str, final: bool) -> None:
+    def stream(
+        self, run: Run, message_id: str, delta: str, final: bool
+    ) -> Message | None:
         """A streamed slice of the agent's words (Claude Code's MessageDisplay hook). Deltas
         for one message grow one Message in place, placed after the calls made before it, so
         the dashboard shows the reasoning as it is produced and the next call's judgment
-        reads it. Logged once, when the message is final."""
+        reads it. Logged once, when the message is final, and returned then."""
         key = (run.id, message_id)
         message, raw = self._streaming.get(
             key, (Message(after=len(run.steps), text=""), "")
@@ -160,7 +167,12 @@ class Runs:
         self._streaming[key] = (message, raw)
         if final:
             del self._streaming[key]
-            self.log.append("message", {"run": run.id, **message.model_dump()})
+            said = message.model_dump(
+                exclude={"labels", "flagged", "source", "thoughts", "read"}
+            )
+            self.log.append("message", {"run": run.id, **said})
+            return message
+        return None
 
     def prompt(self, run: Run, text: str) -> None:
         """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
@@ -174,7 +186,10 @@ class Runs:
         )
         run.messages.append(message)
         run.turn = "working"
-        self.log.append("message", {"run": run.id, **message.model_dump()})
+        said = message.model_dump(
+            exclude={"labels", "flagged", "source", "thoughts", "read"}
+        )
+        self.log.append("message", {"run": run.id, **said})
         if run.revoked and not any(s.status == "held" for s in run.steps):
             run.revoked, run.unlocked_after = False, len(run.steps)
             self.log.append("unlocked", {"run": run.id, "after": run.unlocked_after})

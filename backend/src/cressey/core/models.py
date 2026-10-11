@@ -147,6 +147,10 @@ class Leg(BaseModel):
     score: float  # 0 to 1, for the gauge
     confirmed: bool  # facts observed by code confirm it
     facts: list[str]
+    # What the agent's words say of this leg, 0 to 1. Display only: no hold, key or incident
+    # reads it; None when no message before the call was read. A flag that lands after the
+    # call raises it, never lowers it.
+    words: float | None = None
 
 
 class Legs(BaseModel):
@@ -257,6 +261,11 @@ class Message(BaseModel):
     source: WordSource = "narration"
     thoughts: list[str] = []  # the text of each thought
     read: int = 0  # how many of the thoughts are already read
+    # The decision model's read of the finished message, display only: its score for each
+    # question, and the legs ("pressure", "rationalization") it reaches the ledger's floors
+    # for. None / empty until read, when no model answers, and for the user's prompts.
+    labels: dict[str, float] | None = None
+    flagged: list[str] = []
 
 
 class Preflight(BaseModel):

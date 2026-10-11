@@ -12,14 +12,14 @@ import {
 	Minus,
 	Triangle,
 } from "@/components/icons";
-import { LEGS, TONE } from "@/lib/labels";
+import { byWords, LEGS, level, TONE } from "@/lib/labels";
 import { animIn, useGlide, useOnChange } from "@/lib/motion";
 import { Chart } from "./Chart";
 import { Field, type Hover } from "./Field";
 import type { Phase } from "./Header";
 import type { Scene } from "./pixels";
 import { type Agg, fmt, type Scored, TRAP } from "./run";
-import { Bar, type LegLook, Letter } from "./ui";
+import { Bar, FromWords, type LegLook, Letter } from "./ui";
 import { Waiting } from "./Waiting";
 
 export type CenterTab = "triangle" | "time";
@@ -122,9 +122,9 @@ export function Center({
 	const shown = focusMode ? "triangle" : tab;
 	useOnChange(shown, () => animIn(box.current, "[data-pane]"));
 	const glide = useGlide(
-		agg.pressure.score,
-		agg.opportunity.score,
-		agg.rationalization.score,
+		level(agg.pressure),
+		level(agg.opportunity),
+		level(agg.rationalization),
 	);
 	const score: Record<LegName, number> = {
 		pressure: glide.p,
@@ -223,8 +223,9 @@ export function Center({
 	);
 }
 
-// A leg: its highest score so far, gliding to each new one, whether facts confirm it, the
-// facts in a popover, and what Cressey did about it on its own.
+// A leg: its highest level so far, gliding to each new one, where it comes from when the
+// agent's words lead, whether facts confirm it, the facts in a popover, and what Cressey did
+// about it on its own.
 function Gauge({
 	g,
 	agg,
@@ -283,6 +284,7 @@ function Gauge({
 						</div>
 					</details>
 				)}
+				{byWords(agg[g.k]) && <FromWords g={g} />}
 			</div>
 			{auto.length > 0 && (
 				<div className="flex flex-col items-start gap-1">

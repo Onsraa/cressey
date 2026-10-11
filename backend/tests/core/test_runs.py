@@ -123,3 +123,18 @@ def test_a_run_serves_its_case_and_messages_their_source():
     assert Message(after=0, text="hi").source == "narration"
     assert TextIn(text="x", source="reasoning").source == "reasoning"
     assert Thresholds().thoughts["R"] == 0.2 and Thresholds().thoughts["about"] == 0.5
+
+
+def test_the_log_keeps_who_said_it_not_the_flags():
+    """A message is logged with its role, never with the flags a model adds later."""
+    runs = Runs(EventLog())
+    run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)
+    assert run is not None
+    runs.say(run, "I'll look first.")
+    runs.stream(run, "m1", "Then I'll clean.", True)
+    runs.prompt(run, "stop")
+    logged = [e.data for e in runs.log.events if e.kind == "message"]
+    assert [sorted(d) for d in logged] == [
+        ["after", "role", "run", "streaming", "text"]
+    ] * 3
+    assert [d["role"] for d in logged] == ["agent", "agent", "user"]

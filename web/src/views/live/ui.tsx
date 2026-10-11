@@ -1,6 +1,14 @@
 import type { ReactNode } from "react";
 import type { Step } from "@/api/types";
-import { type LEGS, RISK, type Shown, STATUS, TONE } from "@/lib/labels";
+import { MessageSquare } from "@/components/icons";
+import {
+	FROM_WORDS,
+	type LEGS,
+	RISK,
+	type Shown,
+	STATUS,
+	TONE,
+} from "@/lib/labels";
 import { bar } from "./run";
 
 export type LegLook = (typeof LEGS)[number];
@@ -96,6 +104,27 @@ export function RiskChip({ risk }: { risk: Step["risk"] }) {
 		<span className={`${chip} h-[22px] px-[7px] ${TONE[tone]}`}>
 			<Icon size={11} />
 			{label}
+		</span>
+	);
+}
+
+// The tag on a level the agent's words lead, not the facts: display only.
+export function FromWords({
+	g,
+	className = "",
+}: {
+	g: LegLook;
+	className?: string;
+}) {
+	return (
+		<span
+			data-tip={`${g.name} read from what the agent said, not from the log.\nIt confirms nothing and holds nothing.`}
+			className={`inline-flex min-h-[22px] max-w-full items-start gap-1 text-pretty border px-1.5 py-[3px] font-mono text-[11px] leading-[1.3] ${TONE.grey} ${className}`}
+		>
+			<span className="mt-px inline-flex flex-none">
+				<MessageSquare size={11} />
+			</span>
+			<span className="min-w-0">{FROM_WORDS}</span>
 		</span>
 	);
 }

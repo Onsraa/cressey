@@ -14,7 +14,7 @@ from cressey.core.models import Step
 from cressey.core.proxy import Guard
 from cressey.core.runs import Runs
 from cressey.core.trace import strings
-from cressey.core.triangle import report_check
+from cressey.core.triangle import flag_soon, report_check
 
 router = APIRouter()
 HOOK_PATH = "/hook/claude"
@@ -42,7 +42,8 @@ async def claude_hook(
 
     - Each Claude Code session on the key gets its own run: /clear starts a new session.
     - MessageDisplay streams a slice of the agent's reasoning; it grows one message live, so
-      the dashboard shows it as it is produced and the next call's judgment reads it.
+      the dashboard shows it as it is produced and the next call's judgment reads it. The
+      decision model flags the message once it is final.
     - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key.
     - PreToolUse gets Cressey's decision: nothing when the call may run, a deny with the way
       out when it may not.
@@ -71,12 +72,14 @@ async def claude_hook(
         runs.prompt(run, event.get("prompt") or "")
         return {}
     if kind == "MessageDisplay":
-        runs.stream(
+        done = runs.stream(
             run,
             str(event.get("message_id", "")),
             event.get("delta") or "",
             bool(event.get("final")),
         )
+        if done is not None:  # a message is read once it is whole, never in slices
+            flag_soon(run, done, request.app.state.judge)
         return {}
     if kind == "Stop":
         state = request.app.state
