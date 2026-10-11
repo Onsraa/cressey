@@ -364,6 +364,29 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		/** Case */
+		Case: {
+			/**
+			 * Events
+			 * @default []
+			 */
+			events: components["schemas"]["Event"][];
+			/**
+			 * Threads
+			 * @default []
+			 */
+			threads: components["schemas"]["Thread"][];
+			/**
+			 * Approved
+			 * @default []
+			 */
+			approved: string[];
+			/**
+			 * Notes
+			 * @default []
+			 */
+			notes: components["schemas"]["Note"][];
+		};
 		/**
 		 * EvalFile
 		 * @description A measured report, served as written, with where and when it was measured.
@@ -384,6 +407,70 @@ export interface components {
 			report: {
 				[key: string]: components["schemas"]["JsonValue"];
 			};
+		};
+		/** Event */
+		Event: {
+			/**
+			 * Indicator
+			 * @enum {string}
+			 */
+			indicator:
+				| "P1"
+				| "P3"
+				| "P4"
+				| "O1"
+				| "O2"
+				| "O3"
+				| "O4"
+				| "R"
+				| "C1"
+				| "N1"
+				| "N2"
+				| "N3"
+				| "N4"
+				| "I1"
+				| "plan";
+			/** P */
+			p: number;
+			/** Quote */
+			quote: string;
+			/**
+			 * Source
+			 * @enum {string}
+			 */
+			source:
+				| "narration"
+				| "summary"
+				| "reasoning"
+				| "code"
+				| "environment"
+				| "task";
+			/** After */
+			after: number;
+			/** Message */
+			message?: number | null;
+			/** Thought */
+			thought?: number | null;
+			/**
+			 * Objects
+			 * @default []
+			 */
+			objects: string[];
+			/** Kind */
+			kind?:
+				| (
+						| "necessity"
+						| "override"
+						| "normalization"
+						| "minimization"
+						| "borrowed_authority"
+						| "reframed_goal"
+						| "blame_check"
+						| "other"
+				  )
+				| null;
+			/** Direction */
+			direction?: ("toward" | "away" | "neither") | null;
 		};
 		/**
 		 * Fix
@@ -591,6 +678,37 @@ export interface components {
 			 * @default false
 			 */
 			streaming: boolean;
+			/**
+			 * Source
+			 * @default narration
+			 * @enum {string}
+			 */
+			source: "narration" | "summary" | "reasoning";
+			/**
+			 * Thoughts
+			 * @default []
+			 */
+			thoughts: string[];
+			/**
+			 * Read
+			 * @default 0
+			 */
+			read: number;
+		};
+		/**
+		 * Note
+		 * @description An intervention the spec makes before any act.
+		 */
+		Note: {
+			/** After */
+			after: number;
+			/**
+			 * Action
+			 * @enum {string}
+			 */
+			action: "way_out" | "alert";
+			/** Why */
+			why: string;
 		};
 		/** OwnerGuide */
 		OwnerGuide: {
@@ -734,6 +852,7 @@ export interface components {
 			 * @default []
 			 */
 			messages: components["schemas"]["Message"][];
+			case?: components["schemas"]["Case"];
 			/** Report */
 			report?: string | null;
 			report_check?: components["schemas"]["Leg"] | null;
@@ -778,6 +897,26 @@ export interface components {
 			fingerprint: string;
 			/** Line */
 			line: number;
+		};
+		/** Shadow */
+		Shadow: {
+			/**
+			 * Decision
+			 * @enum {string}
+			 */
+			decision: "allow" | "alert" | "hold";
+			/** Why */
+			why: string[];
+			/**
+			 * Uses
+			 * @default []
+			 */
+			uses: string[];
+			/**
+			 * Words Read
+			 * @default true
+			 */
+			words_read: boolean;
 		};
 		/**
 		 * Source
@@ -868,6 +1007,7 @@ export interface components {
 			 * @default false
 			 */
 			running: boolean;
+			shadow?: components["schemas"]["Shadow"] | null;
 		};
 		/**
 		 * TextIn
@@ -876,6 +1016,38 @@ export interface components {
 		TextIn: {
 			/** Text */
 			text: string;
+			/**
+			 * Source
+			 * @default narration
+			 * @enum {string}
+			 */
+			source: "narration" | "summary" | "reasoning";
+		};
+		/** Thread */
+		Thread: {
+			/**
+			 * Leg
+			 * @enum {string}
+			 */
+			leg: "pressure" | "opportunity" | "rationalization";
+			/** Object */
+			object?: string | null;
+			/**
+			 * State
+			 * @default open
+			 * @enum {string}
+			 */
+			state: "open" | "shared" | "renounced" | "verified" | "approved";
+			/**
+			 * Outside
+			 * @default false
+			 */
+			outside: boolean;
+			/**
+			 * Events
+			 * @default []
+			 */
+			events: number[];
 		};
 		/** Unit */
 		Unit: {

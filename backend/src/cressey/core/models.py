@@ -1,6 +1,6 @@
 """Types of the core loop: the tool policy, a task's mandate, runs and their steps."""
 
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, Field, JsonValue
 
@@ -18,6 +18,47 @@ RunKind = Literal["live", "replay", "control"]
 # What Cressey does with a call a check fired on: let it through with an incident, hold it
 # for a human, or refuse it at once.
 Response = Literal["alert", "review", "stop"]
+# Where the agent's words come from: its narration, a summary of its reasoning, or its
+# reasoning itself.
+WordSource = Literal["narration", "summary", "reasoning"]
+EventSource = Literal[
+    "narration", "summary", "reasoning", "code", "environment", "task"
+]
+Indicator = Literal[
+    "P1",
+    "P3",
+    "P4",
+    "O1",
+    "O2",
+    "O3",
+    "O4",
+    "R",
+    "C1",
+    "N1",
+    "N2",
+    "N3",
+    "N4",
+    "I1",
+    "plan",
+]
+Kind = Literal[
+    "necessity",
+    "override",
+    "normalization",
+    "minimization",
+    "borrowed_authority",
+    "reframed_goal",
+    "blame_check",
+    "other",
+]
+Direction = Literal["toward", "away", "neither"]
+
+
+def _thought_floors() -> dict[str, float]:
+    """Every indicator, and what a thought is about or approves, at 0.5; R at 0.2."""
+    floors = dict.fromkeys([*get_args(Indicator), "about", "approves"], 0.5)
+    floors["R"] = 0.2
+    return floors
 
 
 class ToolRule(BaseModel):
@@ -38,6 +79,8 @@ class Thresholds(BaseModel):
         8  # flagged parts of earlier steps the judgment sees, any distance back
     )
     deadline_words: list[str] = []
+    # S9: the floor a thought's probability must reach for each indicator to be kept.
+    thoughts: dict[str, float] = Field(default_factory=_thought_floors)
 
 
 class Fleet(BaseModel):
@@ -124,6 +167,49 @@ class RunCreated(BaseModel):
     key: str  # shown once; Cressey keeps only its hash
 
 
+class Event(BaseModel):
+    indicator: Indicator
+    p: float  # the model's probability; 1.0 for a code fact
+    quote: str  # the thought verbatim (redacted), or the code fact
+    source: EventSource
+    after: int  # calls made before it
+    message: int | None = None  # index in run.messages
+    thought: int | None = None  # index in that message's thoughts
+    objects: list[str] = []
+    kind: Kind | None = None  # R only
+    direction: Direction | None = None  # R and C1 only
+
+
+class Thread(BaseModel):
+    leg: LegName
+    object: str | None = None
+    state: Literal["open", "shared", "renounced", "verified", "approved"] = "open"
+    outside: bool = False  # O: beyond what the mandate grants
+    events: list[int] = []  # indexes in Case.events
+
+
+class Note(BaseModel):
+    """An intervention the spec makes before any act."""
+
+    after: int
+    action: Literal["way_out", "alert"]
+    why: str
+
+
+class Case(BaseModel):
+    events: list[Event] = []
+    threads: list[Thread] = []
+    approved: list[str] = []  # objects a human approved
+    notes: list[Note] = []
+
+
+class Shadow(BaseModel):
+    decision: Literal["allow", "alert", "hold"]
+    why: list[str]  # the case, one line per link, as §7 writes it
+    uses: list[str] = []  # case objects the call carries
+    words_read: bool = True  # False when a thought before the call has no answer
+
+
 class Step(BaseModel):
     n: int  # 1-based, as in « étape 4 »
     tool: str
@@ -159,6 +245,7 @@ class Step(BaseModel):
     # Its call may still return a result: a parallel call doesn't label it before that.
     # Served: the dashboard shows a tool running.
     running: bool = False
+    shadow: Shadow | None = None
 
 
 class Message(BaseModel):
@@ -167,6 +254,9 @@ class Message(BaseModel):
     # The user's prompt (Claude Code's UserPromptSubmit) is shown, never scored as the agent's.
     role: Literal["agent", "user"] = "agent"
     streaming: bool = False  # still arriving, slice by slice
+    source: WordSource = "narration"
+    thoughts: list[str] = []  # the text of each thought
+    read: int = 0  # how many of the thoughts are already read
 
 
 class Preflight(BaseModel):
@@ -194,6 +284,7 @@ class Run(BaseModel):
     read_only_step: int | None = None
     steps: list[Step] = []
     messages: list[Message] = []
+    case: Case = Field(default_factory=Case)
     report: str | None = None  # the agent's final report: agent text, secrets redacted
     report_check: Leg | None = None  # that report against the log (S9)
     preflight: Preflight | None = None  # set in the background, after the run starts
@@ -213,6 +304,7 @@ class TextIn(BaseModel):
     """A message or the final report, from the agent."""
 
     text: str = Field(min_length=1, max_length=5000)
+    source: WordSource = "narration"
 
 
 class Hold(BaseModel):

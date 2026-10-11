@@ -40,6 +40,9 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
         "text": demo.steps[0].say,
         "role": "agent",
         "streaming": False,
+        "source": "narration",
+        "thoughts": [],
+        "read": 0,
     }
 
 

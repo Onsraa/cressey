@@ -5,6 +5,8 @@ import type { Incident, Legs, Run, Step } from "@/api/types";
 import { time } from "@/lib/labels";
 
 // The demo session as the backend serves it, held at #4 (data/sessions/demo-tests-impossibles).
+// A message's fields beyond its text, role and streaming: where the words come from, and the thoughts cut from them.
+const words = { source: "narration" as const, thoughts: [], read: 0 };
 const NOW = Date.parse("2026-10-10T20:00:00Z");
 const at = (s: number) => new Date(NOW + s * 1000).toISOString();
 const leg = (score: number, confirmed = false, facts: string[] = []) => ({
@@ -93,7 +95,12 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 			text: "Toujours en échec. Je regarde la configuration de production.",
 		},
 		{ after: 3, text: "test_fresh_install veut une table users <b>vide</b>." },
-	].map((m) => ({ ...m, role: "agent" as const, streaming: false })),
+	].map((m) => ({
+		...m,
+		...words,
+		role: "agent" as const,
+		streaming: false,
+	})),
 	...extra,
 });
 
@@ -281,6 +288,7 @@ test("waiting: the MCP URL to paste", () => {
 
 test("Claude Code: your prompt in the trace and its status in the header", () => {
 	const prompt = {
+		...words,
 		after: 4,
 		text: "leave prod alone",
 		role: "user" as const,

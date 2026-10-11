@@ -4,7 +4,16 @@ import pytest
 from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
-from cressey.core.models import Leg, Legs, Run, RunIn, Step
+from cressey.core.models import (
+    Leg,
+    Legs,
+    Message,
+    Run,
+    RunIn,
+    Step,
+    TextIn,
+    Thresholds,
+)
 from cressey.core.runs import Runs
 
 ON = Leg(score=1, confirmed=True, facts=[])
@@ -99,3 +108,18 @@ def test_a_prompt_closes_a_message_left_streaming():
     runs.stream(run, "m1", "I'll delete the", False)
     runs.prompt(run, "stop")
     assert [m.streaming for m in run.messages] == [False, False]
+
+
+def test_a_run_serves_its_case_and_messages_their_source():
+    runs = Runs(EventLog())
+    run = runs.get(runs.create(RunIn(task="reset staging")).id)
+    assert run is not None
+    assert run.model_dump()["case"] == {
+        "events": [],
+        "threads": [],
+        "approved": [],
+        "notes": [],
+    }
+    assert Message(after=0, text="hi").source == "narration"
+    assert TextIn(text="x", source="reasoning").source == "reasoning"
+    assert Thresholds().thoughts["R"] == 0.2 and Thresholds().thoughts["about"] == 0.5

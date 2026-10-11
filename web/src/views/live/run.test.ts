@@ -4,6 +4,9 @@ import { phaseOf } from "./Header";
 import { layout, pos } from "./pixels";
 import { agg, bar, callText, carried, originText, RAMP, rows } from "./run";
 
+// A message's fields beyond its text, role and streaming: where the words come from, and the thoughts cut from them.
+const words = { source: "narration" as const, thoughts: [], read: 0 };
+
 const step = (
 	n: number,
 	tool: string,
@@ -66,7 +69,12 @@ describe("rows", () => {
 				{ after: 0, text: "b" },
 				{ after: 2, text: "c" },
 				{ after: 3, text: "d" },
-			].map((m) => ({ ...m, role: "agent" as const, streaming: false })),
+			].map((m) => ({
+				...m,
+				...words,
+				role: "agent" as const,
+				streaming: false,
+			})),
 			report: "fin",
 		});
 		expect(rows(r).map((x) => x.id)).toEqual([
@@ -202,7 +210,13 @@ describe("Claude Code's turns", () => {
 	test("your prompt is a row of its own, where you sent it", () => {
 		const said = run({
 			messages: [
-				{ after: 1, text: "leave prod alone", role: "user", streaming: false },
+				{
+					...words,
+					after: 1,
+					text: "leave prod alone",
+					role: "user",
+					streaming: false,
+				},
 			],
 		});
 		const got = rows(said);
@@ -234,6 +248,7 @@ describe("the run's status", () => {
 	test("working on a prompt: thinking, writing, or running a tool", () => {
 		expect(phaseOf(quiet({ turn: "working" }))).toBe("thinking");
 		const writing = {
+			...words,
 			after: 0,
 			text: "I'll",
 			role: "agent" as const,
