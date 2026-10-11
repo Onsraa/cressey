@@ -1,5 +1,6 @@
 import type {
 	Incident,
+	Leg,
 	LegName,
 	OwnerGuide,
 	Responses,
@@ -53,6 +54,20 @@ export const LEGS: {
 		color: "var(--color-r)",
 	},
 ];
+
+// What a leg shows: its score, or what the agent's words say of it when that is higher.
+// The words are display only: they confirm nothing and hold nothing.
+type Said = Pick<Leg, "score" | "words">;
+export const level = (leg: Said) => Math.max(leg.score, leg.words ?? 0);
+export const byWords = (leg: Said) => (leg.words ?? 0) > leg.score;
+
+// What the decision model reads in an agent message, by the key it is served under.
+// Manipulation counts as rationalization.
+export const MESSAGE_LABEL = {
+	pressure: "Pressure",
+	rationalization: "Rationalization",
+	manipulation: "Manipulation",
+};
 
 type Look = { label: string; Icon: IconType; tone: Tone; tip: string };
 

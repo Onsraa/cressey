@@ -10,7 +10,7 @@ import {
 	MousePointerClick,
 	Pause,
 } from "@/components/icons";
-import { LEGS, shown, TONE, VIA } from "@/lib/labels";
+import { LEGS, MESSAGE_LABEL, shown, TONE, VIA } from "@/lib/labels";
 import { animIn, useOnChange } from "@/lib/motion";
 import type { Decision } from "./decide";
 import { Hold } from "./Hold";
@@ -264,6 +264,16 @@ function LegRow({ g, leg }: { g: LegLook; leg: Leg }) {
 	);
 }
 
+function LabelRow({ name, score }: { name: string; score: number }) {
+	return (
+		<div className="flex items-center gap-2 border-line border-t py-2">
+			<span className="font-medium text-[13px]">{name}</span>
+			<Bar score={score} n={10} h={8} className="mx-1.5 flex-1" />
+			<span className="font-pixel text-[22px] leading-[0.8]">{fmt(score)}</span>
+		</div>
+	);
+}
+
 function Facts({ facts }: { facts: string[] }) {
 	return facts.map((f) => (
 		<span
@@ -286,6 +296,7 @@ function Text({
 	pinned: boolean;
 }) {
 	const check = row.kind === "report" ? run.report_check : undefined;
+	const labels = row.kind === "msg" ? row.labels : undefined;
 	return (
 		<>
 			<div className="flex flex-col gap-2">
@@ -305,6 +316,21 @@ function Text({
 				</span>
 				<p className="m-0 text-pretty text-[15px] leading-normal">{row.text}</p>
 			</div>
+			{labels && (
+				<div className="flex flex-col gap-0.5">
+					<span
+						data-tip={
+							"The decision model's score for each question, 0 to 1.\nDisplay only: no hold reads it."
+						}
+						className="label mb-1 self-start"
+					>
+						read in this message
+					</span>
+					{Object.entries(MESSAGE_LABEL).map(([k, name]) => (
+						<LabelRow key={k} name={name} score={labels[k]} />
+					))}
+				</div>
+			)}
 			{check && (
 				<div className="flex flex-col gap-[5px] border-line border-t py-2">
 					<span className="label">the report against the log</span>

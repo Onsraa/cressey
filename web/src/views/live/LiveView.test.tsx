@@ -12,7 +12,11 @@ const leg = (score: number, confirmed = false, facts: string[] = []) => ({
 	confirmed,
 	facts,
 });
-const legs = (p: Legs["pressure"], o = leg(0), r = leg(0)): Legs => ({
+const legs = (
+	p: Legs["pressure"],
+	o: Legs["opportunity"] = leg(0),
+	r: Legs["rationalization"] = leg(0),
+): Legs => ({
 	pressure: p,
 	opportunity: o,
 	rationalization: r,
@@ -85,13 +89,18 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 		),
 	],
 	messages: [
-		{ after: 0, text: "Je lance les tests." },
-		{ after: 1, text: "Un test échoue. Je relance." },
+		{ after: 0, text: "Je lance les tests.", flagged: [] },
+		{ after: 1, text: "Un test échoue. Je relance.", flagged: [] },
 		{
 			after: 2,
 			text: "Toujours en échec. Je regarde la configuration de production.",
+			flagged: [],
 		},
-		{ after: 3, text: "test_fresh_install veut une table users <b>vide</b>." },
+		{
+			after: 3,
+			text: "test_fresh_install veut une table users <b>vide</b>.",
+			flagged: [],
+		},
 	],
 	...extra,
 });
@@ -276,4 +285,118 @@ test("waiting: the MCP URL to paste", () => {
 	expect(html()).toContain("http://localhost:8000/mcp");
 	state = live([]);
 	expect(html()).toContain("Waiting for an agent");
+});
+
+// React escapes the apostrophe in the markup.
+const FROM_WORDS = "from the agent&#x27;s words";
+
+test("the agent's words raise a gauge above its facts, and the gauge says so", () => {
+	// Pressure: no facts, words 0.9. Rationalization: facts 0.65 beat words 0.4.
+	const spoken = legs({ ...leg(0), words: 0.9 }, leg(0), {
+		...leg(0.65),
+		words: 0.4,
+	});
+	state = live([
+		demo(
+			{},
+			{
+				steps: [
+					call(1, "read_file", '{"path": "README.md"}', { legs: spoken }),
+				],
+			},
+		),
+	]);
+	const out = html();
+	expect(out).toContain(">0.90<");
+	// Said once: under pressure only.
+	expect(out.split(FROM_WORDS)).toHaveLength(2);
+	// No words, nothing to tag.
+	state = live([demo({})]);
+	expect(html()).not.toContain(FROM_WORDS);
+});
+
+// One trace row's markup.
+const row = (out: string, id: string) => {
+	const from = out.indexOf(`data-row="${id}"`);
+	return out.slice(from, out.indexOf("</button>", from));
+};
+
+test("a message the words flag lights its chip; one never read, or read clean, does not", () => {
+	state = live([
+		demo(
+			{},
+			{
+				messages: [
+					{ after: 0, text: "Je lance les tests.", labels: null, flagged: [] },
+					{
+						after: 1,
+						text: "Tout va bien.",
+						labels: { pressure: 0.03, rationalization: 0.01, manipulation: 0 },
+						flagged: [],
+					},
+					{
+						after: 2,
+						text: "Il me reste dix minutes avant la mise en prod.",
+						labels: {
+							pressure: 0.91,
+							rationalization: 0.04,
+							manipulation: 0.02,
+						},
+						flagged: ["pressure"],
+					},
+				],
+			},
+		),
+	]);
+	const out = html();
+	expect(row(out, "m0")).toContain(
+		'aria-label="Pressure not read, Rationalization not read"',
+	);
+	expect(row(out, "m1")).toContain(
+		'aria-label="Pressure not flagged, Rationalization not flagged"',
+	);
+	const lit = row(out, "m2");
+	expect(lit).toContain(
+		'aria-label="Pressure flagged, Rationalization not flagged"',
+	);
+	// P's chip is filled, R's is hollow; a message has no O chip.
+	expect(lit).toContain("background:var(--color-p)");
+	expect(lit).not.toContain("background:var(--color-r)");
+	expect(lit).not.toContain("--color-o");
+});
+
+test("a message in the step panel: its three labels as bars", () => {
+	const said = (labels: Record<string, number> | null = null) =>
+		live([
+			demo(
+				{ status: "allowed", held_until: null, reason: null },
+				{
+					messages: [
+						{
+							after: 4,
+							text: "Il me reste dix minutes avant la mise en prod.",
+							labels,
+							flagged: ["pressure"],
+						},
+					],
+				},
+			),
+		]);
+	const panel = () => {
+		const out = html();
+		return out.slice(out.indexOf('aria-label="Inspector"'));
+	};
+	state = said({ pressure: 0.91, rationalization: 0.04, manipulation: 0.02 });
+	for (const s of [
+		"Pressure",
+		"Rationalization",
+		"Manipulation",
+		"0.91",
+		"0.04",
+		"0.02",
+	])
+		expect(panel()).toContain(s);
+	// Not read: no labels to show.
+	state = said();
+	expect(panel()).not.toContain("Manipulation");
 });

@@ -20,7 +20,7 @@ import {
 	RAMP,
 	type Row,
 } from "./run";
-import { StatusChip } from "./ui";
+import { Letter, StatusChip } from "./ui";
 
 // The statuses whose reason the row shows: Cressey acted on the call.
 const REASONED = new Set<Step["status"]>([
@@ -29,6 +29,9 @@ const REASONED = new Set<Step["status"]>([
 	"would_hold",
 	"alerted",
 ]);
+
+// The legs a message can light: the agent's words say nothing of opportunity.
+const SPOKEN = LEGS.filter((g) => g.k !== "opportunity");
 
 // The design's held-call chips: salmon, outlined by an inset line.
 const CHIP_HELD =
@@ -81,7 +84,9 @@ export function Trace({
 				<span className="opacity-70">{rows.length || ""}</span>
 				<div className="flex-1" />
 				<span
-					data-tip="Scores per call: Pressure · Opportunity · Rationalization (calls only)"
+					data-tip={
+						"Scores per call: Pressure · Opportunity · Rationalization\nA message lights P or R when its words are flagged"
+					}
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 					tabIndex={0}
 					className="font-mono text-[11px] tracking-normal opacity-80"
@@ -227,8 +232,34 @@ function TextRow({
 					{row.text}
 				</span>
 			</span>
-			<span className="flex gap-[3px] pt-px" />
+			{row.kind === "msg" ? (
+				<Flags row={row} />
+			) : (
+				<span className="flex gap-[3px] pt-px" />
+			)}
 		</>
+	);
+}
+
+// A message's flags: the P and R chips, lit when its words are flagged for that leg. The
+// backend's floors decide; a message that was never read says so.
+function Flags({ row }: { row: Extract<Row, { kind: "msg" }> }) {
+	const says = SPOKEN.map(
+		(g) =>
+			`${g.name} ${row.flagged.includes(g.k) ? "flagged" : row.labels ? "not flagged" : "not read"}`,
+	);
+	return (
+		<span
+			role="img"
+			aria-label={says.join(", ")}
+			className="flex gap-[3px] pt-px"
+		>
+			{SPOKEN.map((g, i) => (
+				<span key={g.k} data-tip={says[i]}>
+					<Letter g={g} on={row.flagged.includes(g.k)} size={20} />
+				</span>
+			))}
+		</span>
 	);
 }
 

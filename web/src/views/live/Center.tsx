@@ -9,10 +9,11 @@ import {
 	Info,
 	KeySquare,
 	Lock,
+	MessageSquare,
 	Minus,
 	Triangle,
 } from "@/components/icons";
-import { LEGS, TONE } from "@/lib/labels";
+import { byWords, LEGS, level, TONE } from "@/lib/labels";
 import { animIn, useGlide, useOnChange } from "@/lib/motion";
 import { Chart } from "./Chart";
 import { Field, type Hover } from "./Field";
@@ -117,9 +118,9 @@ export function Center({
 	const shown = focusMode ? "triangle" : tab;
 	useOnChange(shown, () => animIn(box.current, "[data-pane]"));
 	const glide = useGlide(
-		agg.pressure.score,
-		agg.opportunity.score,
-		agg.rationalization.score,
+		level(agg.pressure),
+		level(agg.opportunity),
+		level(agg.rationalization),
 	);
 	const score: Record<LegName, number> = {
 		pressure: glide.p,
@@ -218,8 +219,9 @@ export function Center({
 	);
 }
 
-// A leg: its highest score so far, gliding to each new one, whether facts confirm it, the
-// facts in a popover, and what Cressey did about it on its own.
+// A leg: its highest level so far, gliding to each new one, where it comes from when the
+// agent's words lead, whether facts confirm it, the facts in a popover, and what Cressey did
+// about it on its own.
 function Gauge({
 	g,
 	agg,
@@ -277,6 +279,17 @@ function Gauge({
 							))}
 						</div>
 					</details>
+				)}
+				{byWords(agg[g.k]) && (
+					<span
+						data-tip={`${g.name} read from what the agent said, not from the log.\nIt confirms nothing and holds nothing.`}
+						className={`inline-flex min-h-[22px] max-w-full items-start gap-1 text-pretty border px-1.5 py-[3px] font-mono text-[11px] leading-[1.3] ${TONE.grey}`}
+					>
+						<span className="mt-px inline-flex flex-none">
+							<MessageSquare size={11} />
+						</span>
+						<span className="min-w-0">from the agent's words</span>
+					</span>
 				)}
 			</div>
 			{auto.length > 0 && (

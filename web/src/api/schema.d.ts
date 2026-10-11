@@ -121,7 +121,8 @@ export interface paths {
 		put?: never;
 		/**
 		 * Message
-		 * @description What the agent says along the way. Only the run's own key may send it.
+		 * @description What the agent says along the way. Only the run's own key may send it. The decision
+		 *     model flags the message in the background.
 		 */
 		post: operations["message_api_runs__run_id__messages_post"];
 		delete?: never;
@@ -530,6 +531,8 @@ export interface components {
 			confirmed: boolean;
 			/** Facts */
 			facts: string[];
+			/** Words */
+			words?: number | null;
 		};
 		/** Legs */
 		Legs: {
@@ -580,6 +583,15 @@ export interface components {
 			after: number;
 			/** Text */
 			text: string;
+			/** Labels */
+			labels?: {
+				[key: string]: number;
+			} | null;
+			/**
+			 * Flagged
+			 * @default []
+			 */
+			flagged: string[];
 		};
 		/** OwnerGuide */
 		OwnerGuide: {
