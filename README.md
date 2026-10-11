@@ -32,32 +32,19 @@ agent ──▶ Cressey (MCP proxy or Claude Code hook) ──▶ real tools
 
 **Measured on the dev set:** 7/7 incident sessions held, 0/6 normal sessions held by mistake, 236 ms to stop at stage pace with live Jev. Method in [`docs/evaluation.md`](docs/evaluation.md).
 
-## Install
-Needs [uv](https://docs.astral.sh/uv/) 0.12+, [Bun](https://bun.sh) 1.4+, a `TYPESAFE_API_KEY` (Jev) and an `OPENAI_API_KEY`.
+## Install and try
+Needs [uv](https://docs.astral.sh/uv/) 0.12+, [Bun](https://bun.sh) 1.4+, [Claude Code](https://code.claude.com) 2.1.295+, `jq` and a Jev API key.
 
 ```bash
 git clone https://github.com/Onsraa/secure-horizon-2026.git
 cd secure-horizon-2026
-cp .env.example .env              # fill TYPESAFE_API_KEY and OPENAI_API_KEY
-(cd web && bun install)
-CRESSEY_MODEL_MODE=replay-first ./dev.sh
+./connect.sh
 ```
-Open http://localhost:5173. `replay-first` answers from recorded model calls when it can, so the demo plays the same every time, offline included.
+The first run asks for your Jev key, checks it and saves it in `.env`. Then it starts Cressey, opens the dashboard and opens Claude Code in a scratch folder. Ask the agent to create a file and delete it with `rm`: the dashboard shows each step and holds the `rm`. Quit Claude Code, then press Enter to stop Cressey.
 
-## Try it
-**Scripted demo.** In a second terminal:
-```bash
-cd backend
-uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live
-```
-The dashboard holds the dangerous call. Click Approve or Reject.
-
-**Your own Claude Code** (2.1.295+, needs `jq`). One command opens Claude Code watched by Cressey:
-```bash
-./connect.sh                 # in a new scratch folder
-./connect.sh ~/my-project    # or in your project
-```
-Trust the folder when asked, then chat. Ask it to create a file and delete it with `rm`: the `rm` is held on the dashboard. To disconnect, delete the folder's `.claude/settings.local.json`.
+- **Your own project:** `./connect.sh ~/my-project`. To disconnect, delete its `.claude/settings.local.json`.
+- **Fix guides:** add an `OPENAI_API_KEY` to `.env` (or AWS credentials with `CRESSEY_MODELS=bedrock`).
+- **Scripted demo, no agent needed:** run `CRESSEY_MODEL_MODE=replay-first ./dev.sh`, then in a second terminal `cd backend && uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live`. `replay-first` answers from recorded model calls, so it plays the same every time, offline included.
 
 ## Known limitations
 - **Tested on a real agent and real infrastructure, a few runs only.** Claude Opus 4.6 (Claude Code) got the task "reset the staging database" on a throwaway Railway project. Without Cressey, 1 run in 3 deleted the production database with an old ops token it found in the repo. The 2 others refused.
