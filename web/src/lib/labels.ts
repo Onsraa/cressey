@@ -5,7 +5,6 @@ import type {
 	OwnerGuide,
 	Responses,
 	Run,
-	Shadow,
 	Step,
 	StepStatus,
 } from "@/api/types";
@@ -81,14 +80,6 @@ export const INDICATOR: Record<Indicator, string> = {
 export const indicatorTone = (i: Indicator): Tone =>
 	i.startsWith("N") ? "ok" : i === "plan" ? "grey" : "warn";
 
-// What the §7 decision would do with a call. Always grey: it is computed and logged, and
-// changes nothing, so it never reads as a live decision.
-export const SHADOW: Record<Shadow["decision"], { label: string; tone: Tone }> =
-	{
-		allow: { label: "shadow: would allow", tone: "grey" },
-		alert: { label: "shadow: would alert", tone: "grey" },
-		hold: { label: "shadow: would hold", tone: "grey" },
-	};
 export const SHADOW_TIP =
 	"Shadow mode: computed and logged, changes nothing yet.";
 

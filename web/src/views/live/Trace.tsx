@@ -21,10 +21,9 @@ import {
 	RAMP,
 	type Row,
 	reportLabel,
-	shadowOf,
 	shownLegs,
 } from "./run";
-import { IndicatorChip, ShadowChip, SignalChip, StatusChip } from "./ui";
+import { IndicatorChip, SignalChip, StatusChip } from "./ui";
 
 // The statuses whose reason the row shows: Cressey acted on the call.
 const REASONED = new Set<Step["status"]>([
@@ -143,7 +142,6 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 	const secrets = carried(step);
 	const status = shown(step);
 	const Why = STATUS[step.status].Icon;
-	const shadow = shadowOf(step);
 	// The backend names a signal's target "<tool> | <reason>" (core/incidents.py, _count).
 	const signal = fleet.find(
 		(f) =>
@@ -172,7 +170,6 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 						<span className={CHIP_HELD}>destructive</span>
 					)}
 					<span className="flex-1" />
-					{shadow && <ShadowChip shadow={shadow} />}
 					{status === "allowed" ? (
 						<span
 							data-tip={STATUS.allowed.tip}

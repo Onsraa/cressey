@@ -1,19 +1,11 @@
 import type { ReactNode } from "react";
-import type {
-	FleetSignal,
-	Indicator,
-	Responses,
-	Shadow,
-	Step,
-} from "@/api/types";
+import type { FleetSignal, Indicator, Responses, Step } from "@/api/types";
 import { GitMerge } from "@/components/icons";
 import {
 	INDICATOR,
 	indicatorTone,
 	type LEGS,
 	RISK,
-	SHADOW,
-	SHADOW_TIP,
 	type Shown,
 	STATUS,
 	TONE,
@@ -145,25 +137,6 @@ export function IndicatorChip({ indicator }: { indicator: Indicator }) {
 			className={`${chip} h-[18px] px-[5px] ${TONE[indicatorTone(indicator)]}`}
 		>
 			{INDICATOR[indicator]}
-		</span>
-	);
-}
-
-// What Cressey would have done with a call, next to what it did.
-export function ShadowChip({
-	shadow,
-	tall,
-}: {
-	shadow: Shadow;
-	tall?: boolean;
-}) {
-	const { label, tone } = SHADOW[shadow.decision];
-	return (
-		<span
-			data-tip={SHADOW_TIP}
-			className={`${chip} ${tall ? "h-[22px] px-[7px]" : "h-5 px-1.5"} ${TONE[tone]}`}
-		>
-			{label}
 		</span>
 	);
 }

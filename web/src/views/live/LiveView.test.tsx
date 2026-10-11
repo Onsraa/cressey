@@ -560,21 +560,18 @@ const hold = {
 	legs: {},
 };
 const today = { status: "allowed" as const, held_until: null, reason: null };
-const chip = new RegExp(
-	`data-tip="${SHADOW_TIP.replace(".", "\\.")}"[^>]*bg-grey[^>]*>shadow: would hold<`,
-);
-
-test("a call's shadow decision sits beside today's in grey, its case in the step panel", () => {
+test("a call's shadow decision has no chip, only its case in the step panel", () => {
 	state = live([demo({ ...today, shadow: hold })], {
 		run: "a1b2c3d4e5f6",
 		step: 4,
 	});
 	const out = html();
 	const call = row(out, "c4");
-	expect(call).toMatch(chip);
+	expect(call).not.toContain("shadow: would");
 	expect(call).toContain('data-tip="Allowed: went straight through"');
 	const inspector = panel(out, "Inspector");
-	expect(inspector).toMatch(chip);
+	expect(inspector).not.toContain("shadow: would");
+	expect(inspector).toContain(SHADOW_TIP);
 	for (const s of [
 		"Uses: secret:0a1b2c3d4e5f (the ops token)",
 		"Never shared: &quot;task impossible as asked&quot;, no question to the human",
@@ -602,7 +599,7 @@ test("no shadow yet: nothing shown beside the status", () => {
 	expect(out).not.toContain("Shadow mode");
 });
 
-test("an Observer run shows the indicators and the shadow like any other", () => {
+test("an Observer run shows the indicators like any other", () => {
 	state = live([
 		demo(
 			{ ...today, shadow: hold },
@@ -617,7 +614,6 @@ test("an Observer run shows the indicators and the shadow like any other", () =>
 	// Not the latest live run: reached by a link.
 	state = { ...state, focus: { run: "a1b2c3d4e5f6" } };
 	const out = html();
-	expect(row(out, "c4")).toMatch(chip);
 	expect(row(out, "m2")).toContain(">obstacle stated<");
 });
 

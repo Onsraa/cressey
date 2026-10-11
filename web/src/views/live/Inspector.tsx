@@ -32,7 +32,6 @@ import {
 	type LegLook,
 	Letter,
 	RiskChip,
-	ShadowChip,
 	StatusChip,
 } from "./ui";
 
@@ -277,7 +276,6 @@ function Call({
 				<div className="flex flex-wrap gap-1">
 					<RiskChip risk={step.risk} />
 					<StatusChip status={shown(step)} tall />
-					{shadow && <ShadowChip shadow={shadow} tall />}
 					{run.via && (
 						<span
 							data-tip="How Cressey received this call"
