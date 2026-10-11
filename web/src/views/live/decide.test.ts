@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { ApiError } from "@/api/client";
-import { failure } from "./decide";
+import { failure, opened } from "./decide";
 
 test("a reason that breaks a rule comes back with the rule named", () => {
 	const broken = new ApiError(422, { detail: "names a trap key" });
@@ -18,4 +18,23 @@ test("a hold nobody waits on, and any other failure, read plainly", () => {
 	expect(failure(new TypeError("Failed to fetch"))).toBe(
 		"Decision not saved: try again.",
 	);
+});
+
+test("opening the reason box seeds it from the draft once", () => {
+	expect(opened(undefined, 4, "Draft.")).toEqual({
+		n: 4,
+		text: "Draft.",
+		fresh: true,
+	});
+	// No draft yet: an empty box, which the human fills.
+	expect(opened(undefined, 4, null).text).toBe("");
+	// Opened again for the same hold (a shortcut): what was typed stays, the box wants focus.
+	const typed = { n: 4, text: "Typed.", fresh: false };
+	expect(opened(typed, 4, "A later draft.")).toEqual({ ...typed, fresh: true });
+	// Another hold: its own draft.
+	expect(opened(typed, 5, "Other.")).toEqual({
+		n: 5,
+		text: "Other.",
+		fresh: true,
+	});
 });

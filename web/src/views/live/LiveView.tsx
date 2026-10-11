@@ -117,7 +117,7 @@ function RunView({ run }: { run?: Run }) {
 				setCenter((c) => (c === "triangle" ? "time" : "triangle"));
 			else if (k === "r" && pending) {
 				if (e.shiftKey) {
-					decision.compose(true);
+					decision.compose(true, pending.draft);
 					setTab(null); // the hold
 				} else decision.reject();
 			} else if (k === "a" && pending) decision.approve();

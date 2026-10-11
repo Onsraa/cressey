@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 import { useLive } from "@/api/live";
 import type { Incident, Run, Step, StepStatus } from "@/api/types";
 import { ArrowRight, Check, DoorOpen, Lock, X } from "@/components/icons";
@@ -9,9 +9,10 @@ import { callText } from "./run";
 import { Code, Labeled } from "./ui";
 
 const WAY_OUT = "Declaring the task impossible is an accepted answer.";
-// The backend (core/draft.py) ends the human's reason with a space and the way-out sentence,
-// and caps the whole message at 500 characters.
-export const REASON_MAX = 500 - WAY_OUT.length - 1;
+// The backend (core/draft.py) caps the message at 500 characters, after finish(): it adds a
+// space and the way-out sentence unless the text already ends with it.
+export const reasonMax = (reason: string) =>
+	reason.endsWith(WAY_OUT) ? 500 : 500 - WAY_OUT.length - 1;
 
 // The decided hold: its title and what it means, as the design's OUT map.
 const OUTCOME: Partial<Record<StepStatus, { title: string; text: string }>> = {
@@ -112,7 +113,7 @@ export function Hold({
 						</button>
 						<button
 							type="button"
-							onClick={() => decision.compose(!decision.composing)}
+							onClick={() => decision.compose(!decision.composing, step.draft)}
 							disabled={decision.busy}
 							aria-expanded={decision.composing}
 							className="btn h-9"
@@ -120,14 +121,7 @@ export function Hold({
 							Reject + add reason
 							<span className="font-mono text-[11px] opacity-70">⇧R</span>
 						</button>
-						{decision.composing && (
-							<ReasonBox
-								draft={step.draft}
-								busy={decision.busy}
-								onSend={decision.rejectWith}
-								onClose={() => decision.compose(false)}
-							/>
-						)}
+						{decision.composing && <ReasonBox decision={decision} />}
 						<button
 							type="button"
 							onClick={decision.approve}
@@ -249,30 +243,23 @@ export function Hold({
 	);
 }
 
-// The reason the human gives the agent. It opens on the drafted reason and never takes a
-// later draft over what was typed. Blank is the plain Reject, so not sent from here.
-export function ReasonBox({
-	draft,
-	busy,
-	onSend,
-	onClose,
-}: {
-	draft?: string | null;
-	busy: boolean;
-	onSend: (text: string) => void;
-	onClose: () => void;
-}) {
-	const [text, setText] = useState(draft ?? "");
+// The reason the human gives the agent, written in the decision (see useDecision): it
+// opened on the draft, and a later draft never takes over what was typed. Blank is the
+// plain Reject, so not sent from here.
+export function ReasonBox({ decision }: { decision: Decision }) {
+	const { text, fresh, busy } = decision;
 	const field = useRef<HTMLTextAreaElement>(null);
 	const count = useId();
+	// The focus goes to a box just opened, not to one the HELD tab brings back.
 	useEffect(() => {
-		field.current?.focus();
-	}, []);
+		if (fresh) field.current?.focus();
+	}, [fresh]);
 	const reason = text.trim();
-	const over = reason.length > REASON_MAX;
+	const max = reasonMax(reason);
+	const over = reason.length > max;
 	const ready = reason.length > 0 && !over && !busy;
 	const send = () => {
-		if (ready) onSend(reason);
+		if (ready) decision.rejectWith(reason);
 	};
 	return (
 		<div className="flex flex-col gap-1.5">
@@ -282,12 +269,13 @@ export function ReasonBox({
 				aria-describedby={count}
 				rows={5}
 				value={text}
-				onChange={(e) => setText(e.target.value)}
+				onChange={(e) => decision.edit(e.target.value)}
+				onFocus={decision.focused}
 				onKeyDown={(e) => {
 					if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
 						e.preventDefault();
 						send();
-					} else if (e.key === "Escape") onClose();
+					} else if (e.key === "Escape") decision.compose(false);
 				}}
 				className="resize-y border-[1.2px] border-ink bg-surface p-2 text-[13px] leading-[1.4]"
 			/>
@@ -296,7 +284,7 @@ export function ReasonBox({
 					id={count}
 					className={`font-mono text-[11px] ${over ? "text-held-fg" : "text-mute-2"}`}
 				>
-					{reason.length} / {REASON_MAX}
+					{reason.length} / {max}
 				</span>
 				<button
 					type="button"

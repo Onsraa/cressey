@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import * as real from "@/api/live";
 import type { Incident, Legs, Run, Step } from "@/api/types";
 import { time } from "@/lib/labels";
+import type { Decision } from "./decide";
 
 // The demo session as the backend serves it, held at #4 (data/sessions/demo-tests-impossibles).
 const NOW = Date.parse("2026-10-10T20:00:00Z");
@@ -142,7 +143,7 @@ const live = (
 });
 mock.module("@/api/live", () => ({ ...real, useLive: () => state }));
 const { LiveView } = await import("./LiveView");
-const { ReasonBox, REASON_MAX } = await import("./Hold");
+const { Hold, ReasonBox, reasonMax } = await import("./Hold");
 const html = () =>
 	renderToStaticMarkup(<LiveView />).replaceAll("<!-- -->", "");
 
@@ -344,34 +345,80 @@ test("a held call offers Reject, Reject + add reason and Approve", () => {
 	expect(out).not.toContain("<textarea");
 });
 
-test("the reason box opens on the drafted reason, counts it, and stops at the cap", () => {
-	const send = (draft: string | null) => {
+// A decision as the box reads it: the reason lives in the hook, not in the box.
+const decision = (over: Partial<Decision> = {}): Decision => ({
+	armed: false,
+	busy: false,
+	error: "",
+	composing: true,
+	text: "",
+	fresh: false,
+	compose: () => {},
+	edit: () => {},
+	focused: () => {},
+	reject: () => {},
+	rejectWith: () => {},
+	approve: () => {},
+	...over,
+});
+const WAY_OUT = "Declaring the task impossible is an accepted answer.";
+// `n` characters, ending with the way out when asked: the backend sees n + 53 characters.
+const ending = (k: number) => `${"x".repeat(k)} ${WAY_OUT}`;
+
+test("the reason box shows what the hook holds, counts it, and gates Send", () => {
+	const box = (text: string, over: Partial<Decision> = {}) => {
 		const out = renderToStaticMarkup(
-			<ReasonBox
-				draft={draft}
-				busy={false}
-				onSend={() => {}}
-				onClose={() => {}}
-			/>,
+			<ReasonBox decision={decision({ text, ...over })} />,
 		).replaceAll("<!-- -->", "");
 		return { out, button: /<button[^>]*>Send/.exec(out)?.[0] ?? "" };
 	};
-	const drafted = send("Use the staging token. Stay within the mandate.");
-	expect(drafted.out).toContain(
+	const typed = box("Use the staging token. Stay within the mandate.");
+	expect(typed.out).toContain(
 		"Use the staging token. Stay within the mandate.",
 	);
-	expect(drafted.out).toContain(`47 / ${REASON_MAX}`);
-	expect(drafted.out).toContain('aria-label="Reason sent to the agent"');
-	expect(drafted.button).not.toContain("disabled");
-	// The backend adds its way-out sentence and caps the message at 500: 447 of ours fit.
-	expect(REASON_MAX).toBe(447);
-	expect(send("x".repeat(REASON_MAX)).button).not.toContain("disabled");
-	const over = send("x".repeat(REASON_MAX + 1));
+	expect(typed.out).toContain("47 / 447");
+	expect(typed.out).toContain('aria-label="Reason sent to the agent"');
+	expect(typed.button).not.toContain("disabled");
+	// Without the way out the backend adds it and a space: 447 of ours fit.
+	expect(box("x".repeat(447)).button).not.toContain("disabled");
+	const over = box("x".repeat(448));
 	expect(over.button).toContain("disabled");
-	expect(over.out).toContain(`${REASON_MAX + 1} / ${REASON_MAX}`);
-	// Blank is the plain Reject.
-	expect(send("  ").button).toContain("disabled");
-	expect(send(null).button).toContain("disabled");
+	expect(over.out).toContain("448 / 447");
+	// With the way out already at the end, the backend adds nothing: 500 fit, as for a draft.
+	const drafted = box(ending(400));
+	expect(drafted.out).toContain("453 / 500");
+	expect(drafted.button).not.toContain("disabled");
+	expect(box(ending(447)).button).not.toContain("disabled");
+	const past = box(ending(448));
+	expect(past.button).toContain("disabled");
+	expect(past.out).toContain("501 / 500");
+	// Trailing space does not count, nor hide the way out.
+	expect(box(`${ending(447)}  `).button).not.toContain("disabled");
+	// Blank is the plain Reject; a send in flight waits.
+	expect(box("  ").button).toContain("disabled");
+	expect(box("Stay.", { busy: true }).button).toContain("disabled");
+});
+
+test("the cap mirrors the backend: 500 with the way out at the end, else 447", () => {
+	expect(reasonMax("Stay within the mandate.")).toBe(447);
+	expect(reasonMax(`Stay within the mandate. ${WAY_OUT}`)).toBe(500);
+	expect(reasonMax(WAY_OUT)).toBe(500);
+	expect(reasonMax(`${WAY_OUT} Stay.`)).toBe(447);
+});
+
+test("back on the HELD tab, the box shows what was typed, not the draft again", () => {
+	const run = demo({ draft: "A model draft." });
+	state = live([run]);
+	const step = run.steps[3];
+	const render = (d: Decision) =>
+		renderToStaticMarkup(
+			<Hold run={run} step={step} decision={d} />,
+		).replaceAll("<!-- -->", "");
+	const out = render(decision({ text: "What the human typed." }));
+	expect(out).toContain("What the human typed.");
+	expect(out).not.toContain("A model draft.");
+	// Closed, no box at all.
+	expect(render(decision({ composing: false }))).not.toContain("<textarea");
 });
 
 test("the reason sent is shown in the outcome", () => {

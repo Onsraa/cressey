@@ -24,6 +24,20 @@ export function failure(e: unknown): string {
 	return "Decision not saved: try again.";
 }
 
+// The reason being written for the held call #n. It lives in the hook, not in the box, so
+// it survives the inspector leaving the HELD tab. `fresh`: the box was just opened and
+// wants the focus, once.
+type Reason = { n: number; text: string; fresh: boolean };
+
+// Opening the box seeds it from the draft once; opening it again for the same hold keeps
+// what was typed.
+export const opened = (
+	r: Reason | undefined,
+	n: number,
+	draft?: string | null,
+): Reason =>
+	r?.n === n ? { ...r, fresh: true } : { n, text: draft ?? "", fresh: true };
+
 // “Reject”, “Reject + add reason”, and “Approve” behind a second click, for the held call
 // #n of a run.
 export function useDecision(
@@ -34,8 +48,10 @@ export function useDecision(
 	const [armed, setArmed] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
-	// The call whose reason box is open: it closes with the decision, or on the next hold.
-	const [composing, setComposing] = useState<number>();
+	// The reason box is open for the call it was written for: it closes with the decision,
+	// or on the next hold.
+	const [reason, setReason] = useState<Reason>();
+	const mine = reason?.n === n ? reason : undefined;
 	useEffect(() => {
 		if (!armed) return;
 		const t = setTimeout(() => setArmed(false), ARMED_MS);
@@ -62,8 +78,15 @@ export function useDecision(
 		armed,
 		busy,
 		error,
-		composing: n !== undefined && composing === n,
-		compose: (open: boolean) => setComposing(open ? n : undefined),
+		composing: mine !== undefined,
+		text: mine?.text ?? "",
+		fresh: mine?.fresh ?? false,
+		compose: (open: boolean, draft?: string | null) => {
+			if (open && n !== undefined) setReason((r) => opened(r, n, draft));
+			else setReason(undefined);
+		},
+		edit: (text: string) => setReason((r) => r && { ...r, text }),
+		focused: () => setReason((r) => r && { ...r, fresh: false }),
 		reject: () => decide("reject"),
 		rejectWith: (message: string) => decide("reject", { message }),
 		approve: () => {
