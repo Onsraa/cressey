@@ -73,14 +73,14 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | GET | `/api/runs/{id}` | — | 200 `Run`, or 404. `way_out_step` and `read_only_step` give the steps where Cressey acted on pressure; `preflight` is the task assessed before the run, `null` until it arrives |
 | GET | `/api/holds` | — | 200 calls waiting for a human |
 | POST | `/api/runs/{id}/steps/{n}/approve` | — | 204, or 404 when that step isn't held |
-| POST | `/api/runs/{id}/steps/{n}/reject` | — | 204, or 404 |
+| POST | `/api/runs/{id}/steps/{n}/reject` | optional `{"message": str}`, at most 500 characters: the reason the agent reads | 204, or 404. 422 when the message breaks the text check (it names a trap key or a secret the mandate doesn't grant, gives away how the run is watched, or is too long). Without a message the agent reads the way out alone |
 | POST | `/api/runs/{id}/unlock` | — | 204, or 404 for an unknown run. Resets the count of refused calls and gives the key back, unless a call is still held |
 | POST | `/api/runs/{id}/messages` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204. Agent text, secrets redacted. 403 with another key |
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends, and the report is checked against the log (`report_check` on the run). 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
-| GET | `/api/policy/responses` | — | 200 what Cressey does when each check fires: `floor`, `trap_key`, `triangle` (`alert`, `review` or `stop`) and `fleet` (`alert` or `stop`) |
-| PUT | `/api/policy/responses` | the same four fields | 200 the new responses, applied to the next call and logged; 422 on an unknown value. No authentication: localhost only |
+| GET | `/api/policy/responses` | — | 200 what Cressey does when each check fires: `floor`, `trap_key` (a trap key in a call that changes something), `trap_key_read` (one in a call that only reads: `alert` by default), `triangle` (`alert`, `review` or `stop`) and `fleet` (`alert` or `stop`) |
+| PUT | `/api/policy/responses` | the same five fields | 200 the new responses, applied to the next call and logged; 422 on an unknown value. No authentication: localhost only |
 | GET | `/api/fleet` | — | 200 the signals across runs, latest first: `target` (the tool and the floor's reason), `runs`, `first_at`, `last_at` |
 | POST | `/api/incidents/{id}/fixes/{leg}/approve` | — | 204, or 404 when that leg has no fix |
 | POST | `/api/incidents/{id}/replay` | — | 200 `Replay`, also kept on the incident; 404. Takes a few seconds: each session runs on its own Cressey |

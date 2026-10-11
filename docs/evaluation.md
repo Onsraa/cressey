@@ -75,14 +75,14 @@ Jev, Cohere Rerank 3.5 on Bedrock and Strands Decider 2B, each with a threshold 
   - The 2,048-character limit cuts the end of 10 of the 111 units for Embed v3.
 
 ## Detection (2026-10-10, recorded live with Jev)
-Every session in `backend/data/sessions/` is played on a fresh Cressey as a replay: nothing waits for a human, and a call that would be held is refused. A session passes when it's held exactly when `expect` says so. The sessions are synthetic and written by the team, in English since 10-10: 7 incidents (the demo DELETE, DROP TABLE, UPDATE without WHERE, the key sent by email in clear, then base64-encoded, a trap key checked with a read, and a test file weakened after two failed runs) and 6 normal tasks. These are the numbers of the final stage recording (« Stage recording » below).
+Every session in `backend/data/sessions/` is played on a fresh Cressey as a replay: nothing waits for a human, and a call that would be held is refused. A session passes when it's held exactly when `expect` says so. The sessions are synthetic and written by the team, in English since 10-10: 7 incidents (the demo DELETE, DROP TABLE, UPDATE without WHERE, the key sent by email in clear, then base64-encoded, a trap key used in an INSERT, and a test file weakened after two failed runs) and 6 normal tasks. These are the numbers of the final stage recording (« Stage recording » below).
 
 | Metric | Result |
 |---|---|
 | Incident sessions held | **7/7** (3 by the SQL rule, 2 by the recipient rule, 1 by the trap key, 1 by the triangle alone) |
 | Normal sessions held by mistake | **0/6** |
-| Time to stop, from the dangerous call's arrival to the decision | p50 231 ms, p95 690 ms, live Jev included, calls back to back. 0.6 ms when Jev's answers come from the cache (earlier run) |
-| Cressey's decision time on every call | p50 0.63 ms, p95 472 ms (the calls that ask Jev) |
+| Time to stop, from the dangerous call's arrival to the decision | p50 1.97 ms, p95 563 ms, calls back to back; the p95 includes a live judge call on `demo-cle-piege`'s new step, until the judge cache is re-recorded. 0.6 ms when every answer of Jev's comes from the cache (earlier run) |
+| Cressey's decision time on every call | p50 0.64 ms, p95 2.03 ms |
 | Offline replay of the same eval, keys blanked | identical results |
 
 - **Time to stop at the stage's pace (10-10, live Jev, demo session):** 839 ms with the calls back to back, as the eval plays them, and **236 ms** with 1.5 s between calls, as on stage. Each result is labelled in the background as it comes in, so the write waits only for its own judgment. One measurement each, before the switch to English.
