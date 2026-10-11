@@ -1,10 +1,20 @@
-import type { LegName, Legs, Message, Run, Secret, Step } from "@/api/types";
-import { level } from "@/lib/labels";
+import type {
+	CaseEvent,
+	Indicator,
+	LegName,
+	Legs,
+	Message,
+	Run,
+	Secret,
+	Shadow,
+	Step,
+	Thread,
+} from "@/api/types";
 
-// What the trace lists, in order.
+// What the trace lists, in order. A message carries the indicators its thoughts raised.
 export type Row =
 	| { id: string; kind: "call"; step: Step }
-	| ({ id: string; kind: "msg" } & Message)
+	| ({ id: string; kind: "msg"; indicators: Indicator[] } & Message)
 	| { id: string; kind: "report"; text: string };
 
 // A message said after k calls goes just before call #k+1; the report comes last, once
@@ -16,7 +26,7 @@ export function rows(run: Run): Row[] {
 	]);
 	const said = run.messages.map((m, i): [number, Row] => [
 		m.after + 0.5,
-		{ ...m, id: `m${i}`, kind: "msg" },
+		{ ...m, id: `m${i}`, kind: "msg", indicators: indicatorsOn(run, i) },
 	]);
 	const all = [...calls, ...said]
 		.sort((a, b) => a[0] - b[0])
@@ -103,13 +113,6 @@ export type Scored = { step: Step; legs: Legs };
 export const scored = (run: Run): Scored[] =>
 	run.steps.flatMap((step) => (step.legs ? [{ step, legs: step.legs }] : []));
 
-// A call's three levels, where the triangle places it and the chart draws it.
-export const levels = (legs: Legs) => ({
-	p: level(legs.pressure),
-	o: level(legs.opportunity),
-	r: level(legs.rationalization),
-});
-
 export const fmt = (v: number) => v.toFixed(2);
 
 // The design's grey ramp: a darker cell is a higher score.
@@ -128,22 +131,15 @@ const KEYS: LegName[] = ["pressure", "opportunity", "rationalization"];
 
 type AggLeg = {
 	score: number;
-	words: number;
 	confirmed: boolean;
 	facts: { t: string; at: string }[];
 };
 export type Agg = Record<LegName, AggLeg>;
 
-// The design's agg over the scored calls: each leg's highest score so far and the most the
-// agent's words said of it, confirmed once a call confirmed it, and its facts, each with the
-// step that first gave it.
+// The design's agg over the scored calls: each leg's highest score so far, confirmed once
+// a call confirmed it, and its facts, each with the step that first gave it.
 export function agg(calls: Scored[]): Agg {
-	const leg = (): AggLeg => ({
-		score: 0,
-		words: 0,
-		confirmed: false,
-		facts: [],
-	});
+	const leg = (): AggLeg => ({ score: 0, confirmed: false, facts: [] });
 	const out: Agg = {
 		pressure: leg(),
 		opportunity: leg(),
@@ -153,7 +149,6 @@ export function agg(calls: Scored[]): Agg {
 		for (const k of KEYS) {
 			const a = out[k];
 			a.score = Math.max(a.score, legs[k].score);
-			a.words = Math.max(a.words, legs[k].words ?? 0);
 			a.confirmed ||= legs[k].confirmed;
 			for (const t of legs[k].facts)
 				if (!a.facts.some((f) => f.t === t))
@@ -161,6 +156,46 @@ export function agg(calls: Scored[]): Agg {
 		}
 	return out;
 }
+
+// A call's shadow decision, once there is one.
+export const shadowOf = (step: Step): Shadow | undefined =>
+	step.shadow ?? undefined;
+
+// A thread is as strong as its strongest event, which also gives its quote.
+export function strongestEvent(run: Run, t: Thread): CaseEvent | undefined {
+	let best: CaseEvent | undefined;
+	for (const i of t.events) {
+		const e = run.case?.events[i];
+		if (e && (!best || e.p > best.p)) best = e;
+	}
+	return best;
+}
+
+// Each leg's strongest open thread: what the leg shows.
+export function legThreads(run: Run): Record<LegName, Thread | undefined> {
+	const out: Record<LegName, Thread | undefined> = {
+		pressure: undefined,
+		opportunity: undefined,
+		rationalization: undefined,
+	};
+	const strength = (t: Thread) => strongestEvent(run, t)?.p ?? 0;
+	for (const t of run.case?.threads ?? []) {
+		const lead = out[t.leg];
+		if (t.state === "open" && (!lead || strength(t) > strength(lead)))
+			out[t.leg] = t;
+	}
+	return out;
+}
+
+// The indicators raised by the thoughts of message `message` (an index in run.messages),
+// each once, in the order they came.
+export const indicatorsOn = (run: Run, message: number): Indicator[] => [
+	...new Set(
+		(run.case?.events ?? [])
+			.filter((e) => e.message === message)
+			.map((e) => e.indicator),
+	),
+];
 
 // The floor's reason for a call carrying a trap key (core/floor.py).
 export const TRAP = "trap key used";

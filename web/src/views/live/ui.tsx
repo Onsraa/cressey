@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import type { Step } from "@/api/types";
-import { MessageSquare } from "@/components/icons";
+import type { Indicator, Shadow, Step } from "@/api/types";
 import {
-	FROM_WORDS,
+	INDICATOR,
+	indicatorTone,
 	type LEGS,
 	RISK,
+	SHADOW,
+	SHADOW_TIP,
 	type Shown,
 	STATUS,
 	TONE,
@@ -108,23 +110,32 @@ export function RiskChip({ risk }: { risk: Step["risk"] }) {
 	);
 }
 
-// The tag on a level the agent's words lead, not the facts: display only.
-export function FromWords({
-	g,
-	className = "",
-}: {
-	g: LegLook;
-	className?: string;
-}) {
+// What a thought raised in the case file.
+export function IndicatorChip({ indicator }: { indicator: Indicator }) {
 	return (
 		<span
-			data-tip={`${g.name} read from what the agent said, not from the log.\nIt confirms nothing and holds nothing.`}
-			className={`inline-flex min-h-[22px] max-w-full items-start gap-1 text-pretty border px-1.5 py-[3px] font-mono text-[11px] leading-[1.3] ${TONE.grey} ${className}`}
+			className={`${chip} h-[18px] px-[5px] ${TONE[indicatorTone(indicator)]}`}
 		>
-			<span className="mt-px inline-flex flex-none">
-				<MessageSquare size={11} />
-			</span>
-			<span className="min-w-0">{FROM_WORDS}</span>
+			{INDICATOR[indicator]}
+		</span>
+	);
+}
+
+// What Cressey would have done with a call, next to what it did.
+export function ShadowChip({
+	shadow,
+	tall,
+}: {
+	shadow: Shadow;
+	tall?: boolean;
+}) {
+	const { label, tone } = SHADOW[shadow.decision];
+	return (
+		<span
+			data-tip={SHADOW_TIP}
+			className={`${chip} ${tall ? "h-[22px] px-[7px]" : "h-5 px-1.5"} ${TONE[tone]}`}
+		>
+			{label}
 		</span>
 	);
 }

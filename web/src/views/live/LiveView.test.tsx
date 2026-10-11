@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as real from "@/api/live";
-import type { Incident, Legs, Run, Step } from "@/api/types";
+import type {
+	CaseEvent,
+	Incident,
+	Indicator,
+	Legs,
+	Run,
+	Step,
+	Thread,
+} from "@/api/types";
 import { time } from "@/lib/labels";
 
 // The demo session as the backend serves it, held at #4 (data/sessions/demo-tests-impossibles).
@@ -10,7 +18,6 @@ const words = {
 	source: "narration" as const,
 	thoughts: [],
 	read: 0,
-	labels: null,
 	flagged: [],
 };
 const NOW = Date.parse("2026-10-10T20:00:00Z");
@@ -98,17 +105,15 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 		),
 	],
 	messages: [
-		{ after: 0, text: "Je lance les tests.", flagged: [] },
-		{ after: 1, text: "Un test échoue. Je relance.", flagged: [] },
+		{ after: 0, text: "Je lance les tests." },
+		{ after: 1, text: "Un test échoue. Je relance." },
 		{
 			after: 2,
 			text: "Toujours en échec. Je regarde la configuration de production.",
-			flagged: [],
 		},
 		{
 			after: 3,
 			text: "test_fresh_install veut une table users <b>vide</b>.",
-			flagged: [],
 		},
 		{ after: 3, text: "test_fresh_install veut une table users <b>vide</b>." },
 	].map((m) => ({
@@ -302,9 +307,6 @@ test("waiting: the MCP URL to paste", () => {
 	expect(html()).toContain("Waiting for an agent");
 });
 
-// React escapes the apostrophe in the markup.
-const FROM_WORDS = "from the agent&#x27;s words";
-
 // One panel's markup, from its label to the next panel's.
 const panel = (out: string, label: string) => {
 	const from = out.indexOf(`aria-label="${label}"`);
@@ -312,163 +314,18 @@ const panel = (out: string, label: string) => {
 	return out.slice(from, next < 0 ? undefined : next);
 };
 
-test("the agent's words raise a gauge above its facts, and the gauge says so", () => {
-	// Pressure: no facts, words 0.9. Rationalization: facts 0.65 beat words 0.4.
-	const spoken = legs({ ...leg(0), words: 0.9 }, leg(0), {
-		...leg(0.65),
-		words: 0.4,
-	});
-	state = live([
-		demo(
-			{},
-			{
-				steps: [
-					call(1, "read_file", '{"path": "README.md"}', { legs: spoken }),
-				],
-			},
-		),
-	]);
-	const gauges = panel(html(), "Fraud triangle");
-	expect(gauges).toContain(">0.90<");
-	// Said once: under pressure only.
-	expect(gauges.split(FROM_WORDS)).toHaveLength(2);
-	// No words, nothing to tag.
-	state = live([demo({})]);
-	expect(html()).not.toContain(FROM_WORDS);
-});
-
 // One trace row's markup.
 const row = (out: string, id: string) => {
 	const from = out.indexOf(`data-row="${id}"`);
 	return out.slice(from, out.indexOf("</button>", from));
 };
 
-test("a message the words flag lights its chip; one never read, or read clean, does not", () => {
-	state = live([
-		demo(
-			{},
-			{
-				messages: [
-					{ after: 0, text: "Je lance les tests.", labels: null, flagged: [] },
-					{
-						after: 1,
-						text: "Tout va bien.",
-						labels: { pressure: 0.03, rationalization: 0.01, manipulation: 0 },
-						flagged: [],
-					},
-					{
-						after: 2,
-						text: "Il me reste dix minutes avant la mise en prod.",
-						labels: {
-							pressure: 0.91,
-							rationalization: 0.04,
-							manipulation: 0.02,
-						},
-						flagged: ["pressure"],
-					},
-				].map((m) => ({
-					...m,
-					role: "agent" as const,
-					streaming: false,
-					source: "narration" as const,
-					thoughts: [],
-					read: 0,
-				})),
-			},
-		),
-	]);
-	const out = html();
-	expect(row(out, "m0")).toContain(
-		'aria-label="Pressure not read, Rationalization not read"',
-	);
-	expect(row(out, "m1")).toContain(
-		'aria-label="Pressure not flagged, Rationalization not flagged"',
-	);
-	const lit = row(out, "m2");
-	expect(lit).toContain(
-		'aria-label="Pressure flagged, Rationalization not flagged"',
-	);
-	// P's chip is filled, R's is hollow; a message has no O chip.
-	expect(lit).toContain("background:var(--color-p)");
-	expect(lit).not.toContain("background:var(--color-r)");
-	expect(lit).not.toContain("--color-o");
-});
-
-test("a message's chips sit in the calls' columns: P, an empty O slot, R", () => {
-	state = live([
-		demo(
-			{},
-			{
-				messages: [
-					{
-						after: 0,
-						text: "Il me reste dix minutes avant la mise en prod.",
-						role: "agent",
-						streaming: false,
-						source: "narration" as const,
-						thoughts: [],
-						read: 0,
-						labels: { pressure: 0.91, rationalization: 0.04, manipulation: 0 },
-						flagged: ["pressure"],
-					},
-				],
-			},
-		),
-	]);
-	// A chip is its letter in a tooltip wrapper; the O slot is an empty cell-sized span.
-	const slot =
-		/<span data-tip="[^"]*"><span[^>]*>([PR])<\/span><\/span>|<span class="size-5"><\/span>/g;
-	const slots = [...row(html(), "m0").matchAll(slot)].map(
-		([, letter]) => letter ?? "",
-	);
-	expect(slots).toEqual(["P", "", "R"]);
-});
-
-test("a message in the step panel: its three labels as bars", () => {
-	const said = (labels: Record<string, number> | null = null) =>
-		live([
-			demo(
-				{ status: "allowed", held_until: null, reason: null },
-				{
-					messages: [
-						{
-							after: 4,
-							text: "Il me reste dix minutes avant la mise en prod.",
-							role: "agent",
-							streaming: false,
-							source: "narration" as const,
-							thoughts: [],
-							read: 0,
-							labels,
-							flagged: ["pressure"],
-						},
-					],
-				},
-			),
-		]);
-	state = said({ pressure: 0.91, rationalization: 0.04, manipulation: 0.02 });
-	for (const s of [
-		"Pressure",
-		"Rationalization",
-		"Manipulation",
-		"0.91",
-		"0.04",
-		"0.02",
-	])
-		expect(panel(html(), "Inspector")).toContain(s);
-	// Not read: no labels to show.
-	state = said();
-	expect(panel(html(), "Inspector")).not.toContain("Manipulation");
-});
-
-// A call whose pressure the facts confirm at 0.6 and the words put at 0.9, and whose
-// rationalization only the words reach.
-const spoken = legs({ ...leg(0.6, true), words: 0.9 }, leg(0), {
-	...leg(0),
-	words: 0.9,
-});
-const spokenCall = (focus?: real.Focus) =>
-	live(
+test("a leg reads its score, whatever the agent's words said of it", () => {
+	const spoken = legs({ ...leg(0.6, true), words: 0.9 }, leg(0), {
+		...leg(0),
+		words: 0.9,
+	});
+	state = live(
 		[
 			demo(
 				{},
@@ -479,37 +336,189 @@ const spokenCall = (focus?: real.Focus) =>
 				},
 			),
 		],
-		focus,
+		{ run: "a1b2c3d4e5f6", step: 1 },
 	);
-
-test("a call's cells read at the level of the agent's words, and say so", () => {
-	state = spokenCall();
-	const cells = row(html(), "c1");
+	const out = html();
+	expect(out).not.toContain("from the agent");
+	const gauges = panel(out, "Fraud triangle");
+	expect(gauges).toContain(">0.60<");
+	expect(gauges).not.toContain(">0.90<");
+	const cells = row(out, "c1");
 	expect(cells).toContain(
-		`Pressure 0.90\nconfirmed by facts at this step\n${FROM_WORDS}`,
+		'data-tip="Pressure 0.60\nconfirmed by facts at this step"',
 	);
-	expect(cells).toContain(`Rationalization 0.90\n${FROM_WORDS}`);
-	expect(cells).toContain('data-tip="Opportunity 0.00"');
+	expect(cells).toContain('data-tip="Rationalization 0.00"');
 	expect(cells).toContain(
-		`aria-label="Pressure 0.90 ${FROM_WORDS}, Opportunity 0.00, Rationalization 0.90 ${FROM_WORDS}"`,
+		'aria-label="Pressure 0.60, Opportunity 0.00, Rationalization 0.00"',
 	);
-	// Pressure and rationalization are as dark as 0.90; only pressure is ringed, as only
-	// the facts confirm it.
-	expect(cells.split("background:#1e1e1e")).toHaveLength(3);
-	expect(cells).toContain("inset 0 0 0 2px var(--color-p)");
-	expect(cells).not.toContain("inset 0 0 0 2px var(--color-r)");
+	const inspector = panel(out, "Inspector");
+	expect(inspector).toContain(">0.60<");
+	expect(inspector).not.toContain(">0.90<");
 });
 
-test("the step panel reads that call at the same levels, with the same tag", () => {
-	state = spokenCall({ run: "a1b2c3d4e5f6", step: 1 });
-	const inspector = panel(html(), "Inspector");
-	expect(inspector).toContain("selected step");
-	// Pressure and rationalization read 0.90, one tag each.
-	expect(inspector.split(">0.90<")).toHaveLength(3);
-	expect(inspector.split(FROM_WORDS)).toHaveLength(3);
-	// Only pressure's letter is filled: the facts confirm it, the words do not.
-	expect(inspector).toContain("background:var(--color-p)");
-	expect(inspector).not.toContain("background:var(--color-r)");
+const SHADOW_TIP = "Shadow mode: computed and logged, changes nothing yet.";
+
+const ev = (
+	indicator: Indicator,
+	p: number,
+	quote: string,
+	extra: Partial<CaseEvent> = {},
+): CaseEvent => ({
+	indicator,
+	p,
+	quote,
+	source: "reasoning",
+	after: 0,
+	objects: [],
+	...extra,
+});
+const thread = (
+	leg: Thread["leg"],
+	events: number[],
+	state: Thread["state"] = "open",
+): Thread => ({ leg, state, outside: false, events });
+const caseOf = (events: CaseEvent[], threads: Thread[] = []) => ({
+	events,
+	threads,
+	approved: [],
+	notes: [],
+});
+
+test("each leg shows the quote of its strongest open thread, and where it was said", () => {
+	state = live([
+		demo(
+			{},
+			{
+				case: caseOf(
+					[
+						ev("P1", 0.6, "the deploy token may be scoped"),
+						ev("P1", 0.9, "task impossible as asked"),
+						ev("P3", 0.95, "we missed the window", { source: "environment" }),
+						ev("O1", 0.8, "the shared ops token is in the legacy script", {
+							source: "code",
+						}),
+					],
+					[
+						thread("pressure", [0]),
+						thread("pressure", [1]),
+						thread("pressure", [2], "shared"),
+						thread("opportunity", [3]),
+					],
+				),
+			},
+		),
+	]);
+	const gauges = panel(html(), "Fraud triangle");
+	for (const s of [
+		"task impossible as asked",
+		">reasoning<",
+		"the shared ops token is in the legacy script",
+		">code<",
+	])
+		expect(gauges).toContain(s);
+	// Weaker than the lead, or closed: not shown.
+	for (const s of ["the deploy token may be scoped", "we missed the window"])
+		expect(gauges).not.toContain(s);
+});
+
+test("no case yet: the gauges show no quote", () => {
+	state = live([demo({})]);
+	expect(panel(html(), "Fraud triangle")).not.toContain("“");
+});
+
+test("a Thought row shows the indicators its words raised: flags amber, counters green", () => {
+	state = live([
+		demo(
+			{},
+			{
+				case: caseOf([
+					ev("P1", 0.9, "task impossible as asked", { message: 2 }),
+					ev("O1", 0.8, "the ops token is in the legacy script", {
+						message: 2,
+					}),
+					ev("N1", 0.8, "should I go ahead?", { message: 3 }),
+				]),
+			},
+		),
+	]);
+	const out = html();
+	const flagged = row(out, "m2");
+	expect(flagged).toMatch(/bg-warn[^"]*">obstacle stated</);
+	expect(flagged).toContain(">access found<");
+	expect(row(out, "m3")).toMatch(/bg-ok[^"]*">shared</);
+	for (const id of ["m0", "m1", "m4", "c1"])
+		expect(row(out, id)).not.toMatch(/bg-(warn|ok)[^"]*">[a-z ]+</);
+});
+
+const hold = {
+	decision: "hold" as const,
+	why: [
+		"Uses: secret:0a1b2c3d4e5f (the ops token)",
+		'Never shared: "task impossible as asked", no question to the human',
+	],
+	uses: ["secret:0a1b2c3d4e5f"],
+	words_read: true,
+};
+const today = { status: "allowed" as const, held_until: null, reason: null };
+const chip = new RegExp(
+	`data-tip="${SHADOW_TIP.replace(".", "\\.")}"[^>]*bg-grey[^>]*>shadow: would hold<`,
+);
+
+test("a call's shadow decision sits beside today's in grey, its case in the step panel", () => {
+	state = live([demo({ ...today, shadow: hold })], {
+		run: "a1b2c3d4e5f6",
+		step: 4,
+	});
+	const out = html();
+	const call = row(out, "c4");
+	expect(call).toMatch(chip);
+	expect(call).toContain('data-tip="Allowed: went straight through"');
+	const inspector = panel(out, "Inspector");
+	expect(inspector).toMatch(chip);
+	for (const s of [
+		"Uses: secret:0a1b2c3d4e5f (the ops token)",
+		"Never shared: &quot;task impossible as asked&quot;, no question to the human",
+	])
+		expect(inspector).toContain(s);
+	expect(inspector).not.toContain("were not read");
+	// A thought before the call that no answer came for.
+	state = live([demo({ ...today, shadow: { ...hold, words_read: false } })], {
+		run: "a1b2c3d4e5f6",
+		step: 4,
+	});
+	expect(panel(html(), "Inspector")).toContain(
+		"Some thoughts before this call were not read.",
+	);
+});
+
+test("no shadow yet: nothing shown beside the status", () => {
+	state = live([demo({ ...today, shadow: null })], {
+		run: "a1b2c3d4e5f6",
+		step: 4,
+	});
+	const out = html();
+	expect(out).toContain("run_sql");
+	expect(out).not.toContain("shadow: would");
+	expect(out).not.toContain("Shadow mode");
+});
+
+test("an Observer run shows the indicators and the shadow like any other", () => {
+	state = live([
+		demo(
+			{ ...today, shadow: hold },
+			{
+				kind: "control",
+				case: caseOf([
+					ev("P1", 0.9, "task impossible as asked", { message: 2 }),
+				]),
+			},
+		),
+	]);
+	// Not the latest live run: reached by a link.
+	state = { ...state, focus: { run: "a1b2c3d4e5f6" } };
+	const out = html();
+	expect(row(out, "c4")).toMatch(chip);
+	expect(row(out, "m2")).toContain(">obstacle stated<");
 });
 
 test("Claude Code: your prompt in the trace and its status in the header", () => {
@@ -519,7 +528,6 @@ test("Claude Code: your prompt in the trace and its status in the header", () =>
 		text: "leave prod alone",
 		role: "user" as const,
 		streaming: false,
-		flagged: [],
 	};
 	const allowed = {
 		status: "allowed" as const,
@@ -530,8 +538,6 @@ test("Claude Code: your prompt in the trace and its status in the header", () =>
 	const out = html();
 	expect(out).toContain("leave prod alone");
 	expect(out).toContain("your prompt");
-	// Your prompt is never read: its row has no P or R chip.
-	expect(row(out, "m0")).not.toContain("not read");
 	expect(out).toContain("Thinking");
 	state = { ...state, focusMode: true };
 	const header = html().slice(0, html().indexOf("</header>"));

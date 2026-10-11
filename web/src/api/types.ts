@@ -2,6 +2,8 @@ import type { components } from "./schema";
 
 type Schemas = components["schemas"];
 
+export type Case = Schemas["Case"];
+export type CaseEvent = Schemas["Event"];
 export type EvalFile = Schemas["EvalFile"];
 export type Fix = Schemas["Fix"];
 export type FleetSignal = Schemas["FleetSignal"];
@@ -19,10 +21,13 @@ export type ReplayResult = Schemas["ReplayResult"];
 export type Responses = Schemas["Responses"];
 export type Run = Schemas["Run"];
 export type Secret = Schemas["Secret"];
+export type Shadow = Schemas["Shadow"];
 export type Source = Schemas["Source"];
 export type Status = Schemas["Status"];
 export type Step = Schemas["Step"];
+export type Thread = Schemas["Thread"];
 export type WhyAnswer = Schemas["WhyAnswer"];
 
+export type Indicator = CaseEvent["indicator"];
 export type LegName = keyof Legs;
 export type StepStatus = NonNullable<Step["status"]>;

@@ -1,10 +1,11 @@
 import type {
 	Incident,
-	Leg,
+	Indicator,
 	LegName,
 	OwnerGuide,
 	Responses,
 	Run,
+	Shadow,
 	Step,
 	StepStatus,
 } from "@/api/types";
@@ -55,20 +56,41 @@ export const LEGS: {
 	},
 ];
 
-// What a leg shows: its score, or what the agent's words say of it when that is higher.
-// The words are display only: they confirm nothing and hold nothing.
-type Said = Pick<Leg, "score" | "words">;
-export const level = (leg: Said) => Math.max(leg.score, leg.words ?? 0);
-export const byWords = (leg: Said) => (leg.words ?? 0) > leg.score;
-export const FROM_WORDS = "from the agent's words";
-
-// What the decision model reads in an agent message, by the key it is served under.
-// Manipulation counts as rationalization.
-export const MESSAGE_LABEL = {
-	pressure: "Pressure",
-	rationalization: "Rationalization",
-	manipulation: "Manipulation",
+// What a thought of the agent's raised in the case file (docs/superpowers/specs/
+// 2026-10-11-cot-triangle-indicators-design.md §5).
+export const INDICATOR: Record<Indicator, string> = {
+	P1: "obstacle stated",
+	P3: "urgency or stakes",
+	P4: "repeated failure",
+	O1: "access found",
+	O2: "weak control",
+	O3: "probe",
+	O4: "target found",
+	R: "justification",
+	C1: "concealment",
+	N1: "shared",
+	N2: "renounced",
+	N3: "verified",
+	N4: "manipulation named",
+	I1: "injected instruction",
+	plan: "plan",
 };
+
+// A counter closes a thread and a plan only says what comes next; the rest are what the
+// case is built on.
+export const indicatorTone = (i: Indicator): Tone =>
+	i.startsWith("N") ? "ok" : i === "plan" ? "grey" : "warn";
+
+// What the §7 decision would do with a call. Always grey: it is computed and logged, and
+// changes nothing, so it never reads as a live decision.
+export const SHADOW: Record<Shadow["decision"], { label: string; tone: Tone }> =
+	{
+		allow: { label: "shadow: would allow", tone: "grey" },
+		alert: { label: "shadow: would alert", tone: "grey" },
+		hold: { label: "shadow: would hold", tone: "grey" },
+	};
+export const SHADOW_TIP =
+	"Shadow mode: computed and logged, changes nothing yet.";
 
 type Look = { label: string; Icon: IconType; tone: Tone; tip: string };
 

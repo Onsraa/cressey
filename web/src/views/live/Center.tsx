@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useLive } from "@/api/live";
-import type { LegName, Run } from "@/api/types";
+import type { CaseEvent, LegName, Run } from "@/api/types";
 import {
 	Check,
 	ChevronUp,
@@ -12,14 +12,21 @@ import {
 	Minus,
 	Triangle,
 } from "@/components/icons";
-import { byWords, LEGS, level, TONE } from "@/lib/labels";
+import { INDICATOR, LEGS, TONE } from "@/lib/labels";
 import { animIn, useGlide, useOnChange } from "@/lib/motion";
 import { Chart } from "./Chart";
 import { Field, type Hover } from "./Field";
 import type { Phase } from "./Header";
 import type { Scene } from "./pixels";
-import { type Agg, fmt, type Scored, TRAP } from "./run";
-import { Bar, FromWords, type LegLook, Letter } from "./ui";
+import {
+	type Agg,
+	fmt,
+	legThreads,
+	type Scored,
+	strongestEvent,
+	TRAP,
+} from "./run";
+import { Bar, type LegLook, Letter } from "./ui";
 import { Waiting } from "./Waiting";
 
 export type CenterTab = "triangle" | "time";
@@ -95,6 +102,13 @@ function autos(run: Run | undefined, g: LegLook): Auto[] {
 	return [];
 }
 
+// What the case holds on a leg: the strongest event of its strongest open thread.
+function said(run: Run | undefined, g: LegLook): CaseEvent | undefined {
+	if (!run) return;
+	const thread = legThreads(run)[g.k];
+	return thread && strongestEvent(run, thread);
+}
+
 export function Center({
 	run,
 	phase,
@@ -122,9 +136,9 @@ export function Center({
 	const shown = focusMode ? "triangle" : tab;
 	useOnChange(shown, () => animIn(box.current, "[data-pane]"));
 	const glide = useGlide(
-		level(agg.pressure),
-		level(agg.opportunity),
-		level(agg.rationalization),
+		agg.pressure.score,
+		agg.opportunity.score,
+		agg.rationalization.score,
 	);
 	const score: Record<LegName, number> = {
 		pressure: glide.p,
@@ -215,6 +229,7 @@ export function Center({
 						g={g}
 						agg={agg}
 						score={score[g.k]}
+						said={said(run, g)}
 						auto={autos(run, g)}
 					/>
 				))}
@@ -223,18 +238,20 @@ export function Center({
 	);
 }
 
-// A leg: its highest level so far, gliding to each new one, where it comes from when the
-// agent's words lead, whether facts confirm it, the facts in a popover, and what Cressey did
-// about it on its own.
+// A leg: its highest score so far, gliding to each new one, whether facts confirm it, the
+// facts in a popover, what its strongest open thread says, and what Cressey did about it on
+// its own.
 function Gauge({
 	g,
 	agg,
 	score,
+	said,
 	auto,
 }: {
 	g: LegLook;
 	agg: Agg;
 	score: number;
+	said?: CaseEvent;
 	auto: Auto[];
 }) {
 	const { focusMode } = useLive();
@@ -284,8 +301,18 @@ function Gauge({
 						</div>
 					</details>
 				)}
-				{byWords(agg[g.k]) && <FromWords g={g} />}
 			</div>
+			{said && (
+				<span
+					data-tip={`${INDICATOR[said.indicator]}\n“${said.quote}”`}
+					className="line-clamp-2 text-pretty text-[12.5px] leading-[1.4]"
+				>
+					“{said.quote}”{" "}
+					<span className="font-mono text-[11px] text-mute-2">
+						{said.source}
+					</span>
+				</span>
+			)}
 			{auto.length > 0 && (
 				<div className="flex flex-col items-start gap-1">
 					{auto.map((a) => (

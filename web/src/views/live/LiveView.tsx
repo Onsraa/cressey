@@ -8,7 +8,7 @@ import type { Hover } from "./Field";
 import { busy, Header, phaseOf } from "./Header";
 import { Inspector, type InspectorTab } from "./Inspector";
 import type { Scene } from "./pixels";
-import { agg, levels, type Row, rows, scored } from "./run";
+import { agg, type Row, rows, scored } from "./run";
 import { Trace } from "./Trace";
 
 const ROOT = "@container flex flex-[1_0_auto] flex-col gap-4 px-7 pt-6 pb-7";
@@ -128,7 +128,11 @@ function RunView({ run }: { run?: Run }) {
 	const scene: Scene = {
 		calls: calls.map(({ step, legs: l }) => ({
 			id: id(step.n),
-			legs: levels(l),
+			legs: {
+				p: l.pressure.score,
+				o: l.opportunity.score,
+				r: l.rationalization.score,
+			},
 			hold: Boolean(step.held_until),
 		})),
 		confirmed: {
@@ -144,7 +148,11 @@ function RunView({ run }: { run?: Run }) {
 	const tip: Hover | undefined = hovered && {
 		n: hovered.step.n,
 		tool: hovered.step.tool,
-		legs: levels(hovered.legs),
+		legs: {
+			p: hovered.legs.pressure.score,
+			o: hovered.legs.opportunity.score,
+			r: hovered.legs.rationalization.score,
+		},
 	};
 	// A call held as it arrives slides the hold pane in, as the banner comes down.
 	const fresh = (added: Row[]) => {

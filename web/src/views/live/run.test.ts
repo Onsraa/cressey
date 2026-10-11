@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import type { Legs, Run, Step } from "@/api/types";
-import { byWords, level } from "@/lib/labels";
+import type {
+	CaseEvent,
+	Indicator,
+	LegName,
+	Legs,
+	Run,
+	Step,
+	Thread,
+} from "@/api/types";
 import { phaseOf } from "./Header";
 import { layout, pos } from "./pixels";
 import {
@@ -8,10 +15,13 @@ import {
 	bar,
 	callText,
 	carried,
-	levels,
+	indicatorsOn,
+	legThreads,
 	originText,
 	RAMP,
 	rows,
+	shadowOf,
+	strongestEvent,
 } from "./run";
 
 // A message's fields beyond its text, role and streaming: where the words come from, and the thoughts cut from them.
@@ -19,7 +29,6 @@ const words = {
 	source: "narration" as const,
 	thoughts: [],
 	read: 0,
-	labels: null,
 	flagged: [],
 };
 
@@ -181,16 +190,10 @@ describe("triangle", () => {
 });
 
 describe("the gauges", () => {
-	const leg = (
-		score: number,
-		confirmed = false,
-		facts: string[] = [],
-		words: number | null = null,
-	) => ({
+	const leg = (score: number, confirmed = false, facts: string[] = []) => ({
 		score,
 		confirmed,
 		facts,
-		words,
 	});
 	const scored = (n: number, l: Legs) => ({
 		step: step(n, "t", "{}"),
@@ -218,29 +221,6 @@ describe("the gauges", () => {
 		expect(a.opportunity.score).toBe(0.9);
 		expect(a.opportunity.confirmed).toBe(false);
 	});
-	test("each leg's highest words, kept apart from its score and never lowered", () => {
-		const a = agg([
-			scored(1, {
-				pressure: leg(0, false, [], 0.4),
-				opportunity: leg(0),
-				rationalization: leg(0, false, [], 0.7),
-			}),
-			scored(2, {
-				pressure: leg(0, false, [], 0.9),
-				opportunity: leg(0),
-				rationalization: leg(0),
-			}),
-			scored(3, {
-				pressure: leg(0.1, false, [], 0.2),
-				opportunity: leg(0),
-				rationalization: leg(0),
-			}),
-		]);
-		expect(a.pressure.words).toBe(0.9);
-		expect(a.pressure.score).toBe(0.1);
-		expect(a.rationalization.words).toBe(0.7);
-		expect(a.opportunity.words).toBe(0);
-	});
 	test("a bar fills up to the score, darker toward its end", () => {
 		const b = bar(0.5, 10);
 		expect(b.filter(Boolean)).toHaveLength(5);
@@ -251,33 +231,104 @@ describe("the gauges", () => {
 	});
 });
 
-describe("what a leg shows", () => {
-	const of = (score: number, words?: number | null) => ({ score, words });
-	test("the higher of its score and the agent's words, tagged only when the words lead", () => {
-		expect(level(of(0, 0.9))).toBe(0.9);
-		expect(level(of(0.8, 0.2))).toBe(0.8);
-		expect(level(of(0.3))).toBe(0.3);
-		expect(level(of(0.3, null))).toBe(0.3);
-		expect(byWords(of(0, 0.9))).toBe(true);
-		expect(byWords(of(0.8, 0.2))).toBe(false);
-		expect(byWords(of(0.5, 0.5))).toBe(false); // a tie is the facts'
-		expect(byWords(of(0.3))).toBe(false);
-		expect(byWords(of(0, null))).toBe(false);
+describe("the case", () => {
+	const event = (
+		indicator: Indicator,
+		p: number,
+		extra: Partial<CaseEvent> = {},
+	): CaseEvent => ({
+		indicator,
+		p,
+		quote: `${indicator} at ${p}`,
+		source: "narration",
+		after: 0,
+		objects: [],
+		...extra,
 	});
-	test("a call lands and is charted at those levels", () => {
-		const leg = (score: number, words?: number | null) => ({
-			score,
-			confirmed: false,
-			facts: [],
-			words,
+	const thread = (
+		leg: LegName,
+		events: number[],
+		state: Thread["state"] = "open",
+	): Thread => ({ leg, state, outside: false, events });
+	const withCase = (events: CaseEvent[], threads: Thread[] = []) =>
+		run({ case: { events, threads, approved: [], notes: [] } });
+
+	test("a leg's thread is the strongest open one, as strong as its strongest event", () => {
+		const r = withCase(
+			[
+				event("P1", 0.5, { objects: ["a"] }),
+				event("P1", 0.9, { objects: ["a"] }),
+				event("P1", 0.7, { objects: ["b"] }),
+				event("P3", 0.95, { objects: ["c"] }),
+				event("O1", 0.4, { objects: ["d"] }),
+				event("O1", 0.6, { objects: ["e"] }),
+			],
+			[
+				thread("pressure", [0, 1]),
+				thread("pressure", [2]),
+				thread("pressure", [3], "shared"),
+				thread("opportunity", [4]),
+				thread("opportunity", [5]),
+			],
+		);
+		const got = legThreads(r);
+		expect(got.pressure).toBe(r.case?.threads[0]);
+		expect(got.opportunity).toBe(r.case?.threads[4]);
+		// Rationalization has no thread; a closed thread never leads.
+		expect(got.rationalization).toBeUndefined();
+		const lead = got.pressure;
+		expect(lead && strongestEvent(r, lead)?.quote).toBe("P1 at 0.9");
+	});
+
+	test("no case yet: no thread on any leg", () => {
+		expect(legThreads(run())).toEqual({
+			pressure: undefined,
+			opportunity: undefined,
+			rationalization: undefined,
 		});
+	});
+
+	test("a message lists the indicators its thoughts raised, once each", () => {
+		const r = withCase([
+			event("P1", 0.9, { message: 0, thought: 0 }),
+			event("O1", 0.8, { message: 0, thought: 1 }),
+			event("P1", 0.7, { message: 0, thought: 2 }),
+			event("R", 0.6, { message: 1, thought: 0 }),
+			event("O4", 1, { source: "code" }),
+		]);
+		expect(indicatorsOn(r, 0)).toEqual(["P1", "O1"]);
+		expect(indicatorsOn(r, 1)).toEqual(["R"]);
+		expect(indicatorsOn(r, 2)).toEqual([]);
+		expect(indicatorsOn(run(), 0)).toEqual([]);
+	});
+
+	test("a message row carries its indicators", () => {
+		const r = withCase([event("N1", 0.8, { message: 1 })]);
+		const said = {
+			...r,
+			messages: ["a", "b"].map((text, i) => ({
+				...words,
+				after: i,
+				text,
+				role: "agent" as const,
+				streaming: false,
+			})),
+		};
 		expect(
-			levels({
-				pressure: leg(0, 0.9),
-				opportunity: leg(0.1),
-				rationalization: leg(0.6, 0.4),
-			}),
-		).toEqual({ p: 0.9, o: 0.1, r: 0.6 });
+			rows(said).flatMap((x) => (x.kind === "msg" ? [x.indicators] : [])),
+		).toEqual([[], ["N1"]]);
+	});
+
+	test("a step's shadow, or none yet", () => {
+		const shadow = {
+			decision: "hold" as const,
+			why: ["Uses: secret:0a1b2c3d4e5f"],
+			uses: [],
+			words_read: true,
+		};
+		expect(shadowOf(step(1, "t", "{}", { shadow }))).toEqual(shadow);
+		expect(shadowOf(step(1, "t", "{}", { shadow: null }))).toBeUndefined();
+		expect(shadowOf(step(1, "t", "{}"))).toBeUndefined();
 	});
 });
 
@@ -328,7 +379,6 @@ describe("the run's status", () => {
 			text: "I'll",
 			role: "agent" as const,
 			streaming: true,
-			flagged: [],
 		};
 		expect(phaseOf(quiet({ turn: "working", messages: [writing] }))).toBe(
 			"writing",

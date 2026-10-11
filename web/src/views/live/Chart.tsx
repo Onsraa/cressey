@@ -1,7 +1,7 @@
 import type { ChartConfiguration } from "chart.js";
 import { useCallback, useEffect, useRef } from "react";
 import { Chart as ChartJS } from "@/lib/chart";
-import { fmt, levels, type Scored } from "./run";
+import { fmt, type Scored } from "./run";
 
 type Line = ChartJS<"line", number[], string>;
 
@@ -109,19 +109,18 @@ export function Chart({ calls }: { calls: Scored[] }) {
 	}, []);
 	useEffect(() => {
 		const c = chart.current;
-		const at = calls.map((x) => levels(x.legs));
 		const now = calls
 			.map(
-				({ step }, i) =>
-					`${step.n}:${at[i].p},${at[i].o},${at[i].r}:${Boolean(step.held_until)}`,
+				({ step, legs }) =>
+					`${step.n}:${legs.pressure.score},${legs.opportunity.score},${legs.rationalization.score}:${Boolean(step.held_until)}`,
 			)
 			.join();
 		if (!c || now === drawn.current) return;
 		drawn.current = now;
 		c.data.labels = calls.map((x) => `#${x.step.n}`);
-		c.data.datasets[0].data = at.map((x) => x.p);
-		c.data.datasets[1].data = at.map((x) => x.o);
-		c.data.datasets[2].data = at.map((x) => x.r);
+		c.data.datasets[0].data = calls.map((x) => x.legs.pressure.score);
+		c.data.datasets[1].data = calls.map((x) => x.legs.opportunity.score);
+		c.data.datasets[2].data = calls.map((x) => x.legs.rationalization.score);
 		hold.current.at = calls.findIndex((x) => x.step.held_until);
 		c.update();
 	});
