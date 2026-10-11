@@ -5,7 +5,7 @@ import { arrive, still } from "@/lib/motion";
 import { Center, type CenterTab } from "./Center";
 import { useDecision } from "./decide";
 import type { Hover } from "./Field";
-import { Header, phaseOf } from "./Header";
+import { busy, Header, phaseOf } from "./Header";
 import { Inspector, type InspectorTab } from "./Inspector";
 import type { Scene } from "./pixels";
 import { agg, levels, type Row, rows, scored } from "./run";
@@ -195,7 +195,7 @@ function RunView({ run }: { run?: Run }) {
 					onTab={setTab}
 					row={picked ?? all.at(-1)}
 					pinned={Boolean(picked)}
-					watching={phase === "running"}
+					watching={busy(phase)}
 					decision={decision}
 					className={AT.inspector}
 				/>

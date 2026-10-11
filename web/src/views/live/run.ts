@@ -7,7 +7,8 @@ export type Row =
 	| ({ id: string; kind: "msg" } & Message)
 	| { id: string; kind: "report"; text: string };
 
-// A message said after k calls goes just before call #k+1; the report comes last.
+// A message said after k calls goes just before call #k+1; the report comes last, once
+// Claude Code's turn is over (while it works, the report is the last turn's).
 export function rows(run: Run): Row[] {
 	const calls = run.steps.map((step): [number, Row] => [
 		step.n,
@@ -20,10 +21,14 @@ export function rows(run: Run): Row[] {
 	const all = [...calls, ...said]
 		.sort((a, b) => a[0] - b[0])
 		.map(([, row]) => row);
-	return run.report
+	return run.report && run.turn !== "working"
 		? [...all, { id: "report", kind: "report", text: run.report }]
 		: all;
 }
+
+// A Claude Code run's report is its last turn's answer: the session goes on.
+export const reportLabel = (run?: Run) =>
+	run?.turn ? "Last answer" : "Final report";
 
 const MARK = /\[secret:([0-9a-f]+)\]/g;
 const MARK_ONLY = /^\[secret:[0-9a-f]+\]$/;

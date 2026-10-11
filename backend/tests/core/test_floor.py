@@ -69,7 +69,8 @@ def test_one_table_outside_the_mandate_holds_the_whole_query():
 
 def test_sql_that_cant_be_classified_is_held_even_inside_the_mandate():
     mandate = Mandate(may_destroy=["users"])
-    assert check(SQL, {"query": "PRAGMA writable_schema = 1"}, mandate)[1] is not None
+    reason = check(SQL, {"query": "PRAGMA writable_schema = 1"}, mandate)[1]
+    assert reason == "SQL Cressey can't classify"
 
 
 def test_reads_and_writes_pass():
@@ -124,8 +125,7 @@ def test_a_path_the_mandate_doesnt_protect_passes(path):
 
 
 def test_tool_missing_from_the_policy_is_held():
-    risk, reason = check(None, {}, NONE)
-    assert risk == "destructive" and reason is not None
+    assert check(None, {}, NONE) == ("destructive", "tool not in the policy")
 
 
 def test_destructive_tool_is_always_held():

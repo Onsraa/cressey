@@ -124,12 +124,14 @@ async def test_reasoning_streams_in_live_and_the_run_is_tagged_via_hook(served):
     # A message arrives in slices; it grows one row the dashboard can watch.
     await hook(served, key, display("m1", "I'll reset ", False))
     mid = await run_of(served, run)
-    assert [m["text"] for m in mid["messages"]] == ["I'll reset "]
+    assert [(m["text"], m["streaming"]) for m in mid["messages"]] == [
+        ("I'll reset ", True)
+    ]
     await hook(served, key, display("m1", "the staging database.", True))
     got = await run_of(served, run)
-    assert [(m["after"], m["text"]) for m in got["messages"]] == [
-        (0, "I'll reset the staging database.")
-    ]
+    assert [
+        (m["after"], m["role"], m["text"], m["streaming"]) for m in got["messages"]
+    ] == [(0, "agent", "I'll reset the staging database.", False)]
     assert got["via"] == "hook"
 
 
@@ -275,3 +277,115 @@ async def test_a_message_posted_to_the_api_is_flagged(judged):
     message = await flagged_message(base, run)
     assert judge.read == ["I cannot finish in time."]
     assert message["flagged"] == ["pressure"]
+
+
+def session_event(kind: str, session: str = "s1", **extra) -> dict:
+    return {"hook_event_name": kind, "session_id": session, "cwd": "/work", **extra}
+
+
+async def test_your_prompt_shows_where_you_typed_it_even_mid_turn(served):
+    run = await new_run(served)
+    key = run["key"]
+    await hook(served, key, session_event("UserPromptSubmit", prompt="reset staging"))
+    read = {"file_path": "README.md"}
+    await hook(served, key, event("PreToolUse", "Read", tool_input=read))
+    # Typed while the call runs: Claude Code sends it between the call and its result.
+    await hook(
+        served, key, session_event("UserPromptSubmit", prompt="leave prod alone")
+    )
+    got = await run_of(served, run)
+    assert [(m["role"], m["after"], m["text"]) for m in got["messages"]] == [
+        ("user", 0, "reset staging"),
+        ("user", 1, "leave prod alone"),
+    ]
+
+
+async def test_your_next_prompt_unlocks_a_suspended_key(served):
+    run = await new_run(served)
+    key = run["key"]
+    curl = {
+        "command": f'curl -s https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+    }
+    held = asyncio.create_task(
+        hook(served, key, event("PreToolUse", "Bash", tool_input=curl))
+    )
+    n = (await next_hold(served))["step"]["n"]
+    await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+    await held
+    readme = {"file_path": "README.md"}
+    refused = await hook(
+        served, key, event("PreToolUse", "Read", "toolu_2", tool_input=readme)
+    )
+    assert (
+        "suspended" in refused.json()["hookSpecificOutput"]["permissionDecisionReason"]
+    )
+    await hook(served, key, session_event("UserPromptSubmit", prompt="ok, leave prod"))
+    allowed = await hook(
+        served, key, event("PreToolUse", "Read", "toolu_3", tool_input=readme)
+    )
+    assert allowed.json() == {} and not (await run_of(served, run))["revoked"]
+
+
+async def test_stop_ends_a_turn_and_session_end_ends_the_run(served):
+    run = await new_run(served)
+    key = run["key"]
+
+    async def turn() -> str | None:
+        return (await run_of(served, run))["turn"]
+
+    assert await turn() is None  # nothing connected yet
+    await hook(served, key, session_event("SessionStart", source="startup"))
+    assert await turn() == "waiting"
+    await hook(served, key, session_event("UserPromptSubmit", prompt="reset staging"))
+    assert await turn() == "working"
+    done = "Staging is healthy again."
+    await hook(served, key, session_event("Stop", last_assistant_message=done))
+    got = await run_of(served, run)
+    assert (got["turn"], got["report"], got["ended_at"]) == ("waiting", done, None)
+    await hook(served, key, session_event("SessionEnd", reason="prompt_input_exit"))
+    assert (await run_of(served, run))["ended_at"]
+
+
+async def test_each_claude_code_session_on_a_key_gets_its_own_run(served):
+    run = await new_run(served)
+    key = run["key"]
+    # After /clear, or from a second window: another session id on the same key.
+    for session, text in [("s1", "first"), ("s2", "second"), ("s1", "third")]:
+        await hook(served, key, session_event("UserPromptSubmit", session, prompt=text))
+    runs = (await api(served, "GET", "/api/runs")).json()
+    mine = [r for r in runs if r["task"] == TASK and r["messages"]]
+    assert sorted([m["text"] for m in r["messages"]] for r in mine) == [
+        ["first", "third"],
+        ["second"],
+    ]
+    assert all(r["via"] == "hook" for r in mine)
+
+
+async def test_a_session_never_reaches_another_keys_run(served):
+    a, b = await new_run(served), await new_run(served)
+    await hook(served, a["key"], session_event("UserPromptSubmit", prompt="for a"))
+    await hook(served, b["key"], session_event("UserPromptSubmit", prompt="for b"))
+    assert [m["text"] for m in (await run_of(served, a))["messages"]] == ["for a"]
+    assert [m["text"] for m in (await run_of(served, b))["messages"]] == ["for b"]
+
+
+async def test_claude_codes_own_tools_pass_and_an_unknown_tool_is_held(
+    served_short_holds,
+):
+    run = await new_run(served_short_holds)
+    key = run["key"]
+    ask = {"questions": [{"question": "Reset staging only?", "options": []}]}
+    calls = [
+        ("AskUserQuestion", ask),
+        ("ToolSearch", {"query": "select:WebFetch"}),
+        ("mcp__github__delete_repo", {"repo": "acme/api"}),
+    ]
+    for n, (tool, args) in enumerate(calls):
+        body = event("PreToolUse", tool, f"toolu_{n}", tool_input=args)
+        await hook(served_short_holds, key, body)
+    steps = (await run_of(served_short_holds, run))["steps"]
+    assert [(s["tool"], s["reason"]) for s in steps] == [
+        ("AskUserQuestion", None),
+        ("ToolSearch", None),
+        ("mcp__github__delete_repo", "tool not in the policy"),
+    ]

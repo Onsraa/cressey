@@ -17,14 +17,28 @@ function hookSettings(origin: string, hookPath: string): string {
 			},
 		],
 	});
+	// SessionStart takes no http hook: a command posts the same event.
+	const started = {
+		matcher: "*",
+		hooks: [
+			{
+				type: "command",
+				command: `curl -s -X POST ${origin}${hookPath} -H 'Authorization: Bearer <run key>' -H 'Content-Type: application/json' --data-binary @- > /dev/null`,
+				timeout: 10,
+			},
+		],
+	};
 	return JSON.stringify(
 		{
 			hooks: {
+				SessionStart: [started],
+				UserPromptSubmit: [one(10)],
 				MessageDisplay: [one(10)],
 				PreToolUse: [one(300, { onFailure: "block" })],
 				PostToolUse: [one(60, { onFailure: "block" })],
 				PostToolUseFailure: [one(60)],
 				Stop: [one(60)],
+				SessionEnd: [one(10)],
 			},
 		},
 		null,

@@ -44,6 +44,8 @@ export function Hold({
 	const { now, go } = useLive();
 	const box = useRef<HTMLDivElement>(null);
 	const pending = step.status === "held";
+	// A rejection suspends the key until the user's next prompt in Claude Code unlocks it.
+	const unlocked = step.status === "rejected" && !run.revoked;
 	const out = OUTCOME[step.status];
 	const st = STATUS[step.status];
 	const sev = incident && SEVERITY[incident.severity];
@@ -123,7 +125,9 @@ export function Hold({
 								{out?.title ?? st.label} at {time(step.decided_at)}
 							</span>
 							<span className="text-[13px] leading-[1.4]">
-								{out?.text ?? st.tip}
+								{unlocked
+									? "The call did not go through. Your prompt unlocked the run key."
+									: (out?.text ?? st.tip)}
 							</span>
 						</div>
 					</div>

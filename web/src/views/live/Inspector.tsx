@@ -22,7 +22,14 @@ import {
 import { animIn, useOnChange } from "@/lib/motion";
 import type { Decision } from "./decide";
 import { Hold } from "./Hold";
-import { callText, carried, fmt, originText, type Row } from "./run";
+import {
+	callText,
+	carried,
+	fmt,
+	originText,
+	type Row,
+	reportLabel,
+} from "./run";
 import {
 	Bar,
 	Code,
@@ -305,6 +312,7 @@ function Text({
 	pinned: boolean;
 }) {
 	const check = row.kind === "report" ? run.report_check : undefined;
+	const you = row.kind === "msg" && row.role === "user";
 	const labels = row.kind === "msg" ? row.labels : undefined;
 	return (
 		<>
@@ -312,16 +320,20 @@ function Text({
 				<Kicker pinned={pinned} />
 				<div className="flex min-w-0 items-baseline gap-2.5">
 					<span className="truncate font-medium font-mono text-[15px]">
-						{row.kind === "report" ? "Final report" : "Message"}
+						{row.kind === "report" ? reportLabel(run) : you ? "You" : "Thought"}
 					</span>
 				</div>
 			</div>
 			<div className="flex flex-col gap-1.5">
 				<span
-					data-tip="Untrusted: shown as plain text, never interpreted"
+					data-tip={
+						you
+							? "Your prompt to Claude Code: shown, never scored as the agent's"
+							: "Untrusted: shown as plain text, never interpreted"
+					}
 					className="label self-start"
 				>
-					agent text
+					{you ? "your prompt" : "agent text"}
 				</span>
 				<p className="m-0 text-pretty text-[15px] leading-normal">{row.text}</p>
 			</div>
@@ -333,7 +345,7 @@ function Text({
 						}
 						className="label mb-1 self-start"
 					>
-						read in this message
+						read in this thought
 					</span>
 					{Object.entries(MESSAGE_LABEL).map(([k, name]) => (
 						<LabelRow key={k} name={name} score={labels[k]} />

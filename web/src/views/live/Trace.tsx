@@ -8,6 +8,7 @@ import {
 	MessageSquare,
 	Terminal,
 	TriangleAlert,
+	UserRound,
 } from "@/components/icons";
 import { byWords, FROM_WORDS, LEGS, level, STATUS, shown } from "@/lib/labels";
 import { revealRow, scrollToEnd } from "@/lib/motion";
@@ -19,6 +20,7 @@ import {
 	originText,
 	RAMP,
 	type Row,
+	reportLabel,
 } from "./run";
 import { Letter, StatusChip } from "./ui";
 
@@ -85,7 +87,7 @@ export function Trace({
 				<div className="flex-1" />
 				<span
 					data-tip={
-						"Scores per call: Pressure · Opportunity · Rationalization\nA message lights P or R when its words are flagged"
+						"Scores per call: Pressure · Opportunity · Rationalization\nA thought lights P or R when its words are flagged"
 					}
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 					tabIndex={0}
@@ -102,7 +104,7 @@ export function Trace({
 						</span>
 						<span className="font-medium text-[15px]">No calls yet</span>
 						<span className="max-w-[230px] text-[13px] text-mute-2 leading-[1.45]">
-							Every call, message and report lands here; calls are scored on the
+							Every call, thought and report lands here; calls are scored on the
 							three legs.
 						</span>
 					</div>
@@ -192,8 +194,9 @@ function TextRow({
 }) {
 	const { focusMode } = useLive();
 	const report = row.kind === "report";
+	const you = row.kind === "msg" && row.role === "user";
 	const check = report ? run?.report_check : undefined;
-	const Icon = report ? FileText : MessageSquare;
+	const Icon = report ? FileText : you ? UserRound : MessageSquare;
 	return (
 		<>
 			<span className="pt-px">
@@ -204,14 +207,18 @@ function TextRow({
 			<span className="flex min-w-0 flex-col gap-[3px]">
 				<span className="flex min-w-0 items-center gap-1.5">
 					<span className="truncate font-medium font-mono text-[12.5px]">
-						{report ? "Final report" : "Message"}
+						{report ? reportLabel(run) : you ? "You" : "Thought"}
 					</span>
 					{!focusMode && (
 						<span
-							data-tip="Agent text: untrusted, shown as plain text"
+							data-tip={
+								you
+									? "Your prompt to Claude Code: shown, never scored as the agent's"
+									: "Agent text: untrusted, shown as plain text"
+							}
 							className="whitespace-nowrap font-mono text-[10.5px] text-mute-2"
 						>
-							agent text
+							{you ? "your prompt" : "agent text"}
 						</span>
 					)}
 					{check?.confirmed && (
@@ -232,7 +239,7 @@ function TextRow({
 					{row.text}
 				</span>
 			</span>
-			{row.kind === "msg" ? (
+			{row.kind === "msg" && !you ? (
 				<Flags row={row} />
 			) : (
 				<span className="flex gap-[3px] pt-px" />

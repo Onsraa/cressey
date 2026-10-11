@@ -39,6 +39,8 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
     assert run["messages"][0] == {
         "after": 0,
         "text": demo.steps[0].say,
+        "role": "agent",
+        "streaming": False,
         "labels": None,
         "flagged": [],
     }

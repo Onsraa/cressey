@@ -1,3 +1,4 @@
+import gsap from "gsap";
 import { still } from "@/lib/motion";
 import { band, RAMP } from "./run";
 
@@ -90,6 +91,7 @@ type Wave = {
 	life: number;
 	rm: number;
 };
+type Probe = { x: number; y: number; lx: number | null; ly: number | null };
 type Marker = {
 	x: number;
 	y: number;
@@ -122,6 +124,7 @@ export class Pixels {
 	private hb = -1e9;
 	private shake = 0;
 	private waves: Wave[] = [];
+	private probes: Probe[] = []; // calls flying in from the left edge
 	private pm: Pt | null = null;
 	private holdPos: Pt | null = null;
 	private hl: Marker | null = null;
@@ -176,6 +179,8 @@ export class Pixels {
 		cancelAnimationFrame(this.raf);
 		for (const t of this.timers) clearTimeout(t);
 		this.timers = [];
+		for (const p of this.probes) gsap.killTweensOf(p);
+		this.probes = [];
 		this.cv = null;
 		this.ctx = null;
 		this.pm = null;
@@ -315,8 +320,8 @@ export class Pixels {
 		this.timers.push(window.setTimeout(fn, ms));
 	}
 
-	// A call lands once the marker reaches it: its heat, a ring, and for a held call three
-	// salmon shockwaves and a shake.
+	// A call flies in from the left edge, trailing heat, and lands: its heat, a ring, and for
+	// a held call three salmon shockwaves and a shake.
 	private flyIn(d: Dot) {
 		const T = this.tri;
 		if (!T) return;
@@ -336,8 +341,24 @@ export class Pixels {
 				}
 			}
 		};
-		if (this.rm) land();
-		else this.later(land, 680);
+		if (this.rm) return land();
+		const pr: Probe = {
+			x: -8,
+			y: Math.min(this.H - 8, Math.max(8, ty + (this.hsh(tx, ty) - 0.5) * 120)),
+			lx: null,
+			ly: null,
+		};
+		this.probes.push(pr);
+		gsap.to(pr, {
+			x: tx,
+			y: ty,
+			duration: 0.95,
+			ease: "power3.out",
+			onComplete: () => {
+				this.probes = this.probes.filter((p) => p !== pr);
+				land();
+			},
+		});
 	}
 
 	private move = (e: PointerEvent) => {
@@ -397,6 +418,27 @@ export class Pixels {
 			tr[i] = a < 0.003 ? 0 : a;
 			const b = pk[i] * 0.93;
 			pk[i] = b < 0.01 ? 0 : b;
+		}
+		for (const p of this.probes) {
+			if (p.lx !== null && p.ly !== null) {
+				const n = Math.max(
+					1,
+					Math.min(
+						40,
+						Math.round(Math.hypot(p.x - p.lx, p.y - p.ly) / (c * 0.8)),
+					),
+				);
+				for (let j = 1; j <= n; j++)
+					this.dep(
+						tr,
+						p.lx + ((p.x - p.lx) * j) / n,
+						p.ly + ((p.y - p.ly) * j) / n,
+						0.5,
+						1.1,
+					);
+			}
+			p.lx = p.x;
+			p.ly = p.y;
 		}
 		ctx.setTransform(this.DPR, 0, 0, this.DPR, 0, 0);
 		ctx.fillStyle = PAPER;

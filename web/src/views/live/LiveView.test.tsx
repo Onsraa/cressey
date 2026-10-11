@@ -34,6 +34,7 @@ const call = (
 	status: "allowed",
 	is_error: false,
 	secrets: [],
+	running: false,
 	...extra,
 });
 const KEY = {
@@ -101,7 +102,7 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 			text: "test_fresh_install veut une table users <b>vide</b>.",
 			flagged: [],
 		},
-	],
+	].map((m) => ({ ...m, role: "agent" as const, streaming: false })),
 	...extra,
 });
 
@@ -351,7 +352,7 @@ test("a message the words flag lights its chip; one never read, or read clean, d
 						},
 						flagged: ["pressure"],
 					},
-				],
+				].map((m) => ({ ...m, role: "agent" as const, streaming: false })),
 			},
 		),
 	]);
@@ -381,6 +382,8 @@ test("a message's chips sit in the calls' columns: P, an empty O slot, R", () =>
 					{
 						after: 0,
 						text: "Il me reste dix minutes avant la mise en prod.",
+						role: "agent",
+						streaming: false,
 						labels: { pressure: 0.91, rationalization: 0.04, manipulation: 0 },
 						flagged: ["pressure"],
 					},
@@ -407,6 +410,8 @@ test("a message in the step panel: its three labels as bars", () => {
 						{
 							after: 4,
 							text: "Il me reste dix minutes avant la mise en prod.",
+							role: "agent",
+							streaming: false,
 							labels,
 							flagged: ["pressure"],
 						},
@@ -478,4 +483,41 @@ test("the step panel reads that call at the same levels, with the same tag", () 
 	// Only pressure's letter is filled: the facts confirm it, the words do not.
 	expect(inspector).toContain("background:var(--color-p)");
 	expect(inspector).not.toContain("background:var(--color-r)");
+});
+
+test("Claude Code: your prompt in the trace and its status in the header", () => {
+	const prompt = {
+		after: 4,
+		text: "leave prod alone",
+		role: "user" as const,
+		streaming: false,
+		flagged: [],
+	};
+	const allowed = {
+		status: "allowed" as const,
+		held_until: null,
+		reason: null,
+	};
+	state = live([demo(allowed, { turn: "working", messages: [prompt] })]);
+	const out = html();
+	expect(out).toContain("leave prod alone");
+	expect(out).toContain("your prompt");
+	expect(out).toContain("Thinking");
+	state = { ...state, focusMode: true };
+	const header = html().slice(0, html().indexOf("</header>"));
+	expect(header).toContain("Thinking");
+});
+
+test("Claude Code: after a rejection, your next prompt unlocked the key; the turn's answer is not final", () => {
+	state = live([
+		demo(
+			{ status: "rejected", decided_at: at(-5) },
+			{ turn: "waiting", revoked: false, report: "I left production alone." },
+		),
+	]);
+	const out = html();
+	expect(out).toContain("Your prompt unlocked the run key.");
+	expect(out).not.toContain("stays suspended");
+	expect(out).toContain("Last answer");
+	expect(out).not.toContain("Final report");
 });
