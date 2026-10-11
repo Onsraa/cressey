@@ -153,23 +153,23 @@ test("a held call: trace, gauges and the hold with its countdown", () => {
 	for (const s of [
 		"Live run",
 		"a1b2c3d4e5f6",
-		"running",
+		"Call held",
 		"mandate",
 		"key suspended",
 		"Fais passer les tests avant la mise en prod de ce soir.",
-		"query: DELETE FROM users, key: ‹DB_PROD_KEY›",
+		"run_sql {query: &quot;DELETE FROM users&quot;, key: ‹DB_PROD_KEY›}",
 		"SQL destructeur hors mandat : users",
 		"DB_PROD_KEY (read in .env.prod, step 3)",
 		"failed",
 		"agent text",
-		"way out sent · step 3",
-		"key read-only · step 4",
-		"1 fact from the log",
-		"HOLD",
+		"Way out sent to the agent · step 3",
+		"Key switched to read-only · step 4",
+		"1 fact",
+		"HELD",
 		"safe cancel in",
-		"3:20",
+		"03:20",
 		"Reject",
-		"Approve",
+		"Approve…",
 		"critical",
 		"Run key suspended",
 		"Way out sent to the agent",
@@ -204,11 +204,11 @@ test("after the decision: the outcome, the incident link, the contradicted repor
 	]);
 	const out = html();
 	for (const s of [
-		"finished",
-		"rejected at",
-		"Rejected by a human: not run",
-		"Open incident",
-		"final report",
+		"Ended",
+		"Rejected at",
+		"The call did not go through. The run key stays suspended.",
+		"Open incident inc0412",
+		"Final report",
 		"report contradicted by the log",
 	])
 		expect(out).toContain(s);
@@ -224,7 +224,7 @@ test("a link to a step selects it in the inspector", () => {
 	expect(out).toContain("decision 0.8 ms");
 });
 
-test("focus mode: the task and the key in the header, the hold without its details", () => {
+test("focus mode: the task and the key in the header, the hold in full", () => {
 	state = { ...live([demo({})]), focusMode: true };
 	const out = html();
 	const header = out.slice(0, out.indexOf("</header>"));
@@ -241,23 +241,22 @@ test("focus mode: the task and the key in the header, the hold without its detai
 		"What Cressey sees",
 	])
 		expect(header).not.toContain(s);
-	// The trace keeps the calls and the destructive chip, the hold its decision and its why.
+	// The trace keeps the calls and the destructive chip, the hold stays whole.
 	for (const s of [
 		"run_sql",
 		"destructive",
 		"Reject",
 		"safe cancel in",
 		"SQL destructeur hors mandat : users",
+		"attempted",
+		"Way out sent to the agent",
 	])
 		expect(out).toContain(s);
 	for (const s of [
 		"agent text",
-		"1 fact from the log",
+		"1 fact",
 		"How to read the triangle",
 		"Across steps",
-		"attempted",
-		"Suspended as soon as the call was held",
-		"Way out sent to the agent",
 		"STEP",
 	])
 		expect(out).not.toContain(s);
@@ -273,7 +272,7 @@ test("focus mode without a hold: a quiet inspector", () => {
 
 test("waiting: the MCP URL to paste", () => {
 	state = live([demo({}, { steps: [], messages: [], revoked: false })]);
-	expect(html()).toContain("No steps yet");
+	expect(html()).toContain("No calls yet");
 	expect(html()).toContain("http://localhost:8000/mcp");
 	state = live([]);
 	expect(html()).toContain("Waiting for an agent");

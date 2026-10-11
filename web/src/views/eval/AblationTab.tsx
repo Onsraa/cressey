@@ -1,8 +1,8 @@
 import type { EvalFile } from "@/api/types";
-import { Cells } from "@/components/Cells";
+import { Triangle } from "@/components/icons";
 import { ms, share, signed } from "./format";
 import type { Ablation } from "./read";
-import { Aside, Head, type Tile, Tiles } from "./ui";
+import { Aside, Miss, Panel, type Tile, Tiles } from "./ui";
 
 type Cell = { value: string; score?: number }; // a score draws the pixel cells
 
@@ -11,37 +11,24 @@ const held = (k: number, n: number): Cell => ({
 	score: share(k, n),
 });
 
-function Ids({
-	title,
-	note,
-	ids,
-}: {
-	title: string;
-	note: string;
-	ids: string[];
-}) {
-	return (
-		<section className="panel">
-			<Head>
-				<span>{title}</span>
-				<Aside>{ids.length}</Aside>
-			</Head>
-			<p className="px-[18px] pt-3 text-[13px] text-mute leading-[1.4]">
-				{note}
-			</p>
-			<ul className="px-[18px] pb-2">
-				{ids.map((id) => (
-					<li key={id} className="border-line border-b py-2 font-mono text-xs">
-						{id}
-					</li>
-				))}
-				{ids.length === 0 && (
-					<li className="py-2 font-mono text-mute-2 text-xs">none</li>
-				)}
-			</ul>
-		</section>
-	);
-}
+const CELLS = 20;
+
+// The design's ablation bar: 20 cells, ink up to the share.
+const Cells = ({ score }: { score: number }) => (
+	<span
+		aria-hidden="true"
+		className="grid gap-px"
+		style={{ gridTemplateColumns: `repeat(${CELLS}, minmax(0, 1fr))` }}
+	>
+		{Array.from({ length: CELLS }, (_, i) => (
+			<span
+				// biome-ignore lint/suspicious/noArrayIndexKey: a cell is its position
+				key={i}
+				className={`h-[7px] shadow-[inset_0_0_0_1px_#c4c4c4] transition-[background-color] duration-[350ms] ${i < Math.round(score * CELLS) ? "bg-ink" : "bg-surface"}`}
+			/>
+		))}
+	</span>
+);
 
 export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 	const { floor: f, both: b } = a;
@@ -55,16 +42,16 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 			: `${signed(b.stop_ms_p50 - f.stop_ms_p50)} ms`;
 	const tiles: Tile[] = [
 		{
-			label: "Incidents held by the triangle alone",
+			label: "Incidents caught by the triangle alone",
 			value: signed(gained),
-			sub: `${f.incident_held} → ${b.incident_held} of ${b.incident_sessions}`,
-			reading: "good, higher is better",
+			sub: `${f.incident_held} → ${b.incident_held} / ${b.incident_sessions}`,
+			reading: "good",
 		},
 		{
-			label: "Extra holds",
+			label: "Extra false holds",
 			value: signed(b.normal_held - f.normal_held),
-			sub: `${f.normal_held} → ${b.normal_held} of ${b.normal_sessions}`,
-			reading: "to watch, the triangle's cost",
+			sub: `${f.normal_held} → ${b.normal_held} / ${b.normal_sessions}`,
+			reading: "watch, the cost of the triangle",
 			watch: true,
 		},
 		{
@@ -92,18 +79,37 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 		},
 	];
 	const grid = "grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)]";
-
+	// The triangle's gain always shows; sessions the floor alone held, only if any.
+	const lists = [
+		{
+			title: "HELD BY THE TRIANGLE ALONE",
+			note: "Held only when the triangle may hold, with no floor touched.",
+			ids: a.only_triangle,
+		},
+		...(a.only_floor.length
+			? [
+					{
+						title: "HELD BY THE FLOOR ALONE",
+						note: "Held by the floor alone, but not once the triangle is added.",
+						ids: a.only_floor,
+					},
+				]
+			: []),
+	];
 	return (
 		<>
 			<Tiles file={file} tiles={tiles} />
-			<div className="rise grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4">
-				<section className="panel">
+			<div
+				data-anim
+				className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4"
+			>
+				<div className="border-[1.2px] border-ink bg-surface shadow-[0_1px_2px_rgba(30,30,30,.04),0_12px_28px_-18px_rgba(30,30,30,.22)]">
 					<div
 						className={`${grid} border-ink border-b-[1.2px] font-mono text-xs`}
 					>
 						<span className="px-3.5 py-2.5 text-mute-2">{file.split}</span>
 						<span className="border-line border-l px-3.5 py-2.5">
-							floor alone
+							floor only
 						</span>
 						<span className="bg-ink px-3.5 py-2.5 text-surface">
 							floor + triangle
@@ -124,32 +130,39 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 										<span className="whitespace-nowrap font-pixel text-[34px] leading-[0.8]">
 											{value}
 										</span>
-										{/* 10 cells: 20 would overflow the column on a 1280 px screen */}
-										{score !== undefined && (
-											<Cells
-												score={score}
-												color="var(--color-ink)"
-												n={10}
-												size={7}
-											/>
-										)}
+										{score !== undefined && <Cells score={score} />}
 									</div>
 								);
 							})}
 						</div>
 					))}
-				</section>
+				</div>
 				<div className="flex flex-col gap-4">
-					<Ids
-						title="TRIANGLE ONLY"
-						note="Sessions held only when the triangle may hold."
-						ids={a.only_triangle}
-					/>
-					<Ids
-						title="FLOOR ONLY"
-						note="Sessions held by the floor alone, but not once the triangle is added."
-						ids={a.only_floor}
-					/>
+					{lists.map((l) => (
+						<Panel
+							key={l.title}
+							head={
+								<>
+									<span className="inline-flex text-[#c33a22]">
+										<Triangle size={14} />
+									</span>
+									<span>{l.title}</span>
+									<Aside>{l.ids.length}</Aside>
+								</>
+							}
+						>
+							{l.ids.map((id) => (
+								<Miss key={id} split={file.split} id={id}>
+									{l.note}
+								</Miss>
+							))}
+							{l.ids.length === 0 && (
+								<p className="px-[18px] py-3.5 font-mono text-mute-2 text-xs">
+									none
+								</p>
+							)}
+						</Panel>
+					))}
 				</div>
 			</div>
 		</>

@@ -1,0 +1,637 @@
+import { still } from "@/lib/motion";
+import { band, RAMP } from "./run";
+
+// The design's fraud-triangle field, ported from its prototype (frame, drawEdges, drawHL):
+// a canvas of 10 px cells, its noise drifting, calls landing as heat with a ring, the held
+// call pulsing salmon, the cursor painting a fading trail, a click sending a shockwave, and
+// a marker gliding to the latest (or hovered, or selected) call, leaving a trail.
+
+const CELL = 10; // the design's « medium » pixel
+const HOT = "#EF7462";
+const SALMON = "#FFD6CE";
+const INK = "#1E1E1E";
+const PAPER = "#FEFEFE";
+const LC = { p: "#3D64D8", o: "#0E8F86", r: "#8A55D1" } as const;
+
+export type P3 = { p: number; o: number; r: number };
+type Pt = [number, number];
+// The vertices, the side, the height, and the field's width.
+export type Tri = { P: Pt; O: Pt; R: Pt; s: number; h: number; W: number };
+// A scored call, and whether it was ever held.
+export type Dot = { id: string; legs: P3; hold: boolean };
+export type Scene = {
+	calls: Dot[];
+	confirmed: Record<keyof P3, boolean>; // a side closes when both its legs are
+	held: boolean; // a call waits for a human
+	holdId?: string; // the held call, pending or decided
+	pin?: string; // the hovered or selected call the marker goes to
+};
+
+// Room around the triangle for the vertex labels.
+export function layout(W: number, H: number): Tri {
+	const padX = 84;
+	const top = 62;
+	const bot = 60;
+	const s = Math.max(
+		140,
+		Math.min(W - padX * 2, ((H - top - bot) * 2) / Math.sqrt(3)),
+	);
+	const h = (s * Math.sqrt(3)) / 2;
+	const cx = W / 2;
+	const y0 = top + Math.max(0, (H - top - bot - h) / 2);
+	return {
+		P: [cx, y0],
+		O: [cx - s / 2, y0 + h],
+		R: [cx + s / 2, y0 + h],
+		s,
+		h,
+		W,
+	};
+}
+
+// Where a call lands: its squared scores pull it toward their vertices, eased 18 % toward
+// the centre. No score at all: the centre (the design divides by zero there).
+export function pos(T: Tri, legs: P3): Pt {
+	let a = legs.p * legs.p;
+	let b = legs.o * legs.o;
+	let c = legs.r * legs.r;
+	const s = a + b + c;
+	const m = 1 / 3;
+	const k = 0.82;
+	if (!s) a = b = c = m;
+	else {
+		a = m + (a / s - m) * k;
+		b = m + (b / s - m) * k;
+		c = m + (c / s - m) * k;
+	}
+	return [
+		a * T.P[0] + b * T.O[0] + c * T.R[0],
+		a * T.P[1] + b * T.O[1] + c * T.R[1],
+	];
+}
+
+function bary(T: Tri, x: number, y: number) {
+	const { P, O, R } = T;
+	const d = (O[1] - R[1]) * (P[0] - R[0]) + (R[0] - O[0]) * (P[1] - R[1]);
+	const a = ((O[1] - R[1]) * (x - R[0]) + (R[0] - O[0]) * (y - R[1])) / d;
+	const b = ((R[1] - P[1]) * (x - R[0]) + (P[0] - R[0]) * (y - R[1])) / d;
+	return [a, b, 1 - a - b];
+}
+
+const amp = (d: Dot) => Math.max(d.legs.p, d.legs.o, d.legs.r) * 0.95;
+const key = (d: Dot) => `${d.id}:${d.legs.p},${d.legs.o},${d.legs.r}:${d.hold}`;
+
+type Wave = {
+	x: number;
+	y: number;
+	b: number;
+	pow: number;
+	hot: boolean;
+	life: number;
+	rm: number;
+};
+type Marker = {
+	x: number;
+	y: number;
+	a: number;
+	s: number;
+	id: string | null;
+	w: P3;
+	lx: number | null;
+	ly: number | null;
+};
+
+export class Pixels {
+	private read: () => Scene = () => ({
+		calls: [],
+		confirmed: { p: false, o: false, r: false },
+		held: false,
+	});
+	private onLayout: (t: Tri) => void = () => {};
+	private run = "";
+	private cv: HTMLCanvasElement | null = null;
+	private ctx: CanvasRenderingContext2D | null = null;
+	private ro: ResizeObserver | null = null;
+	private raf = 0;
+	private timers: number[] = [];
+	private rm = false; // reduced motion: the field stands still
+	private S = Math.random() * 1000;
+	private t = 0;
+	private intro = 0;
+	private l: number | null = null;
+	private hb = -1e9;
+	private shake = 0;
+	private waves: Wave[] = [];
+	private pm: Pt | null = null;
+	private holdPos: Pt | null = null;
+	private hl: Marker | null = null;
+	private keys: string[] = [];
+	private DPR = 1;
+	private W = 0;
+	private H = 0;
+	private cols = 0;
+	private rows = 0;
+	private tr = new Float32Array(0); // the cursor's and the marker's trail
+	private acc = new Float32Array(0); // the calls' heat
+	private pk = new Float32Array(0); // the salmon waves' peak
+	private mask = new Uint8Array(0); // the triangle, its edge dithered
+	private tri: Tri | null = null;
+	private reported = ""; // the size last told to the page
+
+	// One canvas at a time: a page switch detaches it, and the field keeps its texture and
+	// its waves for the next one, as the design's.
+	attach(
+		cv: HTMLCanvasElement,
+		run: string,
+		read: () => Scene,
+		onLayout: (t: Tri) => void,
+	) {
+		this.read = read;
+		this.onLayout = onLayout;
+		this.reported = "";
+		this.rm = still();
+		if (run !== this.run) {
+			this.run = run;
+			this.waves = [];
+			this.holdPos = null;
+			this.hl = null;
+		}
+		this.cv = cv;
+		this.ctx = cv.getContext("2d");
+		cv.addEventListener("pointermove", this.move);
+		cv.addEventListener("pointerleave", this.leave);
+		cv.addEventListener("click", this.click);
+		this.ro = new ResizeObserver(() => this.size());
+		if (cv.parentElement) this.ro.observe(cv.parentElement);
+		this.size();
+		this.raf = requestAnimationFrame(this.frame);
+	}
+
+	detach(cv: HTMLCanvasElement) {
+		if (this.cv !== cv) return;
+		cv.removeEventListener("pointermove", this.move);
+		cv.removeEventListener("pointerleave", this.leave);
+		cv.removeEventListener("click", this.click);
+		this.ro?.disconnect();
+		cancelAnimationFrame(this.raf);
+		for (const t of this.timers) clearTimeout(t);
+		this.timers = [];
+		this.cv = null;
+		this.ctx = null;
+		this.pm = null;
+	}
+
+	// A call scored since the last look flies in; any other change redraws the heat at once.
+	sync() {
+		if (!this.tri) return;
+		const calls = this.read().calls;
+		const next = calls.map(key);
+		if (next.join() === this.keys.join()) return;
+		const appended = this.keys.every((k, i) => next[i] === k);
+		if (appended) for (const d of calls.slice(this.keys.length)) this.flyIn(d);
+		else this.rebuild();
+		this.keys = next;
+	}
+
+	private size() {
+		const cv = this.cv;
+		const p = cv?.parentElement;
+		if (!cv || !p || !this.ctx) return;
+		const W = p.clientWidth;
+		const H = p.clientHeight;
+		if (!W || !H) return;
+		const c = CELL;
+		this.DPR = Math.min(window.devicePixelRatio, 2);
+		cv.width = Math.round(W * this.DPR);
+		cv.height = Math.round(H * this.DPR);
+		cv.style.width = `${W}px`;
+		cv.style.height = `${H}px`;
+		this.W = W;
+		this.H = H;
+		this.cols = Math.ceil(W / c);
+		this.rows = Math.ceil(H / c);
+		const N = this.cols * this.rows;
+		this.tr = new Float32Array(N);
+		this.acc = new Float32Array(N);
+		this.pk = new Float32Array(N);
+		this.mask = new Uint8Array(N);
+		const T = layout(W, H);
+		this.tri = T;
+		for (let r = 0; r < this.rows; r++)
+			for (let q = 0; q < this.cols; q++) {
+				const b = bary(T, (q + 0.5) * c, (r + 0.5) * c);
+				const mn = Math.min(b[0], b[1], b[2]);
+				if (mn >= 0)
+					this.mask[r * this.cols + q] =
+						mn * T.h > c * 1.6 || this.hsh(q, r) < 0.55 ? 1 : 0;
+			}
+		this.rebuild();
+		if (this.reported !== `${W}x${H}`) {
+			this.reported = `${W}x${H}`;
+			this.onLayout(T);
+		}
+	}
+
+	private rebuild() {
+		const T = this.tri;
+		if (!T) return;
+		this.acc.fill(0);
+		const sc = this.read();
+		const sg = this.sigC();
+		for (const d of sc.calls) {
+			const [x, y] = pos(T, d.legs);
+			this.dep(this.acc, x, y, amp(d), sg);
+		}
+		const he = sc.calls.find((d) => d.id === sc.holdId);
+		this.holdPos = he ? pos(T, he.legs) : null;
+		this.keys = sc.calls.map(key);
+	}
+
+	private hsh(c: number, r: number) {
+		const n = Math.sin(c * 127.1 + r * 311.7 + this.S * 0.13) * 43758.5453;
+		return n - Math.floor(n);
+	}
+
+	private base(nx0: number, ny0: number, tt: number) {
+		const S = this.S;
+		const nx = nx0 + Math.sin(ny0 * 5 + tt * 0.5 + S) * 0.05;
+		const ny = ny0 + Math.cos(nx * 5 - tt * 0.4) * 0.05;
+		const v =
+			Math.sin(nx * 5.6 + S * 1.3 + tt * 0.3) *
+				Math.cos(ny * 4.7 - S * 0.7 + tt * 0.22) +
+			Math.sin((nx * 1.4 + ny * 1.7) * 4.1 - S + tt * 0.16) +
+			Math.sin(ny * 9 + S * 2.1 + nx * 3) * 0.5 +
+			Math.sin(nx * 13 - S * 1.7) * 0.28;
+		return 0.5 + 0.5 * (v / 2.55);
+	}
+
+	// A blob's spread, in cells.
+	private sigC() {
+		return Math.max(1.5, ((this.tri?.s ?? 0) * 0.034) / CELL);
+	}
+
+	// Heat laid in a gaussian around (x, y).
+	private dep(
+		arr: Float32Array,
+		x: number,
+		y: number,
+		amt: number,
+		sig: number,
+	) {
+		const c = CELL;
+		const cc = x / c;
+		const cr = y / c;
+		const R = Math.ceil(sig * 2.2);
+		const inv = 1 / (2 * sig * sig);
+		const q0 = Math.floor(cc);
+		const r0 = Math.floor(cr);
+		for (let dr = -R; dr <= R; dr++)
+			for (let dq = -R; dq <= R; dq++) {
+				const q = q0 + dq;
+				const r = r0 + dr;
+				if (q < 0 || r < 0 || q >= this.cols || r >= this.rows) continue;
+				const dx = q + 0.5 - cc;
+				const dy = r + 0.5 - cr;
+				const w = Math.exp(-(dx * dx + dy * dy) * inv);
+				if (w > 0.02) {
+					const i = r * this.cols + q;
+					arr[i] = Math.min(1, arr[i] + amt * w);
+				}
+			}
+	}
+
+	private wave(
+		x: number,
+		y: number,
+		pow: number,
+		hot: boolean,
+		life = 1500,
+		rm = 0,
+	) {
+		this.waves.push({ x, y, b: this.t, pow, hot, life, rm });
+	}
+
+	private later(fn: () => void, ms: number) {
+		this.timers.push(window.setTimeout(fn, ms));
+	}
+
+	// A call lands once the marker reaches it: its heat, a ring, and for a held call three
+	// salmon shockwaves and a shake.
+	private flyIn(d: Dot) {
+		const T = this.tri;
+		if (!T) return;
+		const [tx, ty] = pos(T, d.legs);
+		const amt = amp(d);
+		const sg = this.sigC();
+		const land = () => {
+			this.dep(this.acc, tx, ty, amt, sg);
+			if (!this.rm) this.wave(tx, ty, 1, false, 760, CELL * 6.5);
+			if (d.hold) {
+				this.holdPos = [tx, ty];
+				if (!this.rm) {
+					this.wave(tx, ty, 1.3, true);
+					this.later(() => this.wave(tx, ty, 1, true), 240);
+					this.later(() => this.wave(tx, ty, 0.7, true), 480);
+					this.shake = 0.55;
+				}
+			}
+		};
+		if (this.rm) land();
+		else this.later(land, 680);
+	}
+
+	private move = (e: PointerEvent) => {
+		if (this.rm || !this.cv || !this.tri) return;
+		const b = this.cv.getBoundingClientRect();
+		const p: Pt = [e.clientX - b.left, e.clientY - b.top];
+		const pm = this.pm;
+		if (pm) {
+			const n = Math.max(
+				1,
+				Math.min(
+					48,
+					Math.round(Math.hypot(p[0] - pm[0], p[1] - pm[1]) / (CELL * 0.8)),
+				),
+			);
+			for (let i = 1; i <= n; i++)
+				this.dep(
+					this.tr,
+					pm[0] + ((p[0] - pm[0]) * i) / n,
+					pm[1] + ((p[1] - pm[1]) * i) / n,
+					0.16,
+					2.4,
+				);
+		}
+		this.pm = p;
+	};
+
+	private leave = () => {
+		this.pm = null;
+	};
+
+	private click = (e: MouseEvent) => {
+		if (this.rm || !this.cv) return;
+		const b = this.cv.getBoundingClientRect();
+		this.wave(e.clientX - b.left, e.clientY - b.top, 0.75, false);
+	};
+
+	private frame = (ts: number) => {
+		this.raf = requestAnimationFrame(this.frame);
+		const cv = this.cv;
+		const ctx = this.ctx;
+		const T = this.tri;
+		if (!cv || !ctx || !T || !cv.isConnected) {
+			this.l = ts;
+			return;
+		}
+		const dt = Math.min(64, ts - (this.l ?? ts));
+		this.l = ts;
+		const fixed = this.rm;
+		this.t += dt;
+		this.intro += dt / 1000;
+		const tt = fixed ? 0 : this.t / 1000;
+		const { W, H, cols, rows, tr, acc, pk, mask } = this;
+		const c = CELL;
+		for (let i = 0; i < tr.length; i++) {
+			const a = tr[i] * 0.878;
+			tr[i] = a < 0.003 ? 0 : a;
+			const b = pk[i] * 0.93;
+			pk[i] = b < 0.01 ? 0 : b;
+		}
+		ctx.setTransform(this.DPR, 0, 0, this.DPR, 0, 0);
+		ctx.fillStyle = PAPER;
+		ctx.fillRect(0, 0, W, H);
+		if (this.shake > 0.01 && !fixed) {
+			ctx.translate(
+				(Math.random() - 0.5) * this.shake * 12,
+				(Math.random() - 0.5) * this.shake * 12,
+			);
+			this.shake *= 0.9;
+		} else this.shake = 0;
+		ctx.strokeStyle = "#EFEFED";
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		for (let x = 0; x <= W; x += c) {
+			ctx.moveTo(x + 0.5, 0);
+			ctx.lineTo(x + 0.5, H);
+		}
+		for (let y = 0; y <= H; y += c) {
+			ctx.moveTo(0, y + 0.5);
+			ctx.lineTo(W, y + 0.5);
+		}
+		ctx.stroke();
+		this.waves = this.waves.filter((w) => this.t - w.b < w.life);
+		const Rm = Math.hypot(W, H) * 0.62;
+		const ws = this.waves.map((w) => {
+			const a = (this.t - w.b) / 1000;
+			if (w.rm) {
+				const f = a / (w.life / 1000);
+				return {
+					x: w.x,
+					y: w.y,
+					R: w.rm * (0.25 + 0.75 * f),
+					s2: 2 * (c * 1.15 * w.pow) ** 2,
+					amp: (1 - f) * 1.15 * w.pow,
+					hot: w.hot,
+				};
+			}
+			return {
+				x: w.x,
+				y: w.y,
+				R: a * Rm,
+				s2: 2 * (c * 2.4 * w.pow) ** 2,
+				amp: (1 - a / 1.5) * 1.1 * w.pow,
+				hot: w.hot,
+			};
+		});
+		const sc = this.read();
+		const hp = sc.held ? this.holdPos : null;
+		const br =
+			hp && !fixed ? 0.5 + 0.5 * Math.sin((this.t * Math.PI * 2) / 1900) : 0.5;
+		const hr = hp ? this.sigC() * c * (1.8 + 1.1 * br) : 0;
+		const intro = this.intro / 1.6;
+		// While a call waits, its spot breathes and sends a salmon ring every 1.9 s.
+		if (hp && !fixed && this.t - this.hb > 1900) {
+			this.hb = this.t;
+			this.waves.push({
+				x: hp[0],
+				y: hp[1],
+				b: this.t,
+				pow: 0.8,
+				hot: true,
+				life: 1800,
+				rm: c * 7.5,
+			});
+		}
+		for (let r = 0; r < rows; r++)
+			for (let q = 0; q < cols; q++) {
+				const i = r * cols + q;
+				const x = (q + 0.5) * c;
+				const y = (r + 0.5) * c;
+				let v = acc[i] * 0.95 + tr[i] * 0.9;
+				if (mask[i] && this.hsh(q * 1.7 + 11.3, r * 1.3 + 5.1) < intro)
+					v +=
+						0.08 +
+						0.24 * this.base(x / W, y / H, tt) +
+						(this.hsh(q, r) - 0.5) * 0.1 +
+						(fixed ? 0 : Math.sin(q * 0.6 + r * 0.8 + tt * 1.7) * 0.03);
+				let pv = pk[i];
+				for (const w of ws) {
+					const d = Math.hypot(x - w.x, y - w.y) - w.R;
+					const val = w.amp * Math.exp(-(d * d) / w.s2);
+					if (w.hot) {
+						if (val > pv) pv = val;
+					} else if (val > v) v = val;
+				}
+				pk[i] = pv;
+				let col: string | null = null;
+				if (pv > 0.32) col = HOT;
+				else if (hp && v >= 0.62 && Math.hypot(x - hp[0], y - hp[1]) < hr)
+					col = HOT;
+				else {
+					const b = band(v);
+					if (b) col = RAMP[b];
+				}
+				if (col) {
+					ctx.fillStyle = col;
+					ctx.fillRect(q * c, r * c, c - 1, c - 1);
+				}
+			}
+		this.drawEdges(ctx, T, sc);
+		this.drawMarker(ctx, T, sc, dt);
+	};
+
+	// The sides as cells: dashed while open, ink once closed, salmon while a call waits; the
+	// vertices as 3×3 blocks.
+	private drawEdges(ctx: CanvasRenderingContext2D, T: Tri, sc: Scene) {
+		const c = CELL;
+		const sides = [
+			["P", "O", "p", "o"],
+			["O", "R", "o", "r"],
+			["R", "P", "r", "p"],
+		] as const;
+		for (const [a, b, ka, kb] of sides) {
+			const A = T[a];
+			const B = T[b];
+			const closed = sc.confirmed[ka] && sc.confirmed[kb];
+			const n = Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1]) / (c * 0.5));
+			ctx.fillStyle = sc.held ? HOT : closed ? INK : "#C9C9C6";
+			let last = -1;
+			for (let k = 0; k <= n; k++) {
+				const q = Math.floor((A[0] + ((B[0] - A[0]) * k) / n) / c);
+				const r = Math.floor((A[1] + ((B[1] - A[1]) * k) / n) / c);
+				const id = r * this.cols + q;
+				if (id === last) continue;
+				last = id;
+				if (!closed && !sc.held && (q + r) & 1) continue;
+				ctx.fillRect(q * c, r * c, c - 1, c - 1);
+			}
+		}
+		ctx.fillStyle = INK;
+		for (const k of ["P", "O", "R"] as const) {
+			const q = Math.floor(T[k][0] / c);
+			const r = Math.floor(T[k][1] / c);
+			ctx.fillRect((q - 1) * c, (r - 1) * c, c * 3 - 1, c * 3 - 1);
+		}
+	}
+
+	// The marker glides to its call (fast when pinned), its lines to the vertices as thick as
+	// the scores; it pops bigger on a new call, and pulses salmon on a waiting one.
+	private drawMarker(
+		ctx: CanvasRenderingContext2D,
+		T: Tri,
+		sc: Scene,
+		dt: number,
+	) {
+		const c = CELL;
+		const pin = sc.pin ? sc.calls.find((d) => d.id === sc.pin) : undefined;
+		const e = pin ?? sc.calls.at(-1);
+		this.hl ??= {
+			x: (T.P[0] + T.O[0] + T.R[0]) / 3,
+			y: (T.P[1] + T.O[1] + T.R[1]) / 3,
+			a: 0,
+			s: 5,
+			id: null,
+			w: { p: 0, o: 0, r: 0 },
+			lx: null,
+			ly: null,
+		};
+		const M = this.hl;
+		const fixed = this.rm;
+		const k = fixed ? 1 : 1 - Math.exp(-(dt || 16) * (pin ? 0.012 : 0.0046));
+		if (e) {
+			const [tx, ty] = pos(T, e.legs);
+			if (M.id !== e.id) {
+				M.id = e.id;
+				if (!fixed) M.s = 8;
+			}
+			M.x += (tx - M.x) * k;
+			M.y += (ty - M.y) * k;
+			M.a += (1 - M.a) * Math.min(1, k * 2.5);
+			for (const q of ["p", "o", "r"] as const)
+				M.w[q] += (e.legs[q] - M.w[q]) * k;
+			if (!fixed && M.lx !== null && M.ly !== null && M.a > 0.6) {
+				const n = Math.min(
+					40,
+					Math.round(Math.hypot(M.x - M.lx, M.y - M.ly) / (c * 0.7)),
+				);
+				for (let j = 1; j <= n; j++)
+					this.dep(
+						this.tr,
+						M.lx + ((M.x - M.lx) * j) / n,
+						M.ly + ((M.y - M.ly) * j) / n,
+						0.42,
+						1.05,
+					);
+			}
+			M.lx = M.x;
+			M.ly = M.y;
+		} else {
+			M.a += (0 - M.a) * k * 1.4;
+			M.id = null;
+			M.lx = null;
+		}
+		M.s += (5 - M.s) * k;
+		if (M.a < 0.02) return;
+		const held = Boolean(e && sc.held && e.id === sc.holdId);
+		const pu =
+			held && !fixed ? 0.5 + 0.5 * Math.sin((this.t * Math.PI * 2) / 1900) : 0;
+		const half = ((M.s + pu * 1.4) * c) / 2;
+		ctx.save();
+		ctx.globalAlpha = Math.min(1, M.a);
+		ctx.lineCap = "butt";
+		for (const [V, q] of [
+			["P", "p"],
+			["O", "o"],
+			["R", "r"],
+		] as const) {
+			const [vx, vy] = T[V];
+			const w = 1.2 + 2.6 * M.w[q];
+			ctx.beginPath();
+			ctx.moveTo(M.x, M.y);
+			ctx.lineTo(vx, vy);
+			ctx.strokeStyle = PAPER;
+			ctx.lineWidth = w + 3;
+			ctx.stroke();
+			ctx.strokeStyle = LC[q];
+			ctx.lineWidth = w;
+			ctx.stroke();
+		}
+		const rx = Math.round(M.x - half) + 0.5;
+		const ry = Math.round(M.y - half) + 0.5;
+		const sz = Math.round(half * 2);
+		const ink = held ? "#B8331C" : INK;
+		ctx.fillStyle = held ? SALMON : PAPER;
+		ctx.fillRect(rx + 1, ry + 1, sz - 2, sz - 2);
+		ctx.lineWidth = 4;
+		ctx.strokeStyle = PAPER;
+		ctx.strokeRect(rx, ry, sz, sz);
+		ctx.lineWidth = 1.6;
+		ctx.strokeStyle = ink;
+		ctx.strokeRect(rx, ry, sz, sz);
+		ctx.fillStyle = ink;
+		const d = Math.max(3, Math.round(c * 0.5));
+		ctx.fillRect(Math.round(M.x - d / 2), Math.round(M.y - d / 2), d, d);
+		ctx.restore();
+	}
+}

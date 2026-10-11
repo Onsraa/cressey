@@ -1,14 +1,14 @@
-import {
-	Check,
-	CircleQuestionMark,
-	FileText,
-	Hourglass,
-	type LucideIcon,
-	X,
-} from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/api/client";
 import type { Guide, Incident, OwnerGuide, WhyAnswer } from "@/api/types";
+import {
+	Check,
+	CircleHelp,
+	FileText,
+	Hourglass,
+	type IconType,
+	X,
+} from "@/components/icons";
 import { GUIDE_STATUS, ROLE, TONE, type Tone } from "@/lib/labels";
 import { Keyed, useKeyed } from "./store";
 import { Pending, Tip } from "./ui";
@@ -16,26 +16,26 @@ import { LEG } from "./util";
 
 type Status = OwnerGuide["status"];
 
-const LOOK: Record<Status, { Icon: LucideIcon; tone: Tone; tip: string }> = {
+const LOOK: Record<Status, { Icon: IconType; tone: Tone; tip: string }> = {
 	pending: {
 		Icon: Hourglass,
 		tone: "info",
-		tip: "The guide starts when the incident opens, before the decision.",
+		tip: "The guide starts as soon as the incident opens, before the decision.",
 	},
 	ok: {
 		Icon: Check,
 		tone: "ok",
-		tip: "Each step quotes a verified source.",
+		tip: "Every step quotes a verified source.",
 	},
 	unsure: {
-		Icon: CircleQuestionMark,
+		Icon: CircleHelp,
 		tone: "warn",
 		tip: "No verified source covers this case.",
 	},
 	unavailable: {
 		Icon: X,
 		tone: "grey",
-		tip: "Guide unavailable; the sources are still shown.",
+		tip: "Guide unavailable; sources still listed.",
 	},
 };
 
@@ -45,7 +45,10 @@ const whys = new Keyed<Why>();
 
 export function Guides({ incident }: { incident: Incident }) {
 	return (
-		<div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-stretch gap-4">
+		<div
+			data-anim
+			className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] items-stretch gap-4"
+		>
 			{incident.guides.map((g) => (
 				<Inbox key={`${g.leg}-${g.owner_role}`} owner={g} />
 			))}
@@ -57,7 +60,7 @@ function Inbox({ owner }: { owner: OwnerGuide }) {
 	const look = LOOK[owner.status];
 	return (
 		<div className="flex min-w-0 flex-col border-[1.2px] border-ink">
-			<div className="flex min-h-11 flex-wrap items-center gap-2 border-line border-b px-4 py-3">
+			<div className="flex min-h-11 items-center gap-2 border-line border-b px-4 py-3">
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="font-semibold text-sm leading-[1.2]">
 						{ROLE[owner.owner_role]}
@@ -70,9 +73,9 @@ function Inbox({ owner }: { owner: OwnerGuide }) {
 				</div>
 				<Tip
 					tip={look.tip}
-					className={`chip h-auto min-h-[22px] whitespace-normal text-[11px] ${TONE[look.tone]}`}
+					className={`inline-flex h-[22px] items-center gap-1 whitespace-nowrap border px-[7px] font-mono text-[11px] ${TONE[look.tone]}`}
 				>
-					<look.Icon size={11} className="flex-none" />
+					<look.Icon size={11} />
 					{GUIDE_STATUS[owner.status]}
 				</Tip>
 			</div>
@@ -134,11 +137,14 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 								<span className="text-pretty font-medium text-sm leading-[1.35]">
 									{x.action}
 								</span>
-								<span className="text-pretty bg-paper px-[9px] py-1.5 text-[12.5px] leading-[1.45]">
+								<Tip
+									tip={`${x.source_title} · ${x.source_id}\nverified quote`}
+									className="text-pretty bg-paper px-[9px] py-1.5 text-[12.5px] leading-[1.45]"
+								>
 									“{x.quote}”
-								</span>
+								</Tip>
 								<span className="font-mono text-[11px] text-mute">
-									{x.source_title} · {x.source_id}
+									{x.source_id}
 								</span>
 							</div>
 						</li>
@@ -148,7 +154,7 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 			{guide.status === "unsure" && (
 				<>
 					<p className="text-sm leading-[1.45]">
-						No verified source covers this case. Ask the security team.
+						I don’t know — ask the security team.
 					</p>
 					{guide.message && (
 						<p className="font-mono text-[11px] text-mute">{guide.message}</p>
@@ -161,10 +167,13 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 				</p>
 			)}
 			{dropped > 0 && (
-				<span className="inline-flex items-center gap-[5px] self-start font-mono text-[11px] text-mute">
+				<Tip
+					tip="Dropped because the quote could not be verified."
+					className="inline-flex cursor-help items-center gap-[5px] self-start font-mono text-[11px] text-mute"
+				>
 					<X size={11} />
-					{dropped} step{s} dropped: quote not found
-				</span>
+					{dropped} step{s} dropped
+				</Tip>
 			)}
 			{guide.status !== "ok" && guide.passages.length > 0 && (
 				<ul className="flex flex-col gap-1">
@@ -173,7 +182,7 @@ function GuideBody({ id, status }: { id: string; status: Status }) {
 							key={p.id}
 							className="inline-flex items-center gap-[5px] font-mono text-[11.5px] text-mute"
 						>
-							<FileText size={12} className="flex-none" />
+							<FileText size={12} />
 							{p.title} · {p.id}
 						</li>
 					))}
@@ -197,7 +206,7 @@ function Why({ id }: { id: string }) {
 	return (
 		<div className="mt-auto flex flex-col gap-2 border-line border-t pt-2.5">
 			<form
-				className="flex"
+				className="flex border-[1.2px] border-ink"
 				onSubmit={(e) => {
 					e.preventDefault();
 					ask(id, q.trim());
@@ -205,23 +214,23 @@ function Why({ id }: { id: string }) {
 			>
 				<input
 					type="text"
-					aria-label="Question about this guide"
+					aria-label="Ask a question"
 					placeholder="Why this step?"
 					maxLength={500}
 					value={q}
 					onChange={(e) => setQ(e.target.value)}
-					className="h-[34px] min-w-0 flex-1 border-[1.2px] border-ink border-r-0 bg-surface px-2.5 text-[13px] -outline-offset-2"
+					className="h-[34px] min-w-0 flex-1 bg-surface px-2.5 text-[13px] -outline-offset-2"
 				/>
 				<button
 					type="submit"
 					// The API asks for 3 characters at least.
 					disabled={why?.busy || q.trim().length < 3}
-					className="btn btn-dark px-[11px] text-[13px]"
+					className="press inline-flex items-center gap-1.5 whitespace-nowrap border-ink border-l-[1.2px] bg-ink px-[11px] font-medium text-[13px] text-surface hover:bg-[#3a3a38] disabled:opacity-45"
 				>
 					Why?
 				</button>
 			</form>
-			{why?.busy && <Pending>Searching the verified sources…</Pending>}
+			{why?.busy && <Pending small>Searching the verified sources…</Pending>}
 			{why?.failed && (
 				<p className="font-mono text-[11px] text-held-fg">
 					The question couldn't be asked.
@@ -238,10 +247,10 @@ function Why({ id }: { id: string }) {
 							{why.answer.citations.map((c, n) => (
 								<Tip
 									key={`${c.source_id}-${c.quote}`}
-									tip={`“${c.quote}”`}
-									className="inline-flex min-h-5 cursor-help items-center bg-ink px-1.5 py-0.5 font-mono text-[11px] text-surface"
+									tip={`${c.source_title} · ${c.source_id}\n“${c.quote}”`}
+									className="inline-flex h-5 cursor-help items-center bg-ink px-1.5 font-mono text-[11px] text-surface"
 								>
-									[{n + 1}] {c.source_title} · {c.source_id}
+									[{n + 1}] {c.source_id}
 								</Tip>
 							))}
 						</span>

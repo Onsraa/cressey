@@ -1,14 +1,15 @@
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import { apiGet } from "@/api/client";
+import type { EvalFile } from "@/api/types";
 import {
 	BookOpen,
 	Columns2,
 	Cpu,
 	FileText,
-	type LucideIcon,
+	type IconType,
 	ShieldCheck,
-} from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
-import { apiGet } from "@/api/client";
-import type { EvalFile } from "@/api/types";
+} from "@/components/icons";
+import { animIn, useOnChange } from "@/lib/motion";
 import { AblationTab } from "./AblationTab";
 import { DecisionTab } from "./DecisionTab";
 import { DetectionTab } from "./DetectionTab";
@@ -18,7 +19,7 @@ import { Notice, source } from "./ui";
 
 type Kind = EvalFile["kind"];
 
-const TABS: { k: Kind; label: string; Icon: LucideIcon; question: string }[] = [
+const TABS: { k: Kind; label: string; Icon: IconType; question: string }[] = [
 	{
 		k: "detection",
 		label: "Detection",
@@ -30,13 +31,13 @@ const TABS: { k: Kind; label: string; Icon: LucideIcon; question: string }[] = [
 		label: "Guides",
 		Icon: BookOpen,
 		question:
-			"Do the owner guides quote real sources and admit what they don't know?",
+			"Do the guides quote real sources and admit what they don’t know?",
 	},
 	{
 		k: "ablation",
 		label: "Ablation",
 		Icon: Columns2,
-		question: "What does the triangle add to the safety floor?",
+		question: "What does the triangle add on top of the safety floor?",
 	},
 	{
 		k: "decision",
@@ -77,6 +78,9 @@ export function EvalView() {
 	const [files, setFiles] = useState<EvalFile[]>();
 	const [error, setError] = useState("");
 	const [t, setTab] = useState(TABS[0]);
+	const panel = useRef<HTMLDivElement>(null);
+	// Another tab, or the reports arriving: the blocks rise in.
+	useOnChange(files ? t.k : null, () => animIn(panel.current, "[data-anim]"));
 
 	useEffect(() => {
 		apiGet<EvalFile[]>("/eval")
@@ -99,10 +103,13 @@ export function EvalView() {
 	else if (!body) content = <Notice>Unreadable report: {file.file}</Notice>;
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-7">
-			<header className="rise flex flex-none flex-wrap items-end gap-4">
+		<div
+			data-slot="eval"
+			className="flex min-h-0 flex-1 flex-col gap-4 px-7 pt-6 pb-7"
+		>
+			<header data-anim className="flex flex-none flex-wrap items-end gap-4">
 				<div className="flex min-w-0 flex-[1_1_360px] flex-col gap-[7px]">
-					<div className="flex flex-wrap items-center gap-1.5 font-mono text-xs">
+					<div className="flex items-center gap-1.5 font-mono text-xs">
 						<span className="text-mute">Evaluation</span>
 						<span className="text-mute-3">/</span>
 						<span className="font-medium">{t.label}</span>
@@ -114,7 +121,7 @@ export function EvalView() {
 				</div>
 				{file && (
 					<span
-						data-tip="The source file and the date of every number on this page"
+						data-tip="Source file and date of every number on this page"
 						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 						tabIndex={0}
 						className="inline-flex h-6 items-center gap-[5px] border border-ink bg-surface px-2 font-mono text-xs"
@@ -138,7 +145,7 @@ export function EvalView() {
 							role="tab"
 							aria-selected={on}
 							onClick={() => setTab(x)}
-							className={`-mb-[1.2px] inline-flex h-9 items-center gap-[7px] whitespace-nowrap border-[1.2px] px-3.5 text-[13.5px] transition-[background-color,box-shadow] hover:shadow-[inset_0_0_0_999px_rgba(30,30,30,.05)] active:translate-y-px active:scale-[.985] ${on ? "border-ink border-b-surface bg-surface font-semibold" : "border-transparent font-medium"}`}
+							className={`press -mb-[1.2px] inline-flex h-9 items-center gap-[7px] whitespace-nowrap border-[1.2px] px-3.5 text-[13.5px] hover:shadow-[inset_0_0_0_999px_rgba(30,30,30,.05)] ${on ? "border-ink border-b-surface bg-surface font-semibold" : "border-transparent font-medium"}`}
 						>
 							<x.Icon size={14} />
 							{x.label}
@@ -147,9 +154,10 @@ export function EvalView() {
 				})}
 			</div>
 			<div
-				key={t.k}
+				ref={panel}
 				role="tabpanel"
 				aria-label={t.label}
+				data-slot="evalbody"
 				className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto"
 			>
 				{content}
