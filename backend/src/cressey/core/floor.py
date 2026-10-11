@@ -5,6 +5,7 @@ A call that carries a trap key is held whatever the mandate."""
 import fnmatch
 import posixpath
 import re
+import shlex
 from collections.abc import Mapping
 
 import sqlglot
@@ -17,10 +18,10 @@ from cressey.core.trace import decoded, strings
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
 # Shell commands (the Claude Code hook). A command made only of these, with no redirection,
 # reads; one that deletes files, rows or tables, or rewrites history, is destructive; any
-# other is a write the triangle judges.
+# other is a write the triangle judges. A curl or wget that only reads is a read too.
 READ_COMMANDS = {
     "cat", "cd", "diff", "echo", "env", "file", "find", "grep", "head", "jq", "ls",
-    "printenv", "pwd", "rg", "sort", "stat", "tail", "tree", "uniq", "wc", "which",
+    "printenv", "pwd", "rg", "sleep", "sort", "stat", "tail", "tree", "uniq", "wc", "which",
     "git status", "git diff", "git log", "git show", "git branch", "sed -n",
 }  # fmt: skip
 DESTRUCTIVE_COMMAND = re.compile(
@@ -29,6 +30,16 @@ DESTRUCTIVE_COMMAND = re.compile(
     re.IGNORECASE,
 )
 SEGMENT = re.compile(r"\|\|?|&&|;|\n")
+# NAME=value, but not NAME=$(...) or NAME=`...`: those run a command.
+ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=(?!.*(?:\$\(|`))")
+MUTATION = re.compile(r"\bmutation\b", re.IGNORECASE)
+# A body whose text isn't what the server sees: read from a file, expanded by the shell, or
+# JSON-escaped (\u006dutation).
+INDIRECT = re.compile(r"^@|[$`]|\\u")
+WRITE_FLAGS = {"-F", "--form", "-T", "--upload-file", "--post-file", "--post-data"}
+METHOD_FLAGS = {"-X", "--request", "--method"}
+# curl's short options that take a value; in a cluster (-sXPOST, -sd) the first one ends it.
+VALUE_OPTIONS = set("AbcCdDeEFHKmoPQrtTuUwxXyYz")
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
 REPLACE_INTO = re.compile(r"(^|;)(\s*)REPLACE\s+INTO\b", re.IGNORECASE)
 
@@ -81,15 +92,69 @@ def sql_risk(sql: str) -> tuple[Risk, set[str] | None]:
     return risk, tables
 
 
+def _command(words: list[str]) -> list[str]:
+    """The words from the command itself: `export` and NAME=value prefixes dropped."""
+    skip = 0
+    while skip < len(words) and (
+        words[skip] == "export" or ASSIGNMENT.match(words[skip])
+    ):
+        skip += 1
+    return words[skip:]
+
+
+def _http_risk(words: list[str]) -> Risk:
+    """Risk of a curl or wget call: a read unless it uploads, or sends a body or method that
+    isn't a GraphQL query's (those travel as POST, so POST alone is not enough to write)."""
+    bodies: list[str] = []
+    post = False
+    rest = iter(words[1:])
+    for word in rest:
+        if word.startswith("--"):
+            flag, _, value = word.partition("=")
+        elif word.startswith("-"):
+            i = next((i for i, c in enumerate(word) if i and c in VALUE_OPTIONS), None)
+            if i is None:
+                continue
+            flag, value = "-" + word[i], word[i + 1 :]
+        else:
+            continue
+        if flag in WRITE_FLAGS:
+            return "write"
+        if flag in METHOD_FLAGS:
+            method = (value or next(rest, "")).upper()
+            if method not in ("GET", "HEAD", "POST"):
+                return "write"
+            post = post or method == "POST"
+        elif flag in ("-d", "--json") or flag.startswith("--data"):
+            bodies.append(value or next(rest, ""))
+    if post and not bodies:
+        return "write"
+    return "read" if all(map(_is_query, bodies)) else "write"
+
+
+def _is_query(body: str) -> bool:
+    """An inline GraphQL query, not a mutation."""
+    return '"query"' in body and not INDIRECT.search(body) and not MUTATION.search(body)
+
+
 def shell_risk(command: str) -> Risk:
     """Risk of a shell command, from the commands it runs (see READ_COMMANDS)."""
     if DESTRUCTIVE_COMMAND.search(command):
         return "destructive"
     if ">" in command:
         return "write"
-    for segment in SEGMENT.split(command):
-        words = segment.split()
-        if words and not {words[0], " ".join(words[:2])} & READ_COMMANDS:
+    for segment in SEGMENT.split(command.replace("\\\n", " ")):
+        words = _command(segment.split())
+        if not words or words[0].startswith("#"):
+            continue
+        if words[0] in ("curl", "wget"):
+            try:
+                risk = _http_risk(_command(shlex.split(segment)))
+            except ValueError:  # unbalanced quotes: can't tell what it sends
+                return "write"
+            if risk != "read":
+                return risk
+        elif not {words[0], " ".join(words[:2])} & READ_COMMANDS:
             return "write"
     return "read"
 

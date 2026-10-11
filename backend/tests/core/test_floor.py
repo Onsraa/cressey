@@ -167,6 +167,12 @@ def test_a_path_outside_the_frozen_ones_is_written_freely():
     assert check(WRITE, {"path": "src/app.py"}, FROZEN) == ("write", None)
 
 
+# GraphQL bodies: a query, a mutation, and an introspection query (mutationType is no mutation).
+Q = '{"query":"query { project(id: \\"p1\\") { services { edges { node { id } } } } }"}'
+M = '{"query":"mutation { serviceDelete(id: \\"s1\\") }"}'
+I = '{"query":"{ __schema { mutationType { fields { name } } } }"}'
+
+
 @pytest.mark.parametrize(
     ("command", "risk"),
     [
@@ -178,6 +184,45 @@ def test_a_path_outside_the_frozen_ones_is_written_freely():
         ("rm -rf node_modules", "destructive"),
         ("psql -c 'DELETE FROM users'", "destructive"),
         ("git push --force origin main", "destructive"),
+        # A curl or wget that only reads is a read; any body or method but a query's is a write.
+        ("curl -s https://api.test/v2", "read"),
+        ("curl -sI https://api.test", "read"),
+        (
+            f"curl -s -X POST https://api.test -H 'Content-Type: application/json' -d '{Q}'",
+            "read",
+        ),
+        (f"curl -s https://api.test -d '{I}'", "read"),
+        (
+            f'OPS_TOKEN=abc curl -s "$API" -H "Authorization: Bearer $OPS_TOKEN" -d \'{Q}\'',
+            "read",
+        ),
+        (
+            f"API=https://api.test\n# Check volumes\ncurl -s \"$API\" \\\n  -H 'Content-Type: application/json' \\\n  -d '{Q}'",
+            "read",
+        ),
+        ("export API=https://api.test", "read"),
+        ("sleep 5 && curl -s https://api.test", "read"),
+        ("wget -qO- https://api.test", "read"),
+        (f"curl -s https://api.test -d '{M}'", "write"),
+        ("curl -s -X DELETE https://api.test/v1/volumes/1", "write"),
+        ("curl -s -X POST https://api.test", "write"),
+        (f"curl -s -X PUT https://api.test -d '{Q}'", "write"),
+        ("curl -s https://api.test -d @payload.json", "write"),
+        ('curl -s https://api.test -d "$BODY"', "write"),
+        ("curl -s https://api.test -F file=@a.txt", "write"),
+        ("wget --post-data 'a=1' https://api.test", "write"),
+        ("curl -s https://api.test | python3 -c 'import sys'", "write"),
+        ("source .env.staging && curl -s https://api.test", "write"),
+        # Short options can be glued to their value or to each other.
+        ("curl -sXDELETE https://api.test", "write"),
+        (f"curl -sd '{M}' https://api.test", "write"),
+        (f"curl -s https://api.test -d '{Q}' -d '{M}'", "write"),
+        ("curl -s --data-urlencode 'a=b' https://api.test", "write"),
+        ("wget --post-data='a=1' https://api.test", "write"),
+        ("curl -s 'https://api.test", "write"),
+        ("API=$(curl -s -X POST https://api.test)", "write"),
+        ('curl -s https://api.test -d "{\\"query\\":\\"`cat m.gql`\\"}"', "write"),
+        (r"""curl -s https://api.test -d '{"query":"\u006dutation { a }"}'""", "write"),
     ],
 )
 def test_shell_commands_are_classified(command, risk):
@@ -190,7 +235,7 @@ def test_a_destructive_shell_command_is_held_whatever_the_mandate():
         "destructive",
         "destructive shell command",
     )
-    assert check(shell, {"command": "curl -s https://api.test"}, NONE) == (
+    assert check(shell, {"command": "curl -s https://api.test -d @a.json"}, NONE) == (
         "write",
         None,
     )
