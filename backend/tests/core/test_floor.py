@@ -171,6 +171,8 @@ def test_a_path_outside_the_frozen_ones_is_written_freely():
 Q = '{"query":"query { project(id: \\"p1\\") { services { edges { node { id } } } } }"}'
 M = '{"query":"mutation { serviceDelete(id: \\"s1\\") }"}'
 I = '{"query":"{ __schema { mutationType { fields { name } } } }"}'
+C = '{"query":"# volumes\\nquery { a }"}'  # a comment line, then the query
+F = '{"query":"fragment F on V { id } query { ...F }"}'
 
 
 @pytest.mark.parametrize(
@@ -254,6 +256,39 @@ I = '{"query":"{ __schema { mutationType { fields { name } } } }"}'
             "write",
         ),
         ("curl -s https://api.test -d 'query=foo'", "write"),
+        # A & inside quotes belongs to its argument, not to the shell.
+        ('curl -s "https://x/?a=1&b=2"', "read"),
+        ("curl -s 'https://x/?a=1&b=2'", "read"),
+        ('curl -s https://api.test -H "X: a&b"', "read"),
+        # ...but a quote the shell doesn't see (escaped, in a comment, $'..') hides nothing.
+        ('echo \\" & curl -s -X DELETE https://api.test/v1/x #"', "write"),
+        (
+            "echo a # it's\necho hi & curl -s -X DELETE https://api.test/v1/x & echo 'b'",
+            "write",
+        ),
+        (
+            r"""echo $'it\'s' & curl -s -X DELETE https://api.test/v1/x & echo ' '""",
+            "write",
+        ),
+        # Only a GraphQL query document reads: SQL over HTTP, however it is wrapped, writes.
+        (f"curl -s https://api.test -d '{C}'", "read"),
+        (f"curl -s https://api.test -d '{F}'", "read"),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"UPDATE users SET plan = 1 WHERE id = 1"}\'',
+            "write",
+        ),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"INSERT INTO users (id) VALUES (1)"}\'',
+            "write",
+        ),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"SELECT * FROM users"}\'',
+            "write",
+        ),
+        (
+            'curl -s -X POST https://db.test/query -d \'{"query":"query_log"}\'',
+            "write",
+        ),
     ],
 )
 def test_shell_commands_are_classified(command, risk):

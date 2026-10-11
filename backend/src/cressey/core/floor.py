@@ -30,9 +30,14 @@ DESTRUCTIVE_COMMAND = re.compile(
     r"|\bgit\s+push\b[^|;&]*(?:--force\b|\s-f\b)|\bgit\s+(?:reset\s+--hard|clean\s)",
     re.IGNORECASE,
 )
-# A single & backgrounds what precedes it and separates commands like `;` does; redirections
-# (2>&1, &>) don't split, and any `>` makes the command a write anyway.
-SEGMENT = re.compile(r"\|\|?|&&|;|\n|(?<![<>])&(?!>)")
+SEGMENT = re.compile(r"\|\|?|&&|;|\n")
+# A single & backgrounds what precedes it: it separates commands like `;` does. Quoted spans,
+# escaped characters and comments are skipped, so a & in "?a=1&b=2" stays in its argument;
+# redirections (2>&1, &>) aren't it, and any `>` makes the command a write anyway.
+BACKGROUND = re.compile(
+    r"""(\$'(?:\\.|[^'\\])*'|'[^']*'|"(?:\\.|[^"\\])*"|\\.|(?<!\S)#[^\n]*)"""
+    r"|(?<![<>&])&(?![>&])"
+)
 # $(...), `...`, <(...) and zsh's =(...) run a command wherever they sit, whatever the first
 # word.
 SUBSTITUTION = re.compile(r"\$\(|`|<\(|=\(")
@@ -40,6 +45,7 @@ ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 # find's actions that run or delete something.
 FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
 MUTATION = re.compile(r"\bmutation\b", re.IGNORECASE)
+GRAPHQL_DOCUMENT = re.compile(r"\{|(?:query|fragment)\b")
 # A body whose text isn't what the server sees: expanded by the shell, or JSON-escaped
 # (\u006dutation).
 INDIRECT = re.compile(r"\$|\\u")
@@ -139,9 +145,17 @@ def _http_risk(words: list[str]) -> Risk:
     return "read" if all(map(_is_query, bodies)) else "write"
 
 
+def _is_document(text: str) -> bool:
+    """Whether a string opens like a GraphQL query document: after blank and `#` comment
+    lines, a `{`, `query` or `fragment`. SQL sent over HTTP ({"query": "UPDATE ..."}) doesn't."""
+    lines = (line.strip() for line in text.splitlines())
+    first = next((line for line in lines if line and not line.startswith("#")), "")
+    return bool(GRAPHQL_DOCUMENT.match(first))
+
+
 def _is_query(body: str) -> bool:
     """An inline GraphQL query, not a mutation: a JSON object whose top-level "query" is a
-    string (an Elasticsearch {"query": {...}} is not)."""
+    query document (an Elasticsearch {"query": {...}} is not)."""
     try:
         parsed = json.loads(body)
     except ValueError:
@@ -149,6 +163,7 @@ def _is_query(body: str) -> bool:
     return (
         isinstance(parsed, dict)
         and isinstance(parsed.get("query"), str)
+        and _is_document(parsed["query"])
         and not INDIRECT.search(body)
         and not MUTATION.search(body)
     )
@@ -171,7 +186,8 @@ def shell_risk(command: str) -> Risk:
         return "destructive"
     if ">" in command or SUBSTITUTION.search(command):
         return "write"
-    for segment in SEGMENT.split(command.replace("\\\n", " ")):
+    commands = BACKGROUND.sub(lambda m: m[1] or ";", command.replace("\\\n", " "))
+    for segment in SEGMENT.split(commands):
         words = _command(segment.split())
         if not words or words[0].startswith("#"):
             continue
