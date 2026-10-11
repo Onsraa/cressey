@@ -166,7 +166,7 @@ class Runs:
         """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
         mid-turn. It closes a message cut short by Esc, which Claude Code doesn't report. It
         starts a new turn: the count of refused calls resets and a suspended key unlocks, the
-        user being back, but not while a call is still held (see `unlock`)."""
+        user being back, but the key waits while a call is still held (see `unlock`)."""
         for key in [k for k in self._streaming if k[0] == run.id]:
             self._streaming.pop(key)[0].streaming = False
         message = Message(
@@ -180,11 +180,12 @@ class Runs:
 
     def unlock(self, run: Run) -> None:
         """Reset the count of refused calls and give the key back, the user being back or
-        having chosen to. Not while a call is still held: that one is decided on the
-        dashboard."""
+        having chosen to. While a call is still held the key stays suspended: that one is
+        decided on the dashboard, and its rejection counts in the new turn."""
+        run.refused, run.stopped = 0, False
         if any(s.status == "held" for s in run.steps):
             return
-        run.refused, run.stopped, run.revoked = 0, False, False
+        run.revoked = False
         self.log.append("unlocked", {"run": run.id})
 
     def connect(self, run: Run) -> None:

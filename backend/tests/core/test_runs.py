@@ -149,6 +149,20 @@ async def test_a_prompt_unlocks_the_key_but_not_while_a_call_is_held():
     assert await second and not run.revoked
 
 
+@pytest.mark.anyio
+async def test_a_prompt_during_a_hold_starts_a_new_turn_but_the_key_waits():
+    runs, run, calls = _held_pair()
+    await _rejected(runs, run, calls[0])
+    await _rejected(runs, run, calls[1])
+    wait = asyncio.create_task(runs.hold(run, _call(runs, run), 5, 3))
+    await asyncio.sleep(0)
+    runs.prompt(run, "try something else")  # typed while the call is held
+    assert (run.refused, run.revoked) == (0, True)
+    assert runs.decide(run.id, 3, False)
+    assert not await wait
+    assert (run.refused, run.stopped, run.revoked) == (1, False, False)
+
+
 def test_a_prompt_resets_the_count():
     runs = Runs(EventLog())
     run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)

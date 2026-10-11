@@ -393,7 +393,7 @@ async def section_holds(tmp: Path) -> dict:
             == [f"user{i}@example.test" for i in range(1, 6)],
             "approve_after_expiry_status": approve_after.status_code,
         }
-    # double approve, and reuse of a revoked (rejected) key
+    # double approve, and reuse of a suspended key (the third rejection in a turn stops the run)
     with _server(tmp / "holds2", DownJudge(), hold_timeout=10.0) as base:
         run = await _new_run(base, {})
         async with _agent(base, run["key"]) as a:
@@ -412,12 +412,13 @@ async def section_holds(tmp: Path) -> dict:
         }
         run2 = await _new_run(base, {})
         async with _agent(base, run2["key"]) as a:
-            call = asyncio.create_task(
-                a.call_tool("run_sql", delete, raise_on_error=False)
-            )
-            n = await _wait_hold(base)
-            await _api(base, "POST", f"/api/runs/{run2['id']}/steps/{n}/reject")
-            await call
+            for _ in range(_policy().stuck.rejections):
+                call = asyncio.create_task(
+                    a.call_tool("run_sql", delete, raise_on_error=False)
+                )
+                n = await _wait_hold(base)
+                await _api(base, "POST", f"/api/runs/{run2['id']}/steps/{n}/reject")
+                await call
             reused = await a.call_tool(
                 "read_file", {"path": "README.md"}, raise_on_error=False
             )

@@ -59,7 +59,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
 | `triangle_holds` | `CRESSEY_TRIANGLE_HOLDS` | `true`. `false` measures the safety floor alone (the ablation): no triangle hold and no acting on pressure; the legs are still computed |
-| `holds` | `CRESSEY_HOLDS` | `wait`: a held call waits for a human. `refuse`, for a fleet: it is refused at once with its reason and the way out (status `denied`); its incident opens and the key stays revoked, as after a rejection |
+| `holds` | `CRESSEY_HOLDS` | `wait`: a held call waits for a human. `refuse`, for a fleet: it is refused at once with its reason and the way out (status `denied`); its incident opens and the key stays revoked until Unlock or the user's next prompt |
 
 ## API
 | Method | Path | Body | Response |
@@ -74,6 +74,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | GET | `/api/holds` | — | 200 calls waiting for a human |
 | POST | `/api/runs/{id}/steps/{n}/approve` | — | 204, or 404 when that step isn't held |
 | POST | `/api/runs/{id}/steps/{n}/reject` | — | 204, or 404 |
+| POST | `/api/runs/{id}/unlock` | — | 204, or 404 for an unknown run. Resets the count of refused calls and gives the key back, unless a call is still held |
 | POST | `/api/runs/{id}/messages` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204. Agent text, secrets redacted. 403 with another key |
 | POST | `/api/runs/{id}/report` | `{"text": str}`, with `Authorization: Bearer <run key>` | 204: the run ends, and the report is checked against the log (`report_check` on the run). 403 with another key |
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
@@ -105,8 +106,10 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
   - `stop`: refused at once, « Cressey : action refusée. … », and the run's key is revoked.
   - `fleet: stop`: once the signal across runs is up for a target, its holds refuse at once. `CRESSEY_HOLDS=refuse` turns every review into a stop.
 - **While a call is held,** the run's key is revoked: its other calls are denied.
-  - Approval runs the call once and reinstates the key.
-  - Rejection or expiry answers « Cressey : action retenue. Déclarer la tâche impossible est une réponse acceptée. »: the agent learns it was held, never why (the reason stays in the step, the incident and the log) The key stays revoked.
+  - Approval runs the call once and reinstates the key, unless another call of the run is still held.
+  - Rejection or expiry answers « Cressey: action held. Declaring the task impossible is an accepted answer. »: the agent learns it was held, never why (the reason stays in the step, the incident and the log). With Reject + add reason, the human's checked message is what the agent reads, ending with the way out. A rejection alone leaves the key usable: it steers the agent.
+  - **The third stops the run.** Rejected and expired holds are counted per turn (`Run.refused`): since the user's last prompt for Claude Code, since the start for MCP, which has no prompts. At `stuck.rejections` (`policy.yaml`, 3) the run stops (`Run.stopped`): that refusal ends with « Three calls were refused. Stop, report what you found, and declare the task impossible: it can't be done with your permissions. », the key is suspended, and later calls get « Cressey: key suspended. … ».
+  - `POST /api/runs/{id}/unlock` (Unlock) or the user's next prompt resets the count and unlocks the key. A call still held keeps the key suspended until it is decided.
   - With `CRESSEY_HOLDS=refuse`, nothing waits: the call is refused at once, « Cressey : action refusée. Déclarer la tâche impossible est une réponse acceptée. », with status `denied`. Its incident opens, and the key stays revoked.
 - **Run kinds:** `live` holds and waits for a human. `control` (« Observateur ») is logged and never held. `replay` never waits: a call that would be held is blocked and marked `would_hold`, and that replay fails.
 - **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`, and two timings: `check_ms` (Cressey's decision, before the tool runs) and `scan_ms` (the secret scan of the result).

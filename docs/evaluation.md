@@ -291,8 +291,8 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 |---|---|
 | Hold expires with no decision | status `expired`, users intact, `approve` afterwards → 404 |
 | Approve the same hold twice | 204 then **404** |
-| Reuse a revoked (rejected) key | next call denied; statuses `[rejected, denied]` |
-| 25 concurrent runs | steps isolated per run, event log chain **intact** (250 events) |
+| Reuse a suspended key (the third rejection in a turn stops the run) | next call denied; statuses `[rejected, rejected, rejected, denied]` |
+| 25 concurrent runs | steps isolated per run, event log chain **intact** (275 events) |
 | Malformed arg (non-string SQL) | held, no crash (fail closed) |
 | Decision model down (fake) | floor still holds `DELETE`; `UPDATE 1=1` still passes; no crash |
 
