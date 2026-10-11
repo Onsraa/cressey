@@ -946,3 +946,13 @@ async def test_tools_run_flags_nothing():
     triangle = await legs(run, read, judge, T)
     assert triangle.pressure.words is None and said.labels is None
     assert judge.spoken() == []
+
+
+async def test_replay_run_flags_nothing():
+    run, said, read = after_words()
+    run.kind = "replay"  # « Rejouer ×5 » plays in throwaway instances nobody looks at
+    judge = FakeJudge(words={"pressure": 0.9})
+    assert flag_soon(run, said, judge) is None
+    triangle = await legs(run, read, judge, T)
+    assert triangle.pressure.words is None and said.labels is None
+    assert judge.asked == []

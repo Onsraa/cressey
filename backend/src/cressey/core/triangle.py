@@ -447,8 +447,9 @@ _FLAGGING: dict[int, asyncio.Task[None]] = {}
 
 def flag_soon(run: Run, m: Message, judge: Judge) -> asyncio.Task[None] | None:
     """Read a finished message in the background, unless it's being read: the calls that
-    follow wait for it. None for a run that sees tool calls only."""
-    if run.visibility == "tools":
+    follow wait for it. None for a run that sees tool calls only, and for a replay: nobody
+    watches those (the preflight skips them too)."""
+    if run.visibility == "tools" or run.kind == "replay":
         return None
     key = id(m)
     task = _FLAGGING.get(key)
