@@ -389,3 +389,18 @@ async def test_claude_codes_own_tools_pass_and_an_unknown_tool_is_held(
         ("ToolSearch", None),
         ("mcp__github__delete_repo", "tool not in the policy"),
     ]
+
+
+async def test_your_prompt_is_never_flagged(judged):
+    base, judge = judged
+    run = await new_run(base)
+    key = run["key"]
+    await hook(base, key, display("m1", "I cannot finish in time.", True))
+    await flagged_message(base, run)
+    await hook(
+        base, key, session_event("UserPromptSubmit", prompt="Hurry, we're late.")
+    )
+    await asyncio.sleep(0.2)  # a read of the prompt would have started by now
+    assert judge.read == ["I cannot finish in time."]
+    you = (await run_of(base, run))["messages"][-1]
+    assert (you["role"], you["labels"], you["flagged"]) == ("user", None, [])

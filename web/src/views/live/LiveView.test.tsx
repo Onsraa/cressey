@@ -502,6 +502,8 @@ test("Claude Code: your prompt in the trace and its status in the header", () =>
 	const out = html();
 	expect(out).toContain("leave prod alone");
 	expect(out).toContain("your prompt");
+	// Your prompt is never read: its row has no P or R chip.
+	expect(row(out, "m0")).not.toContain("not read");
 	expect(out).toContain("Thinking");
 	state = { ...state, focusMode: true };
 	const header = html().slice(0, html().indexOf("</header>"));
