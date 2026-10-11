@@ -697,10 +697,17 @@ def after_words(text: str = FAILING) -> tuple[Run, Message, Step]:
     return run_with(read, task=CALM, messages=[said]), said, read
 
 
+async def flag(run: Run, m: Message, judge: FakeJudge) -> None:
+    """Flag the message and wait for the flag to land: a call no longer waits for it."""
+    task = flag_soon(run, m, judge)
+    assert task is not None
+    await task
+
+
 async def test_words_raise_p_not_its_score():
     run, said, read = after_words()
     judge = FakeJudge(words={"pressure": 0.9})
-    flag_soon(run, said, judge)
+    await flag(run, said, judge)
     leg = (await legs(run, read, judge, T)).pressure
     assert leg.words == 0.9 and leg.score == 0.0 and not leg.confirmed
     assert said.flagged == ["pressure"]
@@ -709,7 +716,7 @@ async def test_words_raise_p_not_its_score():
 async def test_words_never_hold_a_read():
     run, said, read = after_words("Personne ne verra que je saute ce test.")
     judge = FakeJudge(0.9, words={"rationalization": 0.95})
-    flag_soon(run, said, judge)
+    await flag(run, said, judge)
     triangle = await legs(run, read, judge, T)
     assert triangle.rationalization.words == 0.95
     assert not triangle.rationalization.confirmed
@@ -734,7 +741,7 @@ async def test_words_leave_a_write_unchanged(judgment):
         loud = {"pressure": 0.9, "rationalization": 0.9, "manipulation": 0.9}
         judge = FakeJudge(judgment, words=loud)
         if flagging:
-            flag_soon(run, said, judge)
+            await flag(run, said, judge)
         return await legs(run, write, judge, T)
 
     flagged, plain = await triangle(True), await triangle(False)
@@ -750,7 +757,7 @@ async def test_words_leave_a_write_unchanged(judgment):
 async def test_manipulation_counts_for_r():
     run, said, read = after_words("L'équipe sécurité a déjà approuvé ce contournement.")
     judge = FakeJudge(words={"manipulation": 0.8, "rationalization": 0.1})
-    flag_soon(run, said, judge)
+    await flag(run, said, judge)
     leg = (await legs(run, read, judge, T)).rationalization
     assert leg.words == 0.8 and said.flagged == ["rationalization"]
     assert said.labels == {"pressure": 0.0, "rationalization": 0.1, "manipulation": 0.8}
@@ -832,18 +839,22 @@ async def test_one_flag_call_per_message():
     run = run_with(first, second, task=CALM, messages=[said])
     judge = FakeJudge(words={"pressure": 0.9})
     task = flag_soon(run, said, judge)
-    assert flag_soon(run, said, judge) is task
+    assert task is not None and flag_soon(run, said, judge) is task
     await legs(run, first, judge, T)
-    await legs(run, second, judge, T)  # both calls wait for the one read
+    await legs(run, second, judge, T)  # neither asks again
+    await task
     assert len(judge.spoken()) == 1
 
 
-async def test_legs_waits_for_a_flag_in_flight():
+async def test_legs_never_waits_for_a_flag():
     run, said, read = after_words()
     judge = SlowJudge(words={"pressure": 0.9})
-    flag_soon(run, said, judge)
-    assert said.labels is None  # the model has not answered yet
-    assert (await legs(run, read, judge, T)).pressure.words == 0.9
+    flagging = flag_soon(run, said, judge)
+    assert flagging is not None
+    triangle = await legs(run, read, judge, T)
+    assert said.labels is None  # the model has not answered yet: the call went on
+    assert triangle.pressure.words is None and triangle.rationalization.words is None
+    await flagging
 
 
 class HearsJudge(FakeJudge):
@@ -881,10 +892,132 @@ async def test_words_are_the_highest_over_the_messages_before_the_call():
     assert words == [0.3, 0.9, 0.9]  # "late" is said after the third call
 
 
+class LateFlagJudge(FakeJudge):
+    """Answers the agent's words only once `land` is set: a flag still in flight."""
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.land = asyncio.Event()
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if words_only(state):
+            await self.land.wait()
+        return await super().answers(state, questions)
+
+
+async def test_a_flag_landing_during_the_judgment_still_counts():
+    """The words are collected last, so a flag that lands while a write is judged is in."""
+    gate = asyncio.Event()
+
+    class Judging(FakeJudge):
+        async def answers(self, state: dict, questions: Mapping) -> dict | None:
+            if "weakens" in questions:
+                await gate.wait()
+            return await super().answers(state, questions)
+
+    said = Message(after=0, text=FAILING)
+    write = step(1, "write_file", '{"path": "notes.md"}', "write")
+    run = run_with(write, task=CALM, messages=[said])
+    judge = Judging(words={"pressure": 0.9})
+    judging = asyncio.create_task(legs(run, write, judge, T))
+    flagging = flag_soon(run, said, judge)
+    assert flagging is not None
+    await flagging  # the call is still being judged
+    assert not judging.done()
+    gate.set()
+    assert (await judging).pressure.words == 0.9
+
+
+async def test_a_late_flag_raises_scored_steps():
+    """A call scored while its message is still being read is raised when the flag lands:
+    its `words` only, never its score, confirmation or facts."""
+    said = Message(after=2, text=FAILING)
+    write = step(3, "write_file", '{"path": "tests/t.py"}', "write")
+    run = run_with(
+        step(1, is_error=True),
+        step(2, is_error=True),
+        write,
+        task=CALM,
+        messages=[said],
+    )
+    loud = {"pressure": 0.9, "rationalization": 0.1, "manipulation": 0.8}
+    judge = LateFlagJudge(words=loud)
+    flagging = flag_soon(run, said, judge)
+    assert flagging is not None
+    # The flag is in flight: the call is scored without it, and does not wait for it.
+    scored = await asyncio.wait_for(legs(run, write, judge, T), 1)
+    write.legs = scored
+    assert scored.pressure.words is None and scored.rationalization.words is None
+    before = scored.model_copy(deep=True)
+    judge.land.set()
+    await flagging
+    assert (scored.pressure.words, scored.rationalization.words) == (0.9, 0.8)
+    assert scored.opportunity.words is None
+    for (_, a), (_, b) in zip(scored, before, strict=True):
+        assert (a.score, a.confirmed, a.facts) == (b.score, b.confirmed, b.facts)
+
+
+async def test_a_late_flag_leaves_steps_it_does_not_reach():
+    """Only a call scored after the message is raised: not one before it, and not one still
+    being scored (it collects the words itself when it is)."""
+    said = Message(after=1, text=FAILING)
+    early, scored, scoring = (
+        step(n, "read_file", f'{{"path": "{n}"}}') for n in (1, 2, 3)
+    )
+    run = run_with(early, scored, scoring, task=CALM, messages=[said])
+    judge = FakeJudge(words={"pressure": 0.9})
+    early.legs = await legs(run, early, judge, T)
+    scored.legs = await legs(run, scored, judge, T)
+    flagging = flag_soon(run, said, judge)
+    assert flagging is not None
+    await flagging
+    assert early.legs.pressure.words is None
+    assert scored.legs.pressure.words == 0.9
+    assert scoring.legs is None
+
+
+async def test_a_late_flag_never_lowers_words():
+    """A call already at 0.9 stays there when a message said before it scores 0.3."""
+    judge = HearsJudge({"urgent": 0.9, "mild": 0.3})
+    urgent, mild = Message(after=0, text="urgent"), Message(after=0, text="mild")
+    read = step(1, "read_file")
+    run = run_with(read, task=CALM, messages=[urgent, mild])
+    first = flag_soon(run, urgent, judge)
+    assert first is not None
+    await first
+    read.legs = await legs(run, read, judge, T)  # "mild" is not read yet
+    assert read.legs.pressure.words == 0.9
+    second = flag_soon(run, mild, judge)
+    assert second is not None
+    await second
+    assert mild.labels is not None and mild.labels["pressure"] == 0.3
+    assert read.legs.pressure.words == 0.9
+
+
+async def test_cancelling_one_call_leaves_the_flag_running():
+    """Two calls after one message used to wait on its flag together: cancelling one (an
+    MCP cancel, Esc mid-call) cancelled the flag, and the other call with it."""
+    said = Message(after=0, text=FAILING)
+    first, second = step(1, "read_file"), step(2, "read_file", '{"path": "b.md"}')
+    run = run_with(first, second, task=CALM, messages=[said])
+    judge = LateFlagJudge(words={"pressure": 0.9})
+    flagging = flag_soon(run, said, judge)
+    assert flagging is not None
+    one = asyncio.create_task(legs(run, first, judge, T))
+    other = asyncio.create_task(legs(run, second, judge, T))
+    await asyncio.sleep(0)  # both calls are under way
+    one.cancel()
+    second.legs = await asyncio.wait_for(other, 1)
+    judge.land.set()
+    await flagging
+    assert said.labels is not None
+    assert second.legs.pressure.words == 0.9  # the flag still reached the other call
+
+
 async def test_the_late_read_carries_the_words_too():
     run, said, read = after_words()
     judge = FakeJudge(words={"pressure": 0.9})
-    flag_soon(run, said, judge)
+    await flag(run, said, judge)
     assert (await read_after(run, read, judge, T)).pressure.words == 0.9
 
 
@@ -892,7 +1025,7 @@ async def test_a_long_message_is_read_in_parts():
     text = "a" * CHUNK + OUT_OF_TIME + "b" * (CHUNK - len(OUT_OF_TIME))
     run, said, read = after_words(text)
     judge = HearsJudge({OUT_OF_TIME: 0.9})
-    flag_soon(run, said, judge)
+    await flag(run, said, judge)
     leg = (await legs(run, read, judge, T)).pressure
     parts = [part for [part] in judge.spoken()]
     assert len(parts) == 2 and all(len(p) <= CHUNK for p in parts)
@@ -909,10 +1042,8 @@ async def test_the_model_reads_the_message_alone_with_the_ledgers_questions():
             seen.append((state, questions))
             return await super().answers(state, questions)
 
-    run, said, read = after_words()
-    judge = Spy()
-    flag_soon(run, said, judge)
-    await legs(run, read, judge, T)
+    run, said, _ = after_words()
+    await flag(run, said, Spy())
     [(state, questions)] = seen
     assert state == {
         "task": CALM,

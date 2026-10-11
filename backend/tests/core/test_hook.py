@@ -180,13 +180,14 @@ class WordsJudge:
 
     def __init__(self) -> None:
         self.read: list[str] = []
+        self.delay = 0.05
 
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
         if "current_step" not in state:
             return dict.fromkeys(questions, 0.0)
         [said] = state["current_step"]["agent_said"]
         self.read.append(said)
-        await asyncio.sleep(0.05)
+        await asyncio.sleep(self.delay)
         return {q: 0.9 if q == "pressure" else 0.0 for q in questions}
 
 
@@ -235,13 +236,18 @@ async def test_message_flagged_once_when_final(judged):
     }
 
 
-async def test_the_next_call_carries_the_words(judged):
-    base, _ = judged
+async def test_a_late_flag_raises_the_call_already_scored(judged):
+    base, judge = judged
+    judge.delay = 0.5  # the call is scored and served well before the flag lands
     run = await new_run(base)
     await hook(base, run["key"], display("m1", "I cannot finish in time.", True))
     read = {"file_path": "README.md"}
     await hook(base, run["key"], event("PreToolUse", "Read", tool_input=read))
-    [step] = (await run_of(base, run))["steps"]  # it waited for the read in flight
+    # The call did not wait for the read in flight; the flag raises it when it lands.
+    [step] = (await run_of(base, run))["steps"]
+    assert step["legs"]["pressure"]["words"] is None
+    await flagged_message(base, run)
+    [step] = (await run_of(base, run))["steps"]
     assert step["legs"]["pressure"]["words"] == 0.9
     assert step["legs"]["pressure"]["score"] == 0.0
     assert step["legs"]["opportunity"]["words"] is None

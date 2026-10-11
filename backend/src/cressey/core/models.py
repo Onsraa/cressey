@@ -105,7 +105,8 @@ class Leg(BaseModel):
     confirmed: bool  # facts observed by code confirm it
     facts: list[str]
     # What the agent's words say of this leg, 0 to 1. Display only: no hold, key or incident
-    # reads it; None when no message before the call was read.
+    # reads it; None when no message before the call was read. A flag that lands after the
+    # call raises it, never lowers it.
     words: float | None = None
 
 

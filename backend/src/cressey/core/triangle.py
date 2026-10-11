@@ -412,9 +412,15 @@ async def _read(run: Run, steps: list[Step], judge: Judge) -> None:
     await asyncio.gather(*(label_soon(run, i, judge) for i in positions))
 
 
+def _spoken(labels: Mapping[str, float]) -> dict[str, float]:
+    """What a read message says of each leg it speaks to: the highest of its questions."""
+    return {leg: max(labels[name] for name in names) for leg, names in SPEAKS.items()}
+
+
 async def _flag(run: Run, m: Message, judge: Judge) -> None:
     """Read the finished message once, in parts that fit, with the ledger's own questions.
-    Without an answer it stays unflagged. Display only: no hold reads these flags."""
+    Without an answer it stays unflagged. Display only: no hold reads these flags and no
+    call waits for one; the calls scored after the message meanwhile are raised on landing."""
     window: dict[str, JsonValue] = {
         "task": run.task,
         "mandate": run.mandate.model_dump(),
@@ -437,18 +443,24 @@ async def _flag(run: Run, m: Message, judge: Judge) -> None:
         for leg, names in SPEAKS.items()
         if any(labels[name] >= FLOORS[name] for name in names)
     ]
+    said = _spoken(labels)
+    for s in run.steps:  # `words` only, and only up: a score is never touched
+        if s.n > m.after and s.legs is not None:
+            s.legs.pressure.words = max(s.legs.pressure.words or 0, said["pressure"])
+            s.legs.rationalization.words = max(
+                s.legs.rationalization.words or 0, said["rationalization"]
+            )
 
 
-# Messages being read: the Message's id -> the task reading it. A call waits for the read
-# already running instead of asking again. A message is told apart by identity: two can say
-# the same words after the same call.
+# Messages being read: the Message's id -> the task reading it, so a message is read once.
+# A message is told apart by identity: two can say the same words after the same call.
 _FLAGGING: dict[int, asyncio.Task[None]] = {}
 
 
 def flag_soon(run: Run, m: Message, judge: Judge) -> asyncio.Task[None] | None:
-    """Read a finished message in the background, unless it's being read: the calls that
-    follow wait for it. None for a run that sees tool calls only, and for a replay: nobody
-    watches those (the preflight skips them too)."""
+    """Read a finished message in the background, unless it's being read. None for a run
+    that sees tool calls only, and for a replay: nobody watches those (the preflight skips
+    them too)."""
     if run.visibility == "tools" or run.kind == "replay":
         return None
     key = id(m)
@@ -669,32 +681,30 @@ async def report_check(run: Run, judge: Judge, t: Thresholds) -> Leg:
     return Leg(score=score, confirmed=score >= t.report, facts=facts)
 
 
-async def _words(run: Run, call: Step) -> dict[str, float]:
-    """What the agent said before this call, as the highest flag for each leg it speaks to.
-    The messages being read are waited for; one never marked final isn't being read.
-    Empty when no message was read."""
-    before = [m for m in run.messages if m.after < call.n]
-    await asyncio.gather(*(x for m in before if (x := _FLAGGING.get(id(m)))))
-    read = [m.labels for m in before if m.labels is not None]
-    if not read:
-        return {}
-    return {
-        leg: max(labels[name] for labels in read for name in names)
-        for leg, names in SPEAKS.items()
-    }
+def _words(run: Run, call: Step) -> dict[str, float]:
+    """What the agent said before this call, as the highest flag for each leg it speaks to,
+    among the messages read so far. It waits for none: a message still being read raises the
+    call when it lands (`_flag`). Empty when no message was read."""
+    read = [
+        _spoken(m.labels)
+        for m in run.messages
+        if m.after < call.n and m.labels is not None
+    ]
+    return {leg: max(said[leg] for said in read) for leg in SPEAKS} if read else {}
 
 
 async def _triangle(
     run: Run, call: Step, judge: Judge, t: Thresholds, everything: bool
 ) -> Legs:
     """The three legs of a call. The agent's words before it are shown on pressure and
-    rationalization as `words`: they change no score and confirm nothing."""
+    rationalization as `words`: they change no score and confirm nothing. They are collected
+    last, after the judgment, so a flag that landed meanwhile counts."""
     made = Legs(
         pressure=pressure(run, call, t),
         opportunity=opportunity(run, call),
         rationalization=await _rationalization(run, call, judge, t, everything),
     )
-    words = await _words(run, call)
+    words = _words(run, call)
     made.pressure.words = words.get("pressure")
     made.rationalization.words = words.get("rationalization")
     return made
