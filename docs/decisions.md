@@ -88,6 +88,7 @@
 - `GITGUARDIAN_API_KEY` repo secret: needed for the secret scan in CI.
 - **Re-record the cache with the Bedrock models:** one command records every answer the stage needs and checks it offline: `CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record` (`demo/record.py`). Run it after the last change to a prompt, a question, a model or the sessions.
 - **Re-record the judge cache:** one command records every answer the stage needs and checks it offline: `CRESSEY_MODEL_MODE=record uv run python -m cressey.demo.record` (`demo/record.py`). Run it after the last change to a prompt, a question, a model or the sessions.
+- **After that re-record, replay the two lab replays** (METR, PocketOS) against a backend in `record` mode and commit the new cache files: `demo.record` replaces `data/cache` and doesn't play them (commands in `runsheet.md`, Sunday 06:00).
 - **The report check** is built: a contradicted report flags the run (`report_check`), it doesn't hold or open an incident. A run with no hold whose report lies (the control run) is flagged on the run, not in the incident queue.
 - **Hugging Face / METR gaps, for dev after the event** (`positioning-and-risks.md`):
   - a read floor for protected paths declared in the mandate, with no model call: **built 10-10** (`protected`, below);
