@@ -268,6 +268,59 @@ test("a link to a step selects it in the inspector", () => {
 	expect(out).toContain("decision 0.8 ms");
 });
 
+test("the hold banner skips the run the Live view shows, so the page doesn't jump", async () => {
+	const { default: App } = await import("@/App");
+	const run = demo({});
+	const other = { ...run, id: "b9c8d7e6f5a4", started_at: at(-120) };
+	const hold = (r: Run) => ({ run_id: r.id, task: r.task, step: run.steps[3] });
+	const banner = () => renderToStaticMarkup(<App />).includes("View the call");
+	state = { ...live([run]), holds: [hold(run)] };
+	expect(banner()).toBe(false);
+	// Another run's hold is announced here; this run's hold, on the other pages.
+	state = { ...live([run, other]), holds: [hold(other)] };
+	expect(banner()).toBe(true);
+	state = { ...live([run]), holds: [hold(run)], view: "eval" };
+	expect(banner()).toBe(true);
+});
+
+test("on its Live page, alert mode and the run's cross-run signal are chips, not banners", async () => {
+	const { default: App } = await import("@/App");
+	const run = demo({});
+	const page = () => renderToStaticMarkup(<App />).replaceAll("<!-- -->", "");
+	const banners = () => page().split('role="alert"').length - 1;
+	state = {
+		...live([run]),
+		responses: {
+			floor: "review",
+			trap_key: "alert",
+			trap_key_read: "alert",
+			triangle: "review",
+			fleet: "alert",
+		},
+		fleet: [
+			{
+				target: "run_sql | SQL destructeur hors mandat : users",
+				runs: ["f0e1d2c3b4a5", run.id],
+				first_at: at(-300),
+				last_at: at(-10),
+			},
+		],
+	};
+	expect(banners()).toBe(0);
+	// Alert mode in the header; the signal on the held call's row, under its reason.
+	const [header, rest] = page().split("</header>");
+	expect(header).toContain("alert mode</span>");
+	expect(rest).toContain("cross-run · 2 runs</span>");
+	// A signal about other runs doesn't push this page down either.
+	const others = { ...state.fleet[0], runs: ["f0e1d2c3b4a5", "a0b1c2d3e4f5"] };
+	state = { ...state, fleet: [others] };
+	expect(banners()).toBe(0);
+	expect(page()).not.toContain("cross-run");
+	// The other pages keep both banners.
+	state = { ...state, view: "eval" };
+	expect(banners()).toBe(2);
+});
+
 test("focus mode: the task and the key in the header, the hold in full", () => {
 	state = { ...live([demo({})]), focusMode: true };
 	const out = html();

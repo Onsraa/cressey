@@ -23,7 +23,7 @@ import {
 	reportLabel,
 	shadowOf,
 } from "./run";
-import { IndicatorChip, ShadowChip, StatusChip } from "./ui";
+import { IndicatorChip, ShadowChip, SignalChip, StatusChip } from "./ui";
 
 // The statuses whose reason the row shows: Cressey acted on the call.
 const REASONED = new Set<Step["status"]>([
@@ -56,11 +56,14 @@ export function Trace({
 }) {
 	const box = useRef<HTMLDivElement>(null);
 	const seen = useRef<Set<string> | null>(null);
+	const end = useRef(0); // the trace's height at the last look
 	// Each new row slides in and the trace glides to it; the rows already there on mount
 	// just show, scrolled to the latest.
 	useLayoutEffect(() => {
 		const el = box.current;
 		if (!el) return;
+		const was = end.current;
+		end.current = el.scrollHeight;
 		if (!seen.current) {
 			seen.current = new Set(rows.map((r) => r.id));
 			el.scrollTop = el.scrollHeight;
@@ -68,7 +71,13 @@ export function Trace({
 		}
 		const known = seen.current;
 		const fresh = rows.filter((r) => !known.has(r.id));
-		if (!fresh.length) return;
+		if (!fresh.length) {
+			// A row grew (a hold's reason, a signal): the reader at the end stays there (1 px
+			// for a fractional scrollTop).
+			if (el.scrollHeight > was && el.scrollTop + el.clientHeight >= was - 1)
+				scrollToEnd(el);
+			return;
+		}
 		for (const r of fresh) {
 			known.add(r.id);
 			const row = el.querySelector(`[data-row="${r.id}"]`);
@@ -129,10 +138,16 @@ export function Trace({
 }
 
 function CallRow({ run, step }: { run: Run; step: Step }) {
+	const { fleet, responses } = useLive();
 	const secrets = carried(step);
 	const status = shown(step);
 	const Why = STATUS[step.status].Icon;
 	const shadow = shadowOf(step);
+	// The backend names a signal's target "<tool> | <reason>" (core/incidents.py, _count).
+	const signal = fleet.find(
+		(f) =>
+			f.runs.includes(run.id) && f.target === `${step.tool} | ${step.reason}`,
+	);
 	return (
 		<>
 			<span className="pt-px">
@@ -175,6 +190,11 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 					<span className="mt-0.5 flex items-center gap-[5px] font-medium text-[12.5px] text-held-fg leading-[1.35]">
 						<Why size={12} strokeWidth={2.5} />
 						{step.reason}
+					</span>
+				)}
+				{signal && REASONED.has(step.status) && (
+					<span className="mt-1 flex">
+						<SignalChip signal={signal} responses={responses} />
 					</span>
 				)}
 			</span>

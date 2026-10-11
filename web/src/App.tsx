@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { LiveProvider, useLive, type View } from "@/api/live";
+import { LiveProvider, shownRun, useLive, type View } from "@/api/live";
 import type { FleetSignal } from "@/api/types";
 import {
 	Activity,
@@ -292,8 +292,11 @@ const slideDown = (el: HTMLDivElement | null) =>
 	arrive(el, { yPercent: -100 }, 0.35);
 
 function HoldBanner() {
-	const { holds, now, go } = useLive();
-	const hold = holds[0];
+	const { holds, now, go, view, runs, focus } = useLive();
+	// The Live page shows its run's hold in full: a banner there only pushes the page down.
+	const watched = view === "live" ? shownRun(runs, focus)?.id : undefined;
+	const others = holds.filter((h) => h.run_id !== watched);
+	const hold = others[0];
 	if (!hold) return null;
 	return (
 		<div
@@ -308,7 +311,7 @@ function HoldBanner() {
 			<strong className="font-semibold text-[15px]">Call held</strong>
 			<span className="font-mono text-[13px]">
 				#{hold.step.n} {hold.step.tool} · {hold.step.risk}
-				{holds.length > 1 && ` · and ${holds.length - 1} more`}
+				{others.length > 1 && ` · and ${others.length - 1} more`}
 			</span>
 			<span
 				data-tip="With no decision, the call is safely cancelled when the countdown ends."
@@ -342,9 +345,10 @@ function AlertBanner() {
 }
 
 function AlertBar({ alerting }: { alerting: ReturnType<typeof onAlert> }) {
-	const { go } = useLive();
+	const { go, view } = useLive();
 	const [closed, setClosed] = useState(false);
-	if (closed) return null;
+	// The Live page shows alert mode in its header (the banner keeps its closed state).
+	if (closed || view === "live") return null;
 	return (
 		<div
 			role="alert"
@@ -381,10 +385,13 @@ function AlertBar({ alerting }: { alerting: ReturnType<typeof onAlert> }) {
 }
 
 function SignalBanner() {
-	const { fleet, responses, go } = useLive();
+	const { fleet, responses, go, view } = useLive();
 	// A closed signal comes back when another run is held on its target.
 	const [closed, setClosed] = useState<string[]>([]);
 	const id = (f: FleetSignal) => `${f.target}@${f.last_at}`;
+	// The Live page shows a signal on its run's calls, and nothing to decide comes with one:
+	// a banner there only pushes the page down (the banner keeps its closed signals).
+	if (view === "live") return null;
 	return fleet
 		.filter((f) => !closed.includes(id(f)))
 		.map((f) => (

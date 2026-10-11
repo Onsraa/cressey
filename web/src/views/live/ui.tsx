@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
-import type { Indicator, Shadow, Step } from "@/api/types";
+import type {
+	FleetSignal,
+	Indicator,
+	Responses,
+	Shadow,
+	Step,
+} from "@/api/types";
+import { GitMerge } from "@/components/icons";
 import {
 	INDICATOR,
 	indicatorTone,
@@ -10,6 +17,7 @@ import {
 	type Shown,
 	STATUS,
 	TONE,
+	time,
 } from "@/lib/labels";
 import { bar } from "./run";
 
@@ -96,6 +104,26 @@ export function StatusChip({
 		>
 			<Icon size={11} />
 			{label}
+		</span>
+	);
+}
+
+// Other runs were held on the same target as this call: the cross-run signal, dark like the
+// banner the other pages show.
+export function SignalChip({
+	signal,
+	responses,
+}: {
+	signal: FleetSignal;
+	responses?: Responses;
+}) {
+	return (
+		<span
+			data-tip={`Cross-run signal: ${signal.target}\n${signal.runs.length} runs held outside the mandate · ${time(signal.first_at)} → ${time(signal.last_at)}\n${responses?.fleet === "stop" ? "Stop: calls refused" : "Alert: calls let through"}`}
+			className={`${chip} h-5 border-ink bg-ink px-1.5 text-surface`}
+		>
+			<GitMerge size={11} />
+			cross-run · {signal.runs.length} runs
 		</span>
 	);
 }

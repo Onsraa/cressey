@@ -143,3 +143,7 @@ export function latestLive(runs: Run[]): Run | undefined {
 		.sort((a, b) => a.started_at.localeCompare(b.started_at))
 		.at(-1);
 }
+
+// The run the Live view shows: the one another view linked to, else the latest live run.
+export const shownRun = (runs: Run[], focus: Focus) =>
+	focus.run ? runs.find((r) => r.id === focus.run) : latestLive(runs);

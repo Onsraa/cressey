@@ -1,13 +1,22 @@
 import { useLive } from "@/api/live";
 import type { Mandate, Run } from "@/api/types";
 import {
+	Bell,
 	Clock,
 	FileCheck,
 	type IconType,
 	KeySquare,
 	Lock,
 } from "@/components/icons";
-import { KIND, TONE, type Tone, time, VISIBILITY } from "@/lib/labels";
+import {
+	CHECK,
+	KIND,
+	onAlert,
+	TONE,
+	type Tone,
+	time,
+	VISIBILITY,
+} from "@/lib/labels";
 
 export type Phase =
 	| "waiting"
@@ -116,9 +125,11 @@ const CHIP = "inline-flex h-[22px] items-center gap-[5px] px-[7px]";
 const VIS_TIP = "What Cressey sees: set when the run starts";
 
 export function Header({ run, phase }: { run?: Run; phase: Phase }) {
-	const { focusMode, status } = useLive();
+	const { focusMode, status, responses } = useLive();
 	const st = PHASE[phase];
 	const key = run && keyLook(run);
+	// A chip here, not the other pages' banner: a banner pushes the page down.
+	const alerting = onAlert(responses);
 	// A Claude Code run ends with its session; an MCP agent's, with its final report.
 	const startedTip = run?.ended_at
 		? `Started ${time(run.started_at)}\nEnded ${time(run.ended_at)}${run.turn ? ", session closed" : ", final report received"}`
@@ -201,6 +212,17 @@ export function Header({ run, phase }: { run?: Run; phase: Phase }) {
 							className={`${CHIP} border ${TONE[run.stopped ? "held" : "warn"]}`}
 						>
 							{run.refused} of {status.stop_after} refused
+						</span>
+					)}
+					{alerting.length > 0 && (
+						<span
+							data-tip={`Alert mode: Cressey does not block\nOn alert: ${alerting.map((k) => CHECK[k]).join(", ")}`}
+							// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+							tabIndex={0}
+							className={`${CHIP} border ${TONE.warn}`}
+						>
+							<Bell size={12} />
+							alert mode
 						</span>
 					)}
 				</div>

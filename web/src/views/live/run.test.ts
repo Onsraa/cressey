@@ -9,7 +9,7 @@ import type {
 	Thread,
 } from "@/api/types";
 import { phaseOf } from "./Header";
-import { layout, pos } from "./pixels";
+import { layout, mix, pos } from "./pixels";
 import {
 	agg,
 	bar,
@@ -183,6 +183,17 @@ describe("triangle", () => {
 			expect(p[0]).toBeCloseTo(centre[0]);
 			expect(p[1]).toBeCloseTo(centre[1]);
 		}
+	});
+	test("a resized triangle glides to its new place, equilateral all the way", () => {
+		const to = layout(600, 380); // shorter: smaller and higher
+		for (const k of [0, 0.5, 1]) {
+			const g = mix(t, to, k);
+			expect(g.P[1]).toBeCloseTo(t.P[1] + (to.P[1] - t.P[1]) * k);
+			expect(g.s).toBeCloseTo(t.s + (to.s - t.s) * k);
+			expect(g.R[0] - g.O[0]).toBeCloseTo(g.s);
+			expect(g.O[1] - g.P[1]).toBeCloseTo((g.s * Math.sqrt(3)) / 2);
+		}
+		expect(mix(t, to, 1).O[1]).toBeCloseTo(to.O[1]);
 	});
 	test("a call is pulled toward its strongest leg, never onto the vertex", () => {
 		const [x, y] = at(0.7, 0, 0);

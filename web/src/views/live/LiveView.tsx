@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { latestLive, useLive } from "@/api/live";
+import { shownRun, useLive } from "@/api/live";
 import type { Run } from "@/api/types";
 import { arrive, still } from "@/lib/motion";
 import { Center, type CenterTab } from "./Center";
@@ -31,9 +31,7 @@ const AT = {
 // waiting for an agent.
 export function LiveView() {
 	const { runs, focus } = useLive();
-	const run = focus.run
-		? runs.find((r) => r.id === focus.run)
-		: latestLive(runs);
+	const run = shownRun(runs, focus);
 	return <RunView key={run?.id ?? ""} run={run} />;
 }
 

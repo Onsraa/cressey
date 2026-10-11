@@ -38,8 +38,12 @@ export function layout(W: number, H: number): Tri {
 		Math.min(W - padX * 2, ((H - top - bot) * 2) / Math.sqrt(3)),
 	);
 	const h = (s * Math.sqrt(3)) / 2;
-	const cx = W / 2;
-	const y0 = top + Math.max(0, (H - top - bot - h) / 2);
+	return shape(W / 2, top + Math.max(0, (H - top - bot - h) / 2), s, W);
+}
+
+// An equilateral triangle of side s, apex up at (cx, y0).
+function shape(cx: number, y0: number, s: number, W: number): Tri {
+	const h = (s * Math.sqrt(3)) / 2;
 	return {
 		P: [cx, y0],
 		O: [cx - s / 2, y0 + h],
@@ -48,6 +52,12 @@ export function layout(W: number, H: number): Tri {
 		h,
 		W,
 	};
+}
+
+// The layout k of the way from a to b, while the triangle glides to a new size.
+export function mix(a: Tri, b: Tri, k: number): Tri {
+	const m = (x: number, y: number) => x + (y - x) * k;
+	return shape(m(a.P[0], b.P[0]), m(a.P[1], b.P[1]), m(a.s, b.s), b.W);
 }
 
 // Where a call lands: its squared scores pull it toward their vertices, eased 18 % toward
@@ -91,7 +101,14 @@ type Wave = {
 	life: number;
 	rm: number;
 };
-type Probe = { x: number; y: number; lx: number | null; ly: number | null };
+// A call in flight; k is its eased progress.
+type Probe = {
+	x: number;
+	y: number;
+	lx: number | null;
+	ly: number | null;
+	k: number;
+};
 type Marker = {
 	x: number;
 	y: number;
@@ -139,7 +156,8 @@ export class Pixels {
 	private pk = new Float32Array(0); // the salmon waves' peak
 	private mask = new Uint8Array(0); // the triangle, its edge dithered
 	private tri: Tri | null = null;
-	private reported = ""; // the size last told to the page
+	private glide: gsap.core.Tween | null = null; // the triangle moving to a new size
+	private reported = ""; // the layout last told to the page
 
 	// One canvas at a time: a page switch detaches it, and the field keeps its texture and
 	// its waves for the next one, as the design's.
@@ -166,6 +184,7 @@ export class Pixels {
 		cv.addEventListener("click", this.click);
 		this.ro = new ResizeObserver(() => this.size());
 		if (cv.parentElement) this.ro.observe(cv.parentElement);
+		this.tri = null; // a canvas just attached is laid out at once
 		this.size();
 		this.raf = requestAnimationFrame(this.frame);
 	}
@@ -181,6 +200,7 @@ export class Pixels {
 		this.timers = [];
 		for (const p of this.probes) gsap.killTweensOf(p);
 		this.probes = [];
+		this.glide?.kill();
 		this.cv = null;
 		this.ctx = null;
 		this.pm = null;
@@ -221,7 +241,25 @@ export class Pixels {
 		this.pk = new Float32Array(N);
 		this.mask = new Uint8Array(N);
 		const T = layout(W, H);
+		const from = this.tri;
+		this.glide?.kill();
+		// A new gauge line or a banner resizes the field: the triangle glides there, never jumps.
+		if (!from || this.rm) return this.place(T);
+		const g = { k: 0 };
+		this.place(from);
+		this.glide = gsap.to(g, {
+			k: 1,
+			duration: 0.45,
+			ease: "power3.out",
+			onUpdate: () => this.place(mix(from, T, g.k)),
+		});
+	}
+
+	// Lays the field out on T: the triangle's cells, the calls' heat, and the vertex labels.
+	private place(T: Tri) {
+		const c = CELL;
 		this.tri = T;
+		this.mask.fill(0);
 		for (let r = 0; r < this.rows; r++)
 			for (let q = 0; q < this.cols; q++) {
 				const b = bary(T, (q + 0.5) * c, (r + 0.5) * c);
@@ -231,8 +269,9 @@ export class Pixels {
 						mn * T.h > c * 1.6 || this.hsh(q, r) < 0.55 ? 1 : 0;
 			}
 		this.rebuild();
-		if (this.reported !== `${W}x${H}`) {
-			this.reported = `${W}x${H}`;
+		const k = `${T.W}:${T.P}:${T.s}`;
+		if (this.reported !== k) {
+			this.reported = k;
 			this.onLayout(T);
 		}
 	}
@@ -321,39 +360,45 @@ export class Pixels {
 	}
 
 	// A call flies in from the left edge, trailing heat, and lands: its heat, a ring, and for
-	// a held call three salmon shockwaves and a shake.
+	// a held call three salmon shockwaves and a shake. Its place is read when used, not when
+	// it arrives: a banner or a new gauge line can reshape the field while it flies.
 	private flyIn(d: Dot) {
 		const T = this.tri;
 		if (!T) return;
-		const [tx, ty] = pos(T, d.legs);
+		const at = () => pos(this.tri ?? T, d.legs);
 		const amt = amp(d);
-		const sg = this.sigC();
 		const land = () => {
-			this.dep(this.acc, tx, ty, amt, sg);
+			const [tx, ty] = at();
+			this.dep(this.acc, tx, ty, amt, this.sigC());
 			if (!this.rm) this.wave(tx, ty, 1, false, 760, CELL * 6.5);
 			if (d.hold) {
 				this.holdPos = [tx, ty];
 				if (!this.rm) {
 					this.wave(tx, ty, 1.3, true);
-					this.later(() => this.wave(tx, ty, 1, true), 240);
-					this.later(() => this.wave(tx, ty, 0.7, true), 480);
+					this.later(() => this.wave(...at(), 1, true), 240);
+					this.later(() => this.wave(...at(), 0.7, true), 480);
 					this.shake = 0.55;
 				}
 			}
 		};
 		if (this.rm) return land();
-		const pr: Probe = {
-			x: -8,
-			y: Math.min(this.H - 8, Math.max(8, ty + (this.hsh(tx, ty) - 0.5) * 120)),
-			lx: null,
-			ly: null,
-		};
+		const [tx, ty] = at();
+		const x0 = -8;
+		const y0 = Math.min(
+			this.H - 8,
+			Math.max(8, ty + (this.hsh(tx, ty) - 0.5) * 120),
+		);
+		const pr: Probe = { x: x0, y: y0, lx: null, ly: null, k: 0 };
 		this.probes.push(pr);
 		gsap.to(pr, {
-			x: tx,
-			y: ty,
+			k: 1,
 			duration: 0.95,
 			ease: "power3.out",
+			onUpdate: () => {
+				const [x, y] = at();
+				pr.x = x0 + (x - x0) * pr.k;
+				pr.y = y0 + (y - y0) * pr.k;
+			},
 			onComplete: () => {
 				this.probes = this.probes.filter((p) => p !== pr);
 				land();
