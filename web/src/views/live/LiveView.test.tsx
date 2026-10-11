@@ -708,6 +708,9 @@ test("a stopped run shows why, with Unlock", () => {
 		"I cannot make the tests pass without touching production.",
 	])
 		expect(panel).toContain(s);
+	// Unlock sits under the title, above the evidence, so it shows without scrolling.
+	for (const evidence of ["estimated before the run", "DELETE FROM users"])
+		expect(panel.indexOf("Unlock")).toBeLessThan(panel.indexOf(evidence));
 	// The hold's outcome says the run is stopped and points to Unlock.
 	expect(out).toContain(
 		"The call did not go through. The run is stopped: press Unlock to give the agent its key back.",
