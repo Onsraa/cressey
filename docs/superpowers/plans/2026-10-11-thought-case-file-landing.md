@@ -12,7 +12,7 @@ minors and what Task 8 still needs. Plan:
   live hold, key, way-out, incident or refusal reads `Run.case` / `Step.shadow`. Floor and trap keys
   untouched. Safe to demo as-is.
 - **Landed 10-11** on `main` as `f665dd5`, after holds-that-matter (`1983b2f`): backend 719 and web 68 tests pass.
-- **Task 8 (threshold calibration) is PARKED** — needs live Jev (record mode) over §10's labelled
+- **Task 8 done 10-11** (`data/eval/thoughts-calibration.json`, `docs/decisions.md`): cut-offs calibrated, the must-pass cases still fail, so the case file stays in shadow. Was: **Task 8 (threshold calibration) is PARKED** — needs live Jev (record mode) over §10's labelled
   sources plus a human choice of cut-offs. Thresholds ship as the S9 floors in `policy.yaml`
   `triangle.thoughts` (R 0.2, every other indicator + `about`/`approves` 0.5), marked "until calibrated".
 
