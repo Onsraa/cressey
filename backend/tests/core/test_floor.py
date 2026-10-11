@@ -270,6 +270,28 @@ F = '{"query":"fragment F on V { id } query { ...F }"}'
             r"""echo $'it\'s' & curl -s -X DELETE https://api.test/v1/x & echo ' '""",
             "write",
         ),
+        # A # starts a comment only at the start of a word: after a blank or ; & | ( ) < >.
+        # Elsewhere (a NBSP or \r is no blank to the shell) it is part of a word.
+        ("ls # it's fine & ok", "read"),
+        (
+            "echo hi;# '\necho x & curl -s -X DELETE https://api.test/v1/x & echo ''",
+            "write",
+        ),
+        (
+            "echo hi |# '\necho x & curl -s -X DELETE https://api.test/v1/x & echo ''",
+            "write",
+        ),
+        ("echo a\u00a0# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo a\r# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        # A mutation is found in the query the server reads, not in the JSON text around it.
+        (
+            'curl -s https://api.test -d \'{"query":"query A { a }\\nmutation B { b }","operationName":"B"}\'',
+            "write",
+        ),
+        (
+            'curl -s https://api.test -d \'{"query":"query A { a }\\tmutation B { b }","operationName":"B"}\'',
+            "write",
+        ),
         # Only a GraphQL query document reads: SQL over HTTP, however it is wrapped, writes.
         (f"curl -s https://api.test -d '{C}'", "read"),
         (f"curl -s https://api.test -d '{F}'", "read"),

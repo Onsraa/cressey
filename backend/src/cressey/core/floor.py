@@ -33,9 +33,11 @@ DESTRUCTIVE_COMMAND = re.compile(
 SEGMENT = re.compile(r"\|\|?|&&|;|\n")
 # A single & backgrounds what precedes it: it separates commands like `;` does. Quoted spans,
 # escaped characters and comments are skipped, so a & in "?a=1&b=2" stays in its argument;
-# redirections (2>&1, &>) aren't it, and any `>` makes the command a write anyway.
+# redirections (2>&1, &>) aren't it, and any `>` makes the command a write anyway. A # opens
+# a comment only at the start of a word, as in the shell: after a blank, a newline or ; & | ( ) < >
+# (not after a NBSP or \r, which are part of a word).
 BACKGROUND = re.compile(
-    r"""(\$'(?:\\.|[^'\\])*'|'[^']*'|"(?:\\.|[^"\\])*"|\\.|(?<!\S)#[^\n]*)"""
+    r"""(\$'(?:\\.|[^'\\])*'|'[^']*'|"(?:\\.|[^"\\])*"|\\.|(?<![^ \t\n;&|()<>])#[^\n]*)"""
     r"|(?<![<>&])&(?![>&])"
 )
 # $(...), `...`, <(...) and zsh's =(...) run a command wherever they sit, whatever the first
@@ -47,7 +49,8 @@ FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
 MUTATION = re.compile(r"\bmutation\b", re.IGNORECASE)
 GRAPHQL_DOCUMENT = re.compile(r"\{|(?:query|fragment)\b")
 # A body whose text isn't what the server sees: expanded by the shell, or JSON-escaped
-# (\u006dutation).
+# (\u006dutation). MUTATION is looked for in the decoded query, where \nmutation has a
+# word boundary that the raw JSON hides.
 INDIRECT = re.compile(r"\$|\\u")
 WRITE_FLAGS = {"-F", "--form", "-T", "--upload-file", "--post-file", "--post-data"}
 METHOD_FLAGS = {"-X", "--request", "--method"}
@@ -165,7 +168,7 @@ def _is_query(body: str) -> bool:
         and isinstance(parsed.get("query"), str)
         and _is_document(parsed["query"])
         and not INDIRECT.search(body)
-        and not MUTATION.search(body)
+        and not MUTATION.search(parsed["query"])
     )
 
 
