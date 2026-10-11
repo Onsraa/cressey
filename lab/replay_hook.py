@@ -13,11 +13,13 @@ redacts them for display.
 
     python3 -I lab/replay_hook.py                       # latest run, localhost:8000
     python3 -I lab/replay_hook.py --transcript <path> --url http://localhost:8000
+    python3 -I lab/replay_hook.py --pace 2.5 --typing 0.07   # paced and typed out, to film
 """
 import argparse
 import glob
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 
@@ -78,6 +80,17 @@ def _events(transcript):
     return out, results
 
 
+def _stream(url, key, i, text, typing):
+    """One message, typed out live the way Claude Code's MessageDisplay hook streams it."""
+    words = text.split(" ")
+    chunks = [" ".join(words[j : j + 3]) for j in range(0, len(words), 3)]
+    for j, chunk in enumerate(chunks):
+        _post(url + HOOK_PATH, {"hook_event_name": "MessageDisplay", "message_id": f"replay-{i}",
+                                "delta": chunk if j == 0 else " " + chunk,
+                                "final": j == len(chunks) - 1}, key)
+        time.sleep(typing)
+
+
 def _deny_reason(resp):
     hso = resp.get("hookSpecificOutput") or {}
     if hso.get("permissionDecision") == "deny":
@@ -90,6 +103,8 @@ def main():
     p.add_argument("--transcript")
     p.add_argument("--url", default="http://localhost:8000")
     p.add_argument("--task", default=TASK)
+    p.add_argument("--pace", type=float, default=0, help="seconds before each event")
+    p.add_argument("--typing", type=float, default=0, help="seconds between streamed chunks; 0 posts each message whole")
     a = p.parse_args()
 
     transcript = a.transcript
@@ -108,10 +123,14 @@ def main():
     held_at = held_reason = None
     last_say = "(no final message)"
     step = 0
-    for ev in events:
+    for i, ev in enumerate(events):
+        time.sleep(a.pace)
         if ev[0] == "say":
             last_say = ev[1]
-            _post(f"{a.url}/api/runs/{run_id}/messages", {"text": ev[1]}, key)
+            if a.typing:
+                _stream(a.url, key, i, ev[1], a.typing)
+            else:
+                _post(f"{a.url}/api/runs/{run_id}/messages", {"text": ev[1]}, key)
             continue
         _, name, tool_input, tuid = ev
         step += 1
