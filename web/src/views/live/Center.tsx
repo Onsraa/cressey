@@ -9,7 +9,6 @@ import {
 	Info,
 	KeySquare,
 	Lock,
-	MessageSquare,
 	Minus,
 	Triangle,
 } from "@/components/icons";
@@ -20,7 +19,7 @@ import { Field, type Hover } from "./Field";
 import type { Phase } from "./Header";
 import type { Scene } from "./pixels";
 import { type Agg, fmt, type Scored, TRAP } from "./run";
-import { Bar, type LegLook, Letter } from "./ui";
+import { Bar, FromWords, type LegLook, Letter } from "./ui";
 import { Waiting } from "./Waiting";
 
 export type CenterTab = "triangle" | "time";
@@ -280,17 +279,7 @@ function Gauge({
 						</div>
 					</details>
 				)}
-				{byWords(agg[g.k]) && (
-					<span
-						data-tip={`${g.name} read from what the agent said, not from the log.\nIt confirms nothing and holds nothing.`}
-						className={`inline-flex min-h-[22px] max-w-full items-start gap-1 text-pretty border px-1.5 py-[3px] font-mono text-[11px] leading-[1.3] ${TONE.grey}`}
-					>
-						<span className="mt-px inline-flex flex-none">
-							<MessageSquare size={11} />
-						</span>
-						<span className="min-w-0">from the agent's words</span>
-					</span>
-				)}
+				{byWords(agg[g.k]) && <FromWords g={g} />}
 			</div>
 			{auto.length > 0 && (
 				<div className="flex flex-col items-start gap-1">

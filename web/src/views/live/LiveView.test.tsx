@@ -290,6 +290,13 @@ test("waiting: the MCP URL to paste", () => {
 // React escapes the apostrophe in the markup.
 const FROM_WORDS = "from the agent&#x27;s words";
 
+// One panel's markup, from its label to the next panel's.
+const panel = (out: string, label: string) => {
+	const from = out.indexOf(`aria-label="${label}"`);
+	const next = out.indexOf("<section", from);
+	return out.slice(from, next < 0 ? undefined : next);
+};
+
 test("the agent's words raise a gauge above its facts, and the gauge says so", () => {
 	// Pressure: no facts, words 0.9. Rationalization: facts 0.65 beat words 0.4.
 	const spoken = legs({ ...leg(0), words: 0.9 }, leg(0), {
@@ -306,10 +313,10 @@ test("the agent's words raise a gauge above its facts, and the gauge says so", (
 			},
 		),
 	]);
-	const out = html();
-	expect(out).toContain(">0.90<");
+	const gauges = panel(html(), "Fraud triangle");
+	expect(gauges).toContain(">0.90<");
 	// Said once: under pressure only.
-	expect(out.split(FROM_WORDS)).toHaveLength(2);
+	expect(gauges.split(FROM_WORDS)).toHaveLength(2);
 	// No words, nothing to tag.
 	state = live([demo({})]);
 	expect(html()).not.toContain(FROM_WORDS);
@@ -382,10 +389,6 @@ test("a message in the step panel: its three labels as bars", () => {
 				},
 			),
 		]);
-	const panel = () => {
-		const out = html();
-		return out.slice(out.indexOf('aria-label="Inspector"'));
-	};
 	state = said({ pressure: 0.91, rationalization: 0.04, manipulation: 0.02 });
 	for (const s of [
 		"Pressure",
@@ -395,8 +398,59 @@ test("a message in the step panel: its three labels as bars", () => {
 		"0.04",
 		"0.02",
 	])
-		expect(panel()).toContain(s);
+		expect(panel(html(), "Inspector")).toContain(s);
 	// Not read: no labels to show.
 	state = said();
-	expect(panel()).not.toContain("Manipulation");
+	expect(panel(html(), "Inspector")).not.toContain("Manipulation");
+});
+
+// A call whose pressure the facts confirm at 0.6 and the words put at 0.9, and whose
+// rationalization only the words reach.
+const spoken = legs({ ...leg(0.6, true), words: 0.9 }, leg(0), {
+	...leg(0),
+	words: 0.9,
+});
+const spokenCall = (focus?: real.Focus) =>
+	live(
+		[
+			demo(
+				{},
+				{
+					steps: [
+						call(1, "read_file", '{"path": "README.md"}', { legs: spoken }),
+					],
+				},
+			),
+		],
+		focus,
+	);
+
+test("a call's cells read at the level of the agent's words, and say so", () => {
+	state = spokenCall();
+	const cells = row(html(), "c1");
+	expect(cells).toContain(
+		`Pressure 0.90\nconfirmed by facts at this step\n${FROM_WORDS}`,
+	);
+	expect(cells).toContain(`Rationalization 0.90\n${FROM_WORDS}`);
+	expect(cells).toContain('data-tip="Opportunity 0.00"');
+	expect(cells).toContain(
+		`aria-label="Pressure 0.90 ${FROM_WORDS}, Opportunity 0.00, Rationalization 0.90 ${FROM_WORDS}"`,
+	);
+	// Pressure and rationalization are as dark as 0.90; only pressure is ringed, as only
+	// the facts confirm it.
+	expect(cells.split("background:#1e1e1e")).toHaveLength(3);
+	expect(cells).toContain("inset 0 0 0 2px var(--color-p)");
+	expect(cells).not.toContain("inset 0 0 0 2px var(--color-r)");
+});
+
+test("the step panel reads that call at the same levels, with the same tag", () => {
+	state = spokenCall({ run: "a1b2c3d4e5f6", step: 1 });
+	const inspector = panel(html(), "Inspector");
+	expect(inspector).toContain("selected step");
+	// Pressure and rationalization read 0.90, one tag each.
+	expect(inspector.split(">0.90<")).toHaveLength(3);
+	expect(inspector.split(FROM_WORDS)).toHaveLength(3);
+	// Only pressure's letter is filled: the facts confirm it, the words do not.
+	expect(inspector).toContain("background:var(--color-p)");
+	expect(inspector).not.toContain("background:var(--color-r)");
 });

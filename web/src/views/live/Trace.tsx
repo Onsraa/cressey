@@ -9,7 +9,7 @@ import {
 	Terminal,
 	TriangleAlert,
 } from "@/components/icons";
-import { LEGS, STATUS, shown } from "@/lib/labels";
+import { byWords, FROM_WORDS, LEGS, level, STATUS, shown } from "@/lib/labels";
 import { revealRow, scrollToEnd } from "@/lib/motion";
 import {
 	band,
@@ -263,8 +263,8 @@ function Flags({ row }: { row: Extract<Row, { kind: "msg" }> }) {
 	);
 }
 
-// A call's three scores as pixel cells: darker is higher, ringed in the leg's colour once
-// facts confirm it at this step.
+// A call's three levels as pixel cells: darker is higher, ringed in the leg's colour once
+// facts confirm it at this step. A level the agent's words lead says so.
 function Legs({ step }: { step: Step }) {
 	const legs = step.legs;
 	return (
@@ -272,7 +272,10 @@ function Legs({ step }: { step: Step }) {
 			role="img"
 			aria-label={
 				legs
-					? LEGS.map((g) => `${g.name} ${fmt(legs[g.k].score)}`).join(", ")
+					? LEGS.map(
+							(g) =>
+								`${g.name} ${fmt(level(legs[g.k]))}${byWords(legs[g.k]) ? ` ${FROM_WORDS}` : ""}`,
+						).join(", ")
 					: "no score"
 			}
 			className="flex gap-[3px] pt-px"
@@ -280,12 +283,16 @@ function Legs({ step }: { step: Step }) {
 			{legs &&
 				LEGS.map((g) => {
 					const leg = legs[g.k];
-					const b = band(leg.score);
+					const b = band(level(leg));
 					return (
 						<span
 							key={g.k}
 							data-cell
-							data-tip={`${g.name} ${fmt(leg.score)}${leg.confirmed ? "\nconfirmed by facts at this step" : ""}`}
+							data-tip={[
+								`${g.name} ${fmt(level(leg))}`,
+								...(leg.confirmed ? ["confirmed by facts at this step"] : []),
+								...(byWords(leg) ? [FROM_WORDS] : []),
+							].join("\n")}
 							className="inline-flex size-5 items-center justify-center font-pixel text-base leading-none"
 							style={{
 								background: RAMP[b],

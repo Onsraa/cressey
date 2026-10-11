@@ -60,6 +60,7 @@ export const LEGS: {
 type Said = Pick<Leg, "score" | "words">;
 export const level = (leg: Said) => Math.max(leg.score, leg.words ?? 0);
 export const byWords = (leg: Said) => (leg.words ?? 0) > leg.score;
+export const FROM_WORDS = "from the agent's words";
 
 // What the decision model reads in an agent message, by the key it is served under.
 // Manipulation counts as rationalization.
