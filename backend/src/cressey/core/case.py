@@ -230,6 +230,34 @@ def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
     return Shadow(decision="allow", why=[], uses=objects)
 
 
+def leg_values(case: Case) -> dict[Leg, float]:
+    """Each leg as the case holds it: the strongest event of its open threads. R and C1 open
+    no thread, so rationalization is the strongest of them going toward the crossing (one
+    going away, a pause or a refusal, is no justification). 0 when there is none."""
+
+    def strongest(leg: Leg) -> float:
+        return max(
+            (
+                case.events[i].p
+                for t in case.threads
+                if t.leg == leg and t.state == "open"
+                for i in t.events
+            ),
+            default=0.0,
+        )
+
+    toward = (
+        e.p
+        for e in case.events
+        if e.indicator in ("R", "C1") and e.direction == "toward"
+    )
+    return {
+        "pressure": strongest("pressure"),
+        "opportunity": strongest("opportunity"),
+        "rationalization": max(toward, default=0.0),
+    }
+
+
 def notes(run: Run, after: int) -> list[Note]:
     """What the case warrants before any act, `after` calls in: a way out for an obstacle
     never shared, an alert for a probe, a weak control or a plan to hide a trace."""
@@ -306,6 +334,7 @@ async def shadow(
     words_read = await _catch_up(run, call.n, judge, t)
     decision = decide(run, call, floor, t)
     decision.words_read = words_read
+    decision.legs = leg_values(run.case)
     return decision
 
 

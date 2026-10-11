@@ -1,6 +1,7 @@
 import type {
 	CaseEvent,
 	Indicator,
+	Leg,
 	LegName,
 	Legs,
 	Message,
@@ -109,9 +110,37 @@ export const carried = (step: Step) => [
 
 export type Scored = { step: Step; legs: Legs };
 
+// A call's scores as shown: each leg raised to what the case held from the agent's thoughts
+// when the call came in (its shadow). Display only: `confirmed`, and so every hold, stays
+// the code's.
+export function shownLegs(step: Step): Legs | undefined {
+	const legs = step.legs ?? undefined;
+	const held = step.shadow?.legs;
+	if (!legs || !held) return legs;
+	const raise = (k: LegName): Leg => {
+		const v = held[k] ?? 0; // a shadow recorded before the case kept legs has none
+		const leg = legs[k];
+		return v > leg.score
+			? {
+					...leg,
+					score: v,
+					facts: [...leg.facts, `from the agent's thoughts: ${fmt(v)}`],
+				}
+			: leg;
+	};
+	return {
+		pressure: raise("pressure"),
+		opportunity: raise("opportunity"),
+		rationalization: raise("rationalization"),
+	};
+}
+
 // The calls the triangle scored: a call refused on a suspended key has no legs.
 export const scored = (run: Run): Scored[] =>
-	run.steps.flatMap((step) => (step.legs ? [{ step, legs: step.legs }] : []));
+	run.steps.flatMap((step) => {
+		const legs = shownLegs(step);
+		return legs ? [{ step, legs }] : [];
+	});
 
 export const fmt = (v: number) => v.toFixed(2);
 

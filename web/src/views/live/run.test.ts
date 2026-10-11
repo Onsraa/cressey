@@ -22,6 +22,7 @@ import {
 	RAMP,
 	rows,
 	shadowOf,
+	shownLegs,
 	strongestEvent,
 	turnEvidence,
 } from "./run";
@@ -236,6 +237,29 @@ describe("the gauges", () => {
 		expect(a.opportunity.score).toBe(0.9);
 		expect(a.opportunity.confirmed).toBe(false);
 	});
+	test("a call's scores rise to what the agent's thoughts held, and only facts confirm", () => {
+		const legs = {
+			pressure: leg(0.2, true, ["2 failed calls"]),
+			opportunity: leg(0),
+			rationalization: leg(0.7),
+		};
+		const shadow = {
+			decision: "allow" as const,
+			why: [],
+			uses: [],
+			words_read: true,
+			legs: { pressure: 0.9, opportunity: 0.85, rationalization: 0.4 },
+		};
+		const shown = shownLegs(step(1, "t", "{}", { legs, shadow }));
+		expect(shown?.pressure).toEqual(
+			leg(0.9, true, ["2 failed calls", "from the agent's thoughts: 0.90"]),
+		);
+		expect(shown?.opportunity.score).toBe(0.85);
+		expect(shown?.opportunity.confirmed).toBe(false);
+		expect(shown?.rationalization).toEqual(legs.rationalization);
+		expect(shownLegs(step(1, "t", "{}", { legs }))).toEqual(legs);
+		expect(shownLegs(step(1, "t", "{}"))).toBeUndefined();
+	});
 	test("a bar fills up to the score, darker toward its end", () => {
 		const b = bar(0.5, 10);
 		expect(b.filter(Boolean)).toHaveLength(5);
@@ -378,6 +402,7 @@ describe("the case", () => {
 			why: ["Uses: secret:0a1b2c3d4e5f"],
 			uses: [],
 			words_read: true,
+			legs: {},
 		};
 		expect(shadowOf(step(1, "t", "{}", { shadow }))).toEqual(shadow);
 		expect(shadowOf(step(1, "t", "{}", { shadow: null }))).toBeUndefined();

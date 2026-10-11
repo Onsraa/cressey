@@ -22,6 +22,7 @@ import {
 	type Row,
 	reportLabel,
 	shadowOf,
+	shownLegs,
 } from "./run";
 import { IndicatorChip, ShadowChip, SignalChip, StatusChip } from "./ui";
 
@@ -272,7 +273,7 @@ function TextRow({
 // A call's three scores as pixel cells: darker is higher, ringed in the leg's colour once
 // facts confirm it at this step.
 function Legs({ step }: { step: Step }) {
-	const legs = step.legs;
+	const legs = shownLegs(step);
 	return (
 		<span
 			role="img"

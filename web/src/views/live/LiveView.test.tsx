@@ -555,6 +555,7 @@ const hold = {
 	],
 	uses: ["secret:0a1b2c3d4e5f"],
 	words_read: true,
+	legs: {},
 };
 const today = { status: "allowed" as const, held_until: null, reason: null };
 const chip = new RegExp(

@@ -22,6 +22,7 @@ import {
 	type Row,
 	reportLabel,
 	shadowOf,
+	shownLegs,
 	turnEvidence,
 } from "./run";
 import {
@@ -254,7 +255,7 @@ function Call({
 	step: Step;
 	pinned: boolean;
 }) {
-	const legs = step.legs;
+	const legs = shownLegs(step);
 	const secrets = carried(step);
 	const shadow = shadowOf(step);
 	const timing = [

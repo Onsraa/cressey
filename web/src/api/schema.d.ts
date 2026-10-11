@@ -977,6 +977,13 @@ export interface components {
 			 * @default true
 			 */
 			words_read: boolean;
+			/**
+			 * Legs
+			 * @default {}
+			 */
+			legs: {
+				[key: string]: number;
+			};
 		};
 		/**
 		 * Source

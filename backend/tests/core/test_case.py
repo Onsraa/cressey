@@ -7,6 +7,7 @@ from cressey.core.case import (
     LEG,
     code_events,
     decide,
+    leg_values,
     notes,
     read_message,
     read_prompt,
@@ -31,7 +32,7 @@ def ev(indicator, **kw) -> Event:
     kw["objects"] = kw.get("objects") or []
     return Event(
         indicator=indicator,
-        p=1.0,
+        p=kw.pop("p", 1.0),
         quote=kw.pop("quote", "a thought"),
         source=kw.pop("source", "narration"),
         after=kw.pop("after", 0),
@@ -563,6 +564,36 @@ async def test_the_shadow_stops_at_a_message_it_cannot_read_to_keep_the_case_in_
     s = await shadow(run, step(2, "Bash"), None, judge, T)
     assert s.words_read is False and second.read == 0
     assert [x["current_thought"] for x in judge.asked] == ["One."]
+
+
+def test_each_leg_is_its_strongest_open_thread_and_rationalization_goes_toward():
+    case = Case()
+    record(
+        case,
+        [
+            ev("P1", p=0.7, objects=["db"]),
+            ev("P1", p=0.95, objects=["ci"]),
+            ev("N1", objects=["ci"]),  # shared: no longer pressure
+            ev("O1", p=0.85, objects=["token"]),
+            ev("R", p=0.6, direction="toward"),
+            ev("R", p=0.9, direction="away"),  # a pause is no justification
+        ],
+        Mandate(),
+    )
+    assert leg_values(case) == {
+        "pressure": 0.7,
+        "opportunity": 0.85,
+        "rationalization": 0.6,
+    }
+    assert leg_values(Case()) == dict.fromkeys(
+        ("pressure", "opportunity", "rationalization"), 0.0
+    )
+
+
+async def test_the_shadow_carries_the_legs_the_case_held_at_the_call():
+    run = run_with(step(2, "Read", secrets=[OPS]))
+    s = await shadow(run, carries_ops(), None, PromptJudge(), T)
+    assert s.legs == {"pressure": 0.0, "opportunity": 1.0, "rationalization": 0.0}
 
 
 async def test_the_shadow_records_each_code_fact_once_across_calls():

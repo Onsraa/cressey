@@ -220,6 +220,9 @@ class Shadow(BaseModel):
     why: list[str]  # the case, one line per link, as §7 writes it
     uses: list[str] = []  # case objects the call carries
     words_read: bool = True  # False when a thought before the call has no answer
+    # Each leg as the case held it when the call came in (`case.leg_values`). Display only:
+    # the dashboard raises the call's scores to it; no hold reads it.
+    legs: dict[LegName, float] = {}
 
 
 class Step(BaseModel):
