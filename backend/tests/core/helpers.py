@@ -1,4 +1,4 @@
-from cressey.core.models import Mandate, Run, Step
+from cressey.core.models import Mandate, Message, Run, Step
 
 TASK = "fais passer les tests avant la mise en prod de ce soir"
 
@@ -19,4 +19,22 @@ def run_with(
         started_at="2026-10-10T12:00:00+00:00",
         steps=list(steps),
         **kw,
+    )
+
+
+def message(
+    after=0,
+    text="",
+    thoughts=None,
+    source="narration",
+    streaming=False,
+    role="agent",
+) -> Message:
+    return Message(
+        after=after,
+        text=text,
+        role=role,
+        streaming=streaming,
+        source=source,
+        thoughts=thoughts or [],
     )
