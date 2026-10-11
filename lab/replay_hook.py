@@ -4,10 +4,12 @@ shows the real trajectory — the agent's own reasoning and its real serviceDele
 held by the engine. Deterministic: the hold is code-confirmed (the found ops token is a
 trap key), so the same recording holds the same way every time.
 
-This drives the hook over HTTP exactly as Claude Code would; it does not import or modify
-any Cressey code. The recorded transcript (lab/runs/<stamp>/transcript.jsonl) is read
-locally and never leaves the machine; tool arguments (which hold the real token) are sent
-only to the local backend, which redacts them for display.
+This drives the hook over HTTP exactly as Claude Code would: each call before it runs
+(PreToolUse), then what it returned (PostToolUse), so Cressey scans and reads the results as
+in a live run. It does not import or modify any Cressey code. The recorded transcript
+(lab/runs/<stamp>/transcript.jsonl) is read locally and never leaves the machine; tool
+arguments and results (which hold the real token) are sent only to the local backend, which
+redacts them for display.
 
     python3 -I lab/replay_hook.py                       # latest run, localhost:8000
     python3 -I lab/replay_hook.py --transcript <path> --url http://localhost:8000
@@ -37,26 +39,43 @@ def _post(url, body, key=None):
     return json.loads(raw) if raw.strip() else {}
 
 
+def _text(content):
+    """A recorded tool result as text: a string, or a list's text blocks."""
+    if isinstance(content, str):
+        return content
+    return "\n".join(b.get("text", "") for b in content or [] if isinstance(b, dict))
+
+
 def _events(transcript):
-    """The recorded run as an ordered list of ('say', text) and ('call', name, input, id)."""
-    out = []
+    """The recorded run as an ordered list of ('say', text) and ('call', name, input, id),
+    and what each call returned, by its id: (text, is_error)."""
+    out, results = [], {}
     with open(transcript, encoding="utf-8") as f:
         for line in f:
             try:
                 event = json.loads(line)
             except ValueError:
                 continue
-            if event.get("type") != "assistant":
+            kind = event.get("type")
+            if kind not in ("assistant", "user"):
                 continue
             for block in event.get("message", {}).get("content", []) or []:
+                if not isinstance(block, dict):  # a user turn's content can be plain text
+                    continue
                 t = block.get("type")
-                if t == "text" and block.get("text", "").strip():
+                if kind == "user":
+                    if t == "tool_result":
+                        results[block.get("tool_use_id", "")] = (
+                            _text(block.get("content")),
+                            bool(block.get("is_error")),
+                        )
+                elif t == "text" and block.get("text", "").strip():
                     out.append(("say", block["text"].strip()))
                 elif t == "tool_use":
                     out.append(
                         ("call", block.get("name", ""), block.get("input") or {}, block.get("id", ""))
                     )
-    return out
+    return out, results
 
 
 def _deny_reason(resp):
@@ -85,7 +104,7 @@ def main():
     run_id, key = run["id"], run["key"]
     print(f"run {run_id} created")
 
-    events = _events(transcript)
+    events, results = _events(transcript)
     held_at = held_reason = None
     last_say = "(no final message)"
     step = 0
@@ -96,16 +115,20 @@ def main():
             continue
         _, name, tool_input, tuid = ev
         step += 1
-        resp = _post(
-            a.url + HOOK_PATH,
-            {"hook_event_name": "PreToolUse", "tool_name": name, "tool_input": tool_input, "tool_use_id": tuid},
-            key,
-        )
+        call = {"tool_name": name, "tool_input": tool_input, "tool_use_id": tuid}
+        resp = _post(a.url + HOOK_PATH, {"hook_event_name": "PreToolUse", **call}, key)
         reason = _deny_reason(resp)
         if reason:
             held_at, held_reason = step, reason
             print(f"HELD at step {step} ({name}): {reason}")
             break
+        # What the call returned, sent once it has run as Claude Code does: Cressey scans it
+        # for secrets and reads it before judging the next calls.
+        if tuid in results:
+            text, failed = results[tuid]
+            done = {"error": text} if failed else {"tool_response": text}
+            event = "PostToolUseFailure" if failed else "PostToolUse"
+            _post(a.url + HOOK_PATH, {"hook_event_name": event, **call, **done}, key)
 
     # End the run. report_check runs a judge call that can hang on a degraded backend; the
     # hold is already recorded, so a slow Stop must not mask the result.
