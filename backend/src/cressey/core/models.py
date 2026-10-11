@@ -145,6 +145,10 @@ class Step(BaseModel):
     secrets: list[Secret] = []  # found in what the call returned; names, never values
     held_until: str | None = None
     decided_at: str | None = None
+    # While held: what a rejection would tell the agent (the fallback, then a model's checked
+    # draft); once rejected: what the human sent it.
+    draft: str | None = None
+    message: str | None = None
     legs: Legs | None = None  # the triangle when this call came in
     check_ms: float | None = (
         None  # Cressey's decision, before the tool runs or a hold waits
@@ -160,6 +164,12 @@ class Step(BaseModel):
     # Its call may still return a result: a parallel call doesn't label it before that.
     # Served: the dashboard shows a tool running.
     running: bool = False
+
+
+class RejectIn(BaseModel):
+    """The reason a human gives the agent when they reject a held call."""
+
+    message: str | None = Field(None, max_length=500)
 
 
 class Message(BaseModel):

@@ -21,7 +21,7 @@ from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
 from cressey.core.broker import scoped
-from cressey.core.draft import WAY_OUT
+from cressey.core.draft import WAY_OUT, Drafter, check_message, fallback, finish
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
@@ -107,10 +107,11 @@ class Guard(Middleware):
         hold_timeout: float,
         triangle_holds: bool = True,
         holds: Literal["wait", "refuse"] = "wait",
+        drafter: Drafter | None = None,
     ) -> None:
         self.runs, self.incidents = runs, incidents
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
-        self.triangle_holds, self.holds = triangle_holds, holds
+        self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self._late: set[asyncio.Task[None]] = (
             set()
         )  # the loop keeps weak references only
@@ -223,8 +224,10 @@ class Guard(Middleware):
                 )
                 self.runs.mark(run, step, "denied")
                 raise ToolError(f"Cressey: action refused. {WAY_OUT}")
-            elif reason and not await self.runs.hold(run, step, self.hold_timeout):
-                raise held
+            elif reason:
+                self._draft(run, step)
+                if not await self.runs.hold(run, step, self.hold_timeout):
+                    raise ToolError(f"Cressey: action held. {step.message or WAY_OUT}")
             return step
         except BaseException:
             step.running = False  # refused: no result will come
@@ -251,6 +254,30 @@ class Guard(Middleware):
             self._late.add(task)
             task.add_done_callback(self._late.discard)
         return WAY_OUT if run.way_out_step == step.n else None
+
+    def _draft(self, run: Run, step: Step) -> None:
+        """What the human can send if they reject this hold: the fallback at once, then a
+        model's draft, if one comes in time and passes the check."""
+        step.draft = fallback(run.mandate)
+        if self.drafter is not None:
+            drafting = self._draft_late(self.drafter, run, step)
+            task = asyncio.get_running_loop().create_task(drafting)
+            self._late.add(task)
+            task.add_done_callback(self._late.discard)
+
+    async def _draft_late(self, drafter: Drafter, run: Run, step: Step) -> None:
+        # The model reads the task, the mandate, the tool and the risk class: nothing else.
+        asking = asyncio.to_thread(
+            drafter.draft, run.task, run.mandate, step.tool, step.risk
+        )
+        try:
+            draft = finish(await asyncio.wait_for(asking, self.hold_timeout))
+        except Exception:  # a background task has no caller to raise to: report it
+            log.exception("draft for step %d of run %s failed", step.n, run.id)
+            return
+        # Checked now, not when the hold began: the run may have seen more secrets since.
+        if check_message(draft, run, self.policy.decoys) is None:
+            step.draft = draft
 
     async def _read_late(self, run: Run, step: Step) -> None:
         """A call that ran before it could be read: if the triangle would have held it,

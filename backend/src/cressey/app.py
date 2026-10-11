@@ -21,6 +21,7 @@ from cressey.demo.replay import replay
 from cressey.demo.tools import demo_tools
 from cressey.guide.api import router as guide_router
 from cressey.guide.api import write_guide
+from cressey.guide.cache import wrap_drafter
 from cressey.guide.corpus import DATA, load_corpus
 from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
@@ -54,8 +55,19 @@ def create_app(
         policy.fleet,
         assess_task,
     )
+    # On Bedrock the guide models sign with the AWS credentials: .env or boto3's own chain.
+    guides = s.models == "bedrock" or s.openai_api_key is not None
+    models_ready = guides and s.typesafe_api_key is not None
+    drafter = wrap_drafter(s) if models_ready else None
     guard = Guard(
-        runs, incidents, policy, judge, s.hold_timeout, s.triangle_holds, s.holds
+        runs,
+        incidents,
+        policy,
+        judge,
+        s.hold_timeout,
+        s.triangle_holds,
+        s.holds,
+        drafter,
     )
     mcp = build_mcp(guard, upstream)
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
@@ -68,10 +80,8 @@ def create_app(
 
     @api.get("/health")
     def health() -> dict[str, str]:
-        # On Bedrock the guide models sign with the AWS credentials: .env or boto3's own chain.
-        guides = s.models == "bedrock" or s.openai_api_key is not None
-        ok = guides and s.typesafe_api_key is not None
-        return {"status": "ok", "models": "configured" if ok else "missing-keys"}
+        models = "configured" if models_ready else "missing-keys"
+        return {"status": "ok", "models": models}
 
     api.include_router(guide_router)
     api.include_router(core_router)

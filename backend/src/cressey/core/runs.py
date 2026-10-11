@@ -268,9 +268,12 @@ class Runs:
         )
         return step.status == "approved"
 
-    def decide(self, run_id: str, n: int, approve: bool) -> bool:
+    def decide(
+        self, run_id: str, n: int, approve: bool, message: str | None = None
+    ) -> bool:
         decision = self._waiting.get((run_id, n))
         if decision is None or decision.done():
             return False
+        self._runs[run_id].steps[n - 1].message = message  # before the agent reads it
         decision.set_result(approve)
         return True

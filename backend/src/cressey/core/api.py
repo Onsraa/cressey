@@ -8,6 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
+from cressey.core.draft import check_message, finish
 from cressey.core.eventlog import verify
 from cressey.core.hook import HOOK_PATH
 from cressey.core.incidents import AssessTask, Incidents
@@ -17,6 +18,7 @@ from cressey.core.models import (
     Hold,
     Incident,
     LogHead,
+    RejectIn,
     Replay,
     Responses,
     Run,
@@ -222,10 +224,29 @@ async def approve(run_id: str, n: int, runs: RunsDep) -> None:
 
 
 @router.post("/runs/{run_id}/steps/{n}/reject", status_code=204)
-async def reject(run_id: str, n: int, runs: RunsDep) -> None:
-    _decide(runs, run_id, n, approve=False)
+async def reject(
+    run_id: str,
+    n: int,
+    request: Request,
+    runs: RunsDep,
+    body: RejectIn | None = None,
+) -> None:
+    """Reject a held call, optionally with the reason the agent will read. The dashboard
+    shows a checked draft, but the human may have edited it: it is checked again here."""
+    message = body.message.strip() if body and body.message else ""
+    if message:
+        run = runs.get(run_id)
+        if run is None:
+            raise HTTPException(404, "no pending hold")
+        message = finish(message)
+        broken = check_message(message, run, request.app.state.policy.decoys)
+        if broken:
+            raise HTTPException(422, broken)
+    _decide(runs, run_id, n, approve=False, message=message or None)
 
 
-def _decide(runs: Runs, run_id: str, n: int, approve: bool) -> None:
-    if not runs.decide(run_id, n, approve):
+def _decide(
+    runs: Runs, run_id: str, n: int, approve: bool, message: str | None = None
+) -> None:
+    if not runs.decide(run_id, n, approve, message):
         raise HTTPException(404, "no pending hold")

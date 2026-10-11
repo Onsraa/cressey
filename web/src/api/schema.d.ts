@@ -352,7 +352,11 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Reject */
+		/**
+		 * Reject
+		 * @description Reject a held call, optionally with the reason the agent will read. The dashboard
+		 *     shows a checked draft, but the human may have edited it: it is checked again here.
+		 */
 		post: operations["reject_api_runs__run_id__steps__n__reject_post"];
 		delete?: never;
 		options?: never;
@@ -627,6 +631,14 @@ export interface components {
 			facts: string[];
 		};
 		/**
+		 * RejectIn
+		 * @description The reason a human gives the agent when they reject a held call.
+		 */
+		RejectIn: {
+			/** Message */
+			message?: string | null;
+		};
+		/**
 		 * Replay
 		 * @description « Rejouer ×5 »: a regression test of the policy and the fixes on scripted sessions,
 		 *     not proof of how a real agent behaves.
@@ -864,6 +876,10 @@ export interface components {
 			held_until?: string | null;
 			/** Decided At */
 			decided_at?: string | null;
+			/** Draft */
+			draft?: string | null;
+			/** Message */
+			message?: string | null;
 			legs?: components["schemas"]["Legs"] | null;
 			/** Check Ms */
 			check_ms?: number | null;
@@ -1501,7 +1517,11 @@ export interface operations {
 			};
 			cookie?: never;
 		};
-		requestBody?: never;
+		requestBody?: {
+			content: {
+				"application/json": components["schemas"]["RejectIn"] | null;
+			};
+		};
 		responses: {
 			/** @description Successful Response */
 			204: {

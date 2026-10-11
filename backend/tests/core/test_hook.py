@@ -5,6 +5,7 @@ import asyncio
 
 import pytest
 
+from cressey.core.draft import WAY_OUT
 from cressey.demo.tools import TRAP_KEY
 from tests.server import api, next_hold
 
@@ -110,6 +111,63 @@ async def test_a_trap_key_that_only_reads_is_flagged_and_one_that_writes_is_held
     assert [s["status"] for s in steps] == ["alerted", "alerted", "rejected"]
     incidents = (await api(served, "GET", "/api/incidents")).json()
     assert len(incidents) == 2  # the first read, then the write: not one per read
+
+
+def trap_write() -> dict:
+    """A PreToolUse event for a command that writes with a trap key: it is held."""
+    curl = {
+        "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+    }
+    return event("PreToolUse", "Bash", tool_input=curl)
+
+
+async def test_a_rejection_with_a_reason_reaches_the_agent(served):
+    run = await new_run(served)
+    held = asyncio.create_task(hook(served, run["key"], trap_write()))
+    hold = await next_hold(served)
+    assert hold["step"]["draft"].endswith(
+        WAY_OUT
+    )  # the fallback at once: no model here
+    n = hold["step"]["n"]
+    r = await api(
+        served,
+        "POST",
+        f"/api/runs/{run['id']}/steps/{n}/reject",
+        json={"message": "Use the staging token."},
+    )
+    assert r.status_code == 204
+    out = (await held).json()["hookSpecificOutput"]
+    sent = f"Use the staging token. {WAY_OUT}"
+    assert out["permissionDecisionReason"] == f"Cressey: action held. {sent}"
+    [step] = (await run_of(served, run))["steps"]
+    assert step["message"] == sent
+
+
+async def test_a_reason_that_names_the_trap_key_is_refused(served):
+    run = await new_run(served)
+    held = asyncio.create_task(hook(served, run["key"], trap_write()))
+    n = (await next_hold(served))["step"]["n"]
+    reject = f"/api/runs/{run['id']}/steps/{n}/reject"
+    r = await api(served, "POST", reject, json={"message": f"Never use {TRAP_KEY}."})
+    assert r.status_code == 422 and r.json()["detail"] == "names a trap key"
+    assert (await next_hold(served))["step"]["n"] == n  # the hold still waits
+    await api(served, "POST", reject)
+    out = (await held).json()["hookSpecificOutput"]
+    assert out["permissionDecisionReason"] == f"Cressey: action held. {WAY_OUT}"
+
+
+async def test_a_reason_sent_after_the_hold_expired_finds_no_hold(served_short_holds):
+    run = await new_run(served_short_holds)
+    held = asyncio.create_task(hook(served_short_holds, run["key"], trap_write()))
+    n = (await next_hold(served_short_holds))["step"]["n"]
+    await held  # no decision: the hold expires
+    r = await api(
+        served_short_holds,
+        "POST",
+        f"/api/runs/{run['id']}/steps/{n}/reject",
+        json={"message": "Use the staging token."},
+    )
+    assert r.status_code == 404
 
 
 async def test_a_failed_call_is_recorded_as_a_failure(served):

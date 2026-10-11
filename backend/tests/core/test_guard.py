@@ -11,9 +11,12 @@ from fastmcp.client.transports import StreamableHttpTransport
 from typesafe_sdk import Choice
 
 from cressey.core import proxy
+from cressey.core.draft import fallback, finish
+from cressey.core.models import Mandate, Risk
 from cressey.core.proxy import WAY_OUT
 from cressey.core.secret_scan import redact
-from cressey.demo.tools import PROD_KEY
+from cressey.demo.tools import PROD_KEY, TRAP_KEY
+from cressey.guide.clients import ModelUnavailable
 from tests.server import api, next_hold, users
 
 pytestmark = pytest.mark.anyio
@@ -851,3 +854,72 @@ async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(
     assert not r.is_error and ran
     [incident] = alerted
     assert (incident["severity"], incident["decision"]) == ("haute", "alerted")
+
+
+class FakeDrafter:
+    """Answers with a message, or raises; records what the model would have read."""
+
+    def __init__(self, answer: str | Exception):
+        self.answer, self.seen = answer, []
+
+    def draft(self, task: str, mandate: Mandate, tool: str, risk: Risk) -> str:
+        self.seen.append((task, mandate, tool, risk))
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+async def draft_of_a_held_call(tmp_path, drafter: FakeDrafter) -> str | None:
+    """The draft of a held call, once the drafter has had its say."""
+    from cressey.app import create_app
+    from cressey.demo.server import serve
+    from cressey.settings import Settings
+    from tests.server import fake_guide
+
+    s = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+        hold_timeout=10,
+    )
+    app = create_app(s, make_guide=fake_guide)
+    app.state.guard.drafter = drafter  # no keys in tests: the app built none
+    with serve(app) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            call = asyncio.create_task(
+                a.call_tool("run_sql", DELETE, raise_on_error=False)
+            )
+            n = (await next_hold(base))["step"]["n"]
+            for _ in range(250):  # the draft is a background task: wait for it
+                if not app.state.guard._late:
+                    break
+                await asyncio.sleep(0.02)
+            draft = (await next_hold(base))["step"]["draft"]
+            await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+            await call
+    return draft
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [ModelUnavailable("down"), f"Never use {TRAP_KEY}."],
+    ids=["the model fails", "the draft names a trap key"],
+)
+async def test_a_draft_that_fails_or_breaks_a_rule_leaves_the_fallback(
+    tmp_path, answer
+):
+    drafter = FakeDrafter(answer)
+    draft = await draft_of_a_held_call(tmp_path, drafter)
+    assert drafter.seen and draft == fallback(Mandate())
+
+
+async def test_a_checked_draft_replaces_the_fallback_and_reads_only_the_allowed(
+    tmp_path,
+):
+    drafter = FakeDrafter("Use the staging token.")
+    draft = await draft_of_a_held_call(tmp_path, drafter)
+    assert draft == finish("Use the staging token.")
+    assert drafter.seen == [(TASK, Mandate(), "run_sql", "destructive")]
