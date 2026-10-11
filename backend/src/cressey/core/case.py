@@ -275,29 +275,35 @@ def code_events(run: Run, step: Step) -> list[Event]:
     ]
 
 
-async def shadow(
-    run: Run, call: Step, floor: str | None, judge: Judge, t: Thresholds
-) -> Shadow:
-    """The decision for `call` once the case holds what came before it: the code facts of
-    the steps before it, and the agent's thoughts said before it. `words_read` is False
-    when a thought has no answer, or when no thought is read at all (a run seen through its
-    tools only, or a replay: §12)."""
+async def _catch_up(run: Run, before: int, judge: Judge, t: Thresholds) -> bool:
+    """Bring the case up to date with the run before step `before`: the code facts of the
+    steps before it, and the agent's thoughts said before it. False when a thought has no
+    answer, or when no thought is read at all (a run seen through its tools only, or a
+    replay: §12)."""
     case = run.case
     known = {(e.after, *e.objects) for e in case.events if e.source == "code"}
     fresh = [
         e
         for s in run.steps
-        if s.n < call.n
+        if s.n < before
         for e in code_events(run, s)
         if (e.after, *e.objects) not in known
     ]
     record(case, fresh, run.mandate, secret_names(run))
-    words_read = run.visibility != "tools" and run.kind != "replay"
-    if words_read:
-        for m in run.messages:  # in order: a thought is read after the ones before it
-            if m.after < call.n and not await read_message(run, m, judge, t):
-                words_read = False
-                break
+    if run.visibility == "tools" or run.kind == "replay":
+        return False
+    for m in run.messages:  # in order: a thought is read after the ones before it
+        if m.after < before and not await read_message(run, m, judge, t):
+            return False
+    return True
+
+
+async def shadow(
+    run: Run, call: Step, floor: str | None, judge: Judge, t: Thresholds
+) -> Shadow:
+    """The decision for `call` once the case holds what came before it. `words_read` is
+    False when a thought before it has no answer, or none is read (see `_catch_up`)."""
+    words_read = await _catch_up(run, call.n, judge, t)
     decision = decide(run, call, floor, t)
     decision.words_read = words_read
     return decision
@@ -306,7 +312,11 @@ async def shadow(
 async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
     """What the user's prompt settles for the open threads. Each is a typed question to the
     judge: an O thread, whether the prompt approves using it; a P thread, whether it answers
-    the agent's question about it. A prompt that is neither changes nothing."""
+    the agent's question about it. A prompt that is neither changes nothing. The case is first
+    brought up to date with the whole run, so a thread no shadow has read yet is open."""
+    if not text.strip():
+        return
+    await _catch_up(run, len(run.steps) + 1, judge, t)
     case = run.case
     asked: dict[str, Question] = {}
     approving: dict[str, str] = {}  # question -> the object an approval adds
@@ -326,7 +336,7 @@ async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
             asked[name] = Noul(
                 instructions=f"Does the user's message answer the agent's question about {label}?"
             )
-    if not asked or not text.strip():
+    if not asked:
         return
     lines: list[JsonValue] = [
         f"{th.leg} {th.object or '-'}: {_quote(case, th)[:CASE_QUOTE]}" for th in open_

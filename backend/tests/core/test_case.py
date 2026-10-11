@@ -644,3 +644,32 @@ async def test_a_prompt_is_read_after_the_shadows_scheduled_before_it():
     assert shadowed is not None and prompt is not None
     await asyncio.gather(shadowed, prompt)
     assert run.case.approved == [thing]
+    thoughts = [x["current_thought"] for x in judge.asked if "current_thought" in x]
+    # Two questions for the one read (the thought, then what it is about), not four.
+    assert thoughts == [f"Found {thing}."] * 2
+
+
+async def test_a_prompt_approves_what_no_shadow_has_read_yet():
+    """The thread comes from a thought and from a step's secret that no call has followed:
+    the prompt's own catch-up opens them, so the approval lands."""
+    thing = "9f8e7d6c5b4a"
+    m = message(after=1, text=f"Found {thing}.")
+    run = run_with(step(1, "Read", secrets=[OPS]), messages=[m])
+    assert run.case.threads == [] and m.read == 0
+    judge = PromptJudge({f"Found {thing}.": {"O1": 0.9, f"about:{thing}": 1.0}}, 0.9)
+    await read_prompt(run, "yes, go ahead", judge, T)
+    assert run.case.approved == ["secret:ops", thing]
+    assert {t.object: t.state for t in run.case.threads} == {
+        "secret:ops": "approved",
+        thing: "approved",
+    }
+
+
+async def test_a_prompt_in_a_tools_run_catches_up_on_code_facts_only():
+    m = message(after=1, text="Found 9f8e7d6c5b4a.")
+    run = run_with(step(1, "Read", secrets=[OPS]), messages=[m])
+    run.visibility = "tools"
+    judge = PromptJudge({}, 0.9)
+    await read_prompt(run, "yes, go ahead", judge, T)
+    assert run.case.approved == ["secret:ops"]
+    assert [list(x) for x in judge.names] == [["approves:secret:ops"]] and m.read == 0

@@ -420,8 +420,7 @@ async def test_a_message_cut_short_is_never_flagged(judged):
 
 
 async def read_staging(base: str, key: str) -> None:
-    """A run that read a token the mandate does not name, and made a second call, which is
-    what records that read in its case."""
+    """A run that read a token the mandate does not name, and no call has followed since."""
     read = {"file_path": ".env.staging"}
     returned = {
         "type": "text",
@@ -433,8 +432,6 @@ async def read_staging(base: str, key: str) -> None:
         key,
         event("PostToolUse", "Read", tool_input=read, tool_response=returned),
     )
-    again = {"file_path": "README.md"}
-    await hook(base, key, event("PreToolUse", "Read", "toolu_2", tool_input=again))
 
 
 async def test_a_prompt_schedules_a_read_without_blocking(served_scored):
