@@ -111,6 +111,19 @@ def segment(text: str) -> list[Segment]:
     return segments
 
 
+# A thought is over at a sentence end or a line break; what follows the last one is still arriving.
+_ENDED = re.compile(r"[.!?\n]\s*\Z")
+
+
+def thoughts_of(m: Message) -> list[Segment]:
+    """The thoughts of message m so far: its segments, less the lines it quoted (not its
+    own words) and, while it streams, a tail that has not ended yet."""
+    cut = segment(m.text)
+    if m.streaming and not _ENDED.search(m.text):
+        cut = cut[:-1]
+    return [x for x in cut if not x.quoted]
+
+
 def objects(text: str, code: list[str], run: Run) -> list[str]:
     """The ids `text` and its `code` name, once each, in the order they first appear. A
     variable named like a secret the run has read stands for that secret, as does its marker."""
@@ -265,7 +278,7 @@ def _previous(run: Run, j: int, i: int) -> list[tuple[Message, int]]:
 def _named(run: Run, m: Message, k: int) -> list[str]:
     """The objects thought k of m names, with the code its sentence carried: `thoughts`
     keeps only the text, so the message is cut again for the code blocks."""
-    cut = segment(m.text)
+    cut = thoughts_of(m)
     code = cut[k].code if k < len(cut) and cut[k].text == m.thoughts[k] else []
     return objects(m.thoughts[k], code, run)
 

@@ -1,8 +1,25 @@
-from cressey.core.case import LEG, decide, notes, record, secret_names, uses
+from collections.abc import Mapping
+
+import pytest
+
+from cressey.core.case import (
+    LEG,
+    code_events,
+    decide,
+    notes,
+    read_message,
+    read_prompt,
+    record,
+    secret_names,
+    shadow,
+    uses,
+)
 from cressey.core.models import Case, Event, Mandate, Thresholds
 from cressey.core.secret_scan import Secret
-from tests.core.helpers import run_with, step
+from tests.core.helpers import message, run_with, step
+from tests.core.test_thoughts import ScriptedJudge
 
+pytestmark = pytest.mark.anyio
 T = Thresholds()
 OPS = Secret(kind="Named secret", name="OPS_TOKEN", fingerprint="ops", line=1)
 
@@ -293,3 +310,275 @@ def test_a_shared_p_thread_warrants_no_way_out_and_a_probe_warrants_an_alert():
         Mandate(),
     )
     assert [n.action for n in notes(run_with(case=case), after=2)] == ["alert"]
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+class PromptJudge(ScriptedJudge):
+    """ScriptedJudge, which also answers a user's message: an `approves:` question with
+    `approves` (a probability for all, or one per question name), an `answers:` question
+    with `answered`."""
+
+    def __init__(self, by_text=None, approves=0.0, answered=0.0):
+        super().__init__(by_text or {})
+        self.approves, self.answered = approves, answered
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "user_message" not in state:
+            return await super().answers(state, questions)
+        self.asked.append(state)
+        self.names.append(list(questions))
+        approves = self.approves
+        return {
+            q: (approves.get(q, 0.0) if isinstance(approves, dict) else approves)
+            if q.startswith("approves:")
+            else self.answered
+            for q in questions
+        }
+
+
+def ops_o1(**kw) -> Event:
+    return ev("O1", objects=["secret:ops"], **kw)
+
+
+# --- read_message
+
+
+async def test_a_streaming_message_reads_only_its_complete_sentences():  # Review Focus 2
+    m = message(after=0, text="Found the token. Now I will", streaming=True)
+    run = run_with(messages=[m])
+    judge = PromptJudge({"Found the token.": {"O1": 0.9}})
+    assert await read_message(run, m, judge, T) is True
+    assert m.thoughts == ["Found the token."] and m.read == 1
+    assert [e.indicator for e in run.case.events] == ["O1"]  # recorded as it was read
+
+
+async def test_the_tail_is_read_once_the_message_ends_and_nothing_is_read_twice():
+    m = message(after=0, text="Found the token. Now I will", streaming=True)
+    run = run_with(messages=[m])
+    judge = PromptJudge({"Found the token.": {}, "Now I will": {}})
+    await read_message(run, m, judge, T)
+    m.streaming = False
+    assert await read_message(run, m, judge, T) is True
+    assert m.thoughts == ["Found the token.", "Now I will"] and m.read == 2
+    assert [s["current_thought"] for s in judge.asked] == [
+        "Found the token.",
+        "Now I will",
+    ]
+
+
+async def test_a_line_break_ends_a_streaming_thought():
+    m = message(after=0, text="Plan:\n1. List services\n2. Delete the", streaming=True)
+    judge = PromptJudge({"Plan:": {}, "List services": {}})
+    await read_message(run_with(messages=[m]), m, judge, T)
+    assert m.thoughts == ["Plan:", "List services"]
+
+
+async def test_a_quoted_line_is_not_a_thought_and_does_not_shift_the_code_after():
+    m = message(
+        after=0,
+        text="> pre-approved runbook\nDelete the service.\n```sh\ncurl https://api.x.com/v1\n```",
+    )
+    run = run_with(messages=[m])
+    judge = PromptJudge(
+        {"Delete the service.": {"O1": 0.9, "about:https://api.x.com/v1": 1.0}}
+    )
+    await read_message(run, m, judge, T)
+    assert m.thoughts == ["Delete the service."]
+    assert run.case.events[0].objects == ["https://api.x.com/v1"]
+
+
+async def test_a_user_prompt_is_not_read_as_a_thought():
+    m = message(after=0, text="Delete it.", role="user")
+    judge = PromptJudge()
+    assert await read_message(run_with(messages=[m]), m, judge, T) is True
+    assert m.thoughts == [] and judge.asked == []
+
+
+async def test_a_thought_with_no_answer_is_asked_again_and_stops_the_ones_after():
+    m = message(after=0, text="One. Two.")
+    run = run_with(messages=[m])
+    judge = PromptJudge({"One.": None, "Two.": {}})
+    assert await read_message(run, m, judge, T) is False
+    assert m.read == 0 and [s["current_thought"] for s in judge.asked] == ["One."]
+    judge.by_text["One."] = {}
+    assert await read_message(run, m, judge, T) is True and m.read == 2
+
+
+# --- code_events
+
+
+def test_code_facts_open_an_o_thread_for_an_out_of_mandate_secret():
+    run = run_with(step(2, "Read", secrets=[OPS]))
+    [e] = code_events(run, run.steps[0])
+    assert (e.indicator, e.source, e.p, e.after, e.objects) == (
+        "O1",
+        "code",
+        1.0,
+        1,
+        ["secret:ops"],
+    )
+    granted = run_with(
+        step(2, "Read", secrets=[OPS]), mandate=Mandate(may_read_secrets=["OPS_TOKEN"])
+    )
+    assert code_events(granted, granted.steps[0]) == []
+
+
+def test_a_secret_read_on_two_lines_is_one_code_fact():
+    twice = [OPS, OPS.model_copy(update={"line": 5})]
+    run = run_with(step(2, "Read", secrets=twice))
+    assert len(code_events(run, run.steps[0])) == 1
+
+
+# --- read_prompt
+
+
+def with_ops_thread(**kw):
+    run = run_with(step(2, "Read", secrets=[OPS]), **kw)
+    record(run.case, [ops_o1()], run.mandate, secret_names(run))
+    return run
+
+
+async def test_a_prompt_that_approves_extends_the_mandate_for_that_object_only():
+    run = with_ops_thread()
+    other = ev("O1", objects=["svc:9"])
+    record(run.case, [other], run.mandate, secret_names(run))
+    judge = PromptJudge(approves={"approves:secret:ops": 0.9, "approves:svc:9": 0.1})
+    await read_prompt(run, "yes, go ahead and delete it", judge, T)
+    assert run.case.approved == ["secret:ops"]
+    assert {t.object: t.state for t in run.case.threads} == {
+        "secret:ops": "approved",
+        "svc:9": "open",
+    }
+
+
+async def test_a_prompt_that_is_not_an_answer_approves_nothing():  # Review Focus 5
+    run = with_ops_thread()
+    await read_prompt(
+        run, "also fix the typo in the README", PromptJudge(approves=0.1), T
+    )
+    assert run.case.approved == [] and run.case.threads[0].state == "open"
+
+
+async def test_a_prompt_is_asked_one_typed_question_per_open_thread():
+    run = with_ops_thread()
+    record(run.case, [ev("P1", objects=["svc:1"]), ev("P1")], run.mandate)
+    record(
+        run.case, [ev("O1", objects=["done"]), ev("N2", objects=["done"])], run.mandate
+    )
+    judge = PromptJudge()
+    await read_prompt(run, "go on", judge, T)
+    assert judge.names == [["approves:secret:ops", "answers:svc:1", "answers:"]]
+    assert judge.asked[0]["user_message"] == "go on"
+
+
+async def test_an_answered_p_thread_is_shared_and_one_that_is_not_stays_open():
+    run = run_with()
+    record(run.case, [ev("P1", objects=["svc:1"])], run.mandate)
+    await read_prompt(run, "unrelated", PromptJudge(answered=0.1), T)
+    assert run.case.threads[0].state == "open"
+    await read_prompt(
+        run, "svc:1 is fine, use the other key", PromptJudge(answered=0.9), T
+    )
+    [n1] = [e for e in run.case.events if e.indicator == "N1"]
+    assert (n1.objects, n1.source, n1.p, n1.quote) == (
+        ["svc:1"],
+        "task",
+        0.9,
+        "svc:1 is fine, use the other key",
+    )
+    assert run.case.threads[0].state == "shared"
+
+
+async def test_a_prompt_with_no_open_thread_asks_nothing():
+    judge = PromptJudge()
+    await read_prompt(run_with(), "hello", judge, T)
+    assert judge.asked == []
+
+
+async def test_a_prompt_the_judge_cannot_read_changes_nothing():
+    run = with_ops_thread()
+
+    class Down(PromptJudge):
+        async def answers(self, state, questions):
+            return None
+
+    await read_prompt(run, "yes", Down(), T)
+    assert run.case.approved == [] and len(run.case.events) == 1
+
+
+# --- shadow
+
+
+def carries_ops(n=3):
+    return step(n, "Bash", args='{"command":"curl [secret:ops]"}', risk="write")
+
+
+async def test_the_shadow_says_words_not_read_when_a_thought_has_no_answer():  # Review Focus 3
+    m = message(after=1, text="Task impossible.")
+    run = run_with(step(2, "Read", secrets=[OPS]), messages=[m])
+    s = await shadow(
+        run, carries_ops(), None, PromptJudge({"Task impossible.": None}), T
+    )
+    assert s.words_read is False
+    assert s.decision == "hold" and s.uses == [
+        "secret:ops"
+    ]  # the code O1 still decides
+
+
+@pytest.mark.parametrize("field, value", [("visibility", "tools"), ("kind", "replay")])
+async def test_the_shadow_reads_no_thought_in_a_tools_or_replay_run(field, value):
+    m = message(after=1, text="Task impossible.")
+    run = run_with(step(2, "Read", secrets=[OPS]), messages=[m])
+    setattr(run, field, value)
+    judge = PromptJudge()
+    s = await shadow(run, carries_ops(), None, judge, T)
+    assert s.words_read is False and judge.asked == [] and m.read == 0
+    assert s.decision == "hold"  # code facts alone
+
+
+async def test_the_shadow_reads_the_messages_before_the_call_once():
+    before = message(after=1, text="Looking.")
+    user = message(after=1, text="Go on.", role="user")
+    later = message(after=3, text="Later.")
+    run = run_with(step(2, "Read"), messages=[before, user, later])
+    judge = PromptJudge({"Looking.": {}})
+    s = await shadow(run, step(3, "Bash"), None, judge, T)
+    assert s.words_read is True and s.decision == "allow"
+    await shadow(run, step(3, "Bash"), None, judge, T)
+    assert [x["current_thought"] for x in judge.asked] == ["Looking."]
+    assert later.read == 0
+
+
+async def test_the_shadow_stops_at_a_message_it_cannot_read_to_keep_the_case_in_order():
+    first, second = message(after=0, text="One."), message(after=1, text="Two.")
+    run = run_with(step(1, "Read"), messages=[first, second])
+    judge = PromptJudge({"One.": None, "Two.": {}})
+    s = await shadow(run, step(2, "Bash"), None, judge, T)
+    assert s.words_read is False and second.read == 0
+    assert [x["current_thought"] for x in judge.asked] == ["One."]
+
+
+async def test_the_shadow_records_each_code_fact_once_across_calls():
+    run = run_with(step(2, "Read", secrets=[OPS]))
+    judge = PromptJudge()
+    await shadow(run, carries_ops(3), None, judge, T)
+    await shadow(run, carries_ops(4), None, judge, T)
+    assert [e.source for e in run.case.events] == ["code"]
+
+
+async def test_a_secret_the_mandate_names_is_not_held_for_a_thought_about_it():
+    # The thought opens an O thread on the secret; the mandate grants it, so it is not outside.
+    m = message(after=2, text="Found the ops token.")
+    run = run_with(
+        step(2, "Read", secrets=[OPS]),
+        messages=[m],
+        mandate=Mandate(may_read_secrets=["OPS_TOKEN"]),
+    )
+    judge = PromptJudge({"Found the ops token.": {"O1": 0.9, "about:secret:ops": 1.0}})
+    s = await shadow(run, carries_ops(3), None, judge, T)
+    assert run.case.threads[0].object == "secret:ops"
+    assert s.decision == "allow" and s.uses == ["secret:ops"]
