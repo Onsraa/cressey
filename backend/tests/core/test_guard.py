@@ -520,7 +520,10 @@ async def test_the_agent_isnt_told_that_a_key_is_a_trap(served_short_holds):
     base = served_short_holds
     run = await new_run(base)
     async with agent(base, run["key"]) as a:
-        query = {"query": "SELECT count(*) FROM users", "key": TRAP_KEY}
+        query = {
+            "query": "UPDATE users SET plan = 'trial' WHERE id = 1",
+            "key": TRAP_KEY,
+        }
         r = await a.call_tool("run_sql", query, raise_on_error=False)
     told = r.content[0].text
     assert r.is_error and told == f"Cressey: action held. {WAY_OUT}"
@@ -542,6 +545,7 @@ async def test_the_agent_is_told_it_was_held_but_never_why(served_short_holds):
 REVIEW_ALL = {
     "floor": "review",
     "trap_key": "review",
+    "trap_key_read": "alert",  # a decoy key that only reads is flagged, not held
     "triangle": "review",
     "fleet": "alert",
 }
@@ -637,7 +641,10 @@ async def test_on_stop_a_trap_key_is_refused_at_once(served):
     await responses(served, trap_key="stop")
     run = await new_run(served)
     async with agent(served, run["key"]) as a:
-        query = {"query": "SELECT 1", "key": TRAP_KEY}
+        query = {
+            "query": "UPDATE users SET plan = 'trial' WHERE id = 1",
+            "key": TRAP_KEY,
+        }
         r = await a.call_tool("run_sql", query, raise_on_error=False)
     assert r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     assert (await api(served, "GET", "/api/holds")).json() == []

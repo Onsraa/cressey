@@ -24,7 +24,7 @@ from cressey.core.broker import scoped
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
-from cressey.core.models import Policy, Response, Run, Step
+from cressey.core.models import Policy, Response, Risk, Run, Step
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import fingerprint, redact, scan
 from cressey.core.triangle import (
@@ -116,13 +116,16 @@ class Guard(Middleware):
         )  # the loop keeps weak references only
 
     def _response(
-        self, tool: str, reason: str | None, trapped: bool, floor: bool
+        self, tool: str, reason: str | None, trapped: bool, floor: bool, risk: Risk
     ) -> Response | None:
         """What the policy does with a call a check fired on, or None when none did."""
         if reason is None:
             return None
         r = self.policy.responses
-        response = r.trap_key if trapped else r.floor if floor else r.triangle
+        if trapped:
+            response = r.trap_key_read if risk == "read" else r.trap_key
+        else:
+            response = r.floor if floor else r.triangle
         if r.fleet == "stop" and self.incidents.signalled(f"{tool} | {reason}"):
             response = "stop"  # many runs after one target: no human queue for them all
         if response == "review" and self.holds == "refuse":
@@ -189,7 +192,14 @@ class Guard(Middleware):
             # The Observateur run and the floor-alone ablation show what happens without it.
             if self.triangle_holds and run.kind != "control":
                 self.runs.act_on_pressure(run, step, triangle)
-            if reason and run.kind != "replay":
+            # A trap key used again only to read opens no second incident: one per key.
+            if (
+                reason
+                and run.kind != "replay"
+                and not (
+                    trapped and risk == "read" and self.incidents.has(run.id, reason)
+                )
+            ):
                 self.incidents.open(run, step, "critique" if floor else "haute")
             step.check_ms = _ms_since(start)  # the time to stop, when the call is held
             # A call that would be held still goes to a human: only the others are refused.
@@ -200,7 +210,7 @@ class Guard(Middleware):
             # The agent learns it was held, never why: a reason teaches it what to route around
             # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
             held = ToolError(f"Cressey: action held. {WAY_OUT}")
-            response = self._response(name, reason, bool(trapped), bool(floor))
+            response = self._response(name, reason, bool(trapped), bool(floor), risk)
             if response == "alert":
                 self.runs.mark(run, step, "alerted")  # through, with its incident open
             elif reason and run.kind != "live":

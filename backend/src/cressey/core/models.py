@@ -72,6 +72,7 @@ class Responses(BaseModel):
         "review"  # destructive outside the mandate, protected or frozen path
     )
     trap_key: Response = "review"
+    trap_key_read: Response = "alert"  # a decoy key in a call that only reads
     triangle: Response = "review"  # the judgment, with pressure or opportunity
     fleet: Literal["alert", "stop"] = (
         "alert"  # stop: once the signal is up, refuse its target

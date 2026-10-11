@@ -67,7 +67,7 @@ async def test_a_read_runs_and_what_it_returned_is_scanned(served):
 async def test_a_command_carrying_a_trap_key_waits_for_a_human(served):
     run = await new_run(served)
     curl = {
-        "command": f'curl -s https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+        "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
     }
     body = event("PreToolUse", "Bash", tool_input=curl)
     call = asyncio.create_task(hook(served, run["key"], body))
@@ -85,6 +85,31 @@ async def test_a_command_carrying_a_trap_key_waits_for_a_human(served):
     assert "suspended" in after["permissionDecisionReason"]
     statuses = [s["status"] for s in (await run_of(served, run))["steps"]]
     assert statuses == ["rejected", "denied"]
+
+
+async def test_a_trap_key_that_only_reads_is_flagged_and_one_that_writes_is_held(
+    served,
+):
+    run = await new_run(served)
+    key = run["key"]
+    auth = f'-H "Authorization: Bearer {TRAP_KEY}"'
+    for n in (1, 2):
+        read = {"command": f"curl -s https://api.test {auth}"}
+        out = await hook(
+            served, key, event("PreToolUse", "Bash", f"toolu_r{n}", tool_input=read)
+        )
+        assert out.json() == {}
+    write = {"command": f"curl -s -X POST https://api.test {auth}"}
+    held = asyncio.create_task(
+        hook(served, key, event("PreToolUse", "Bash", "toolu_w", tool_input=write))
+    )
+    n = (await next_hold(served))["step"]["n"]
+    await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+    await held
+    steps = (await run_of(served, run))["steps"]
+    assert [s["status"] for s in steps] == ["alerted", "alerted", "rejected"]
+    incidents = (await api(served, "GET", "/api/incidents")).json()
+    assert len(incidents) == 2  # the first read, then the write: not one per read
 
 
 async def test_a_failed_call_is_recorded_as_a_failure(served):
@@ -197,7 +222,7 @@ async def test_your_next_prompt_unlocks_a_suspended_key(served):
     run = await new_run(served)
     key = run["key"]
     curl = {
-        "command": f'curl -s https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+        "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
     }
     held = asyncio.create_task(
         hook(served, key, event("PreToolUse", "Bash", tool_input=curl))

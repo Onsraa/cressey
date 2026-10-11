@@ -682,6 +682,12 @@ export interface components {
 			 */
 			trap_key: "alert" | "review" | "stop";
 			/**
+			 * Trap Key Read
+			 * @default alert
+			 * @enum {string}
+			 */
+			trap_key_read: "alert" | "review" | "stop";
+			/**
 			 * Triangle
 			 * @default review
 			 * @enum {string}

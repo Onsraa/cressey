@@ -93,5 +93,6 @@ broker:
 responses:
   floor: review
   trap_key: review
+  trap_key_read: alert  # a trap key used only to read is flagged, not held
   triangle: review
   fleet: alert
