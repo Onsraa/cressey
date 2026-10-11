@@ -1,5 +1,5 @@
-import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import type { IconType } from "@/components/icons";
 
 // A tooltip a keyboard user can reach too: tooltips.ts opens it on focus.
 export function Tip({
@@ -30,14 +30,14 @@ export function Box({
 	aside,
 	children,
 }: {
-	Icon: LucideIcon;
+	Icon: IconType;
 	title: string;
 	aside?: ReactNode;
 	children: ReactNode;
 }) {
 	return (
 		<div className="flex min-w-0 flex-col border-[1.2px] border-ink">
-			<div className="flex min-h-[34px] flex-wrap items-center gap-2 border-line border-b px-3.5 py-1.5 font-pixel text-[19px] leading-none tracking-[0.04em]">
+			<div className="flex h-[34px] items-center gap-2 border-line border-b px-3.5 font-pixel text-[19px] leading-none tracking-[0.04em]">
 				<Icon size={14} />
 				{title}
 				{aside}
@@ -48,10 +48,20 @@ export function Box({
 }
 
 // Work in progress: a blinking square and what is happening.
-export function Pending({ children }: { children: ReactNode }) {
+export function Pending({
+	children,
+	small,
+}: {
+	children: ReactNode;
+	small?: boolean;
+}) {
 	return (
-		<span className="flex items-center gap-2 text-[13px] text-mute">
-			<span className="blink size-[9px] flex-none bg-ink" />
+		<span
+			className={`flex items-center gap-2 text-mute ${small ? "font-mono text-[11px]" : "text-[13px]"}`}
+		>
+			<span
+				className={`blink flex-none bg-ink ${small ? "size-2" : "size-[9px]"}`}
+			/>
 			{children}
 		</span>
 	);

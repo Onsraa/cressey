@@ -1,14 +1,15 @@
-import { Check, Info, Repeat, Wrench, X } from "lucide-react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { apiPost } from "@/api/client";
 import { useLive } from "@/api/live";
 import type { Fix, Incident, ReplayResult } from "@/api/types";
-import { ROLE, TONE, time } from "@/lib/labels";
+import { Ban, Check, Info, Repeat, Wrench, X } from "@/components/icons";
+import { ROLE, TONE } from "@/lib/labels";
+import { stepIn } from "@/lib/motion";
 import { Keyed, useKeyed } from "./store";
 import { Box, Pending, Tip } from "./ui";
 import { LEG } from "./util";
 
-const DECIDE_FIRST = "Decide on the held call first.";
+const DECIDE_FIRST = "Decide the held call first";
 
 const OUTCOME: Record<ReplayResult["outcome"], string> = {
 	refused: "refused",
@@ -32,14 +33,23 @@ export function Fixes({ incident: i }: { incident: Incident }) {
 	const held = i.decision === "held";
 	const approved = i.fixes.filter((f) => f.approved).length;
 	return (
-		<div className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4">
+		<div
+			data-anim
+			className="grid grid-cols-[repeat(auto-fit,minmax(320px,1fr))] items-start gap-4"
+		>
 			<Box
 				Icon={Wrench}
 				title="FIXES"
 				aside={
-					<span className="ml-auto font-mono text-[11px] text-mute-2 tracking-normal">
-						{approved} of {i.fixes.length} approved
-					</span>
+					<>
+						<div className="flex-1" />
+						<Tip
+							tip="One fix per leg, for pressure and opportunity only. Only a human approves a fix or closes an incident."
+							className="cursor-help font-mono text-[11px] text-mute-2 tracking-normal"
+						>
+							{approved} / {i.fixes.length} approved
+						</Tip>
+					</>
 				}
 			>
 				{i.fixes.map((f) => (
@@ -74,7 +84,7 @@ function FixRow({ id, fix, held }: { id: string; fix: Fix; held: boolean }) {
 		);
 	};
 	return (
-		<div className="grid grid-cols-[26px_minmax(0,1fr)] gap-4 border-line border-b px-[18px] py-4 last:border-b-0">
+		<div className="grid grid-cols-[26px_minmax(0,1fr)] gap-4 border-line border-b px-[18px] py-4">
 			<span
 				className="inline-flex size-[26px] items-center justify-center font-pixel text-[20px] text-surface leading-none"
 				style={{ background: g.color }}
@@ -87,11 +97,13 @@ function FixRow({ id, fix, held }: { id: string; fix: Fix; held: boolean }) {
 						{fix.text}
 					</span>
 					<span className="font-mono text-[11px] text-mute-2">
-						{g.name} · {ROLE[fix.owner_role]}
+						{g.name} · {ROLE[fix.owner_role].toLowerCase()}
 					</span>
 				</div>
 				{fix.approved ? (
-					<span className={`chip self-start ${TONE.ok}`}>
+					<span
+						className={`inline-flex h-[26px] items-center gap-[5px] self-start border px-[9px] font-mono text-[11.5px] ${TONE.ok}`}
+					>
 						<Check size={12} />
 						approved
 					</span>
@@ -100,7 +112,7 @@ function FixRow({ id, fix, held }: { id: string; fix: Fix; held: boolean }) {
 						type="button"
 						onClick={approve}
 						disabled={held || busy}
-						data-tip={held ? DECIDE_FIRST : "A human approves; no model can."}
+						data-tip={held ? DECIDE_FIRST : "A human approves every fix"}
 						className="btn h-[30px] gap-1.5 self-start px-[11px] text-[13px]"
 					>
 						<Check size={14} />
@@ -128,7 +140,17 @@ function ReplayBox({
 	const state = useKeyed(replays, i.id);
 	const running = state === "running";
 	const r = i.replay;
+	const variants = r?.results.filter((x) => x.expect === "held") ?? [];
+	const stopped = variants.filter((x) => x.ok).length;
 	const normal = r?.results.filter((x) => x.expect === "free") ?? [];
+	// A new replay's results come in one after the other, as the design's.
+	const list = useRef<HTMLDivElement>(null);
+	const shown = useRef(r?.date);
+	useLayoutEffect(() => {
+		if (shown.current === r?.date) return;
+		shown.current = r?.date;
+		if (list.current) stepIn([...list.current.children], 0.42);
+	});
 	return (
 		<Box
 			Icon={Repeat}
@@ -138,9 +160,10 @@ function ReplayBox({
 					<span className="font-mono text-[11px] text-mute-2 tracking-normal">
 						policy regression test
 					</span>
+					<div className="flex-1" />
 					<Tip
-						tip="Five scripted variants of the attack, replayed against the fixed policy. They test the policy, not a real agent. A replay never waits for a human: a call that would have been held fails the replay."
-						className="ml-auto inline-flex cursor-help"
+						tip="Five scripted variants of the attack, replayed against the fixed policy. They test the policy, not a real agent. A variant passes only if it stops on its own; “refused” means Cressey still had to block."
+						className="inline-flex cursor-help"
 					>
 						<Info size={14} />
 					</Tip>
@@ -156,10 +179,10 @@ function ReplayBox({
 					className="btn btn-dark h-[38px] self-start px-4"
 				>
 					<Repeat size={15} />
-					{running ? "Replaying…" : "Replay ×5"}
+					{running ? "Replaying…" : r ? "Replay ×5 again" : "Replay ×5"}
 				</button>
 				{running && (
-					<Pending>
+					<Pending small>
 						Each session replays on a fresh Cressey: up to a minute.
 					</Pending>
 				)}
@@ -169,38 +192,32 @@ function ReplayBox({
 					</p>
 				)}
 				{r && (
-					<div className={`flex flex-col gap-4 ${running ? "opacity-50" : ""}`}>
-						<div className="flex flex-col border-line border-t">
-							{r.results
-								.filter((x) => x.expect === "held")
-								.map((x) => (
-									<Result key={x.session} result={x} />
-								))}
+					<>
+						<div ref={list} className="flex flex-col border-line border-t">
+							{variants.map((x) => (
+								<Result key={x.session} result={x} />
+							))}
 						</div>
-						<div className="flex flex-wrap items-center gap-2.5 font-mono text-xs">
+						<div className="flex flex-wrap items-center gap-2.5">
 							<span
-								className={`inline-flex h-7 items-center gap-1.5 border-[1.2px] px-2.5 ${TONE[r.passed ? "ok" : "held"]}`}
+								className={`inline-flex h-7 items-center gap-1.5 border-[1.2px] px-2.5 font-mono text-xs ${TONE[r.passed ? "ok" : "held"]}`}
 							>
 								{r.passed ? <Check size={13} /> : <X size={13} />}
-								{r.passed ? "passed" : "failed"}
+								{r.passed
+									? `replay passed · ${stopped} / ${variants.length} stopped on their own`
+									: `${stopped} / ${variants.length} stopped on their own · replay failed`}
 							</span>
-							<span className="text-mute">
-								{r.fixes.length
-									? `fixes: ${r.fixes.map((k) => LEG[k].name).join(", ")}`
-									: "no fixes"}{" "}
-								· {time(r.date)}
-							</span>
+							{normal.length > 0 && (
+								<Tip
+									tip="Counted from the replay results"
+									className="font-mono text-mute text-xs"
+								>
+									normal tasks: {normal.filter((x) => x.ok).length} /{" "}
+									{normal.length} completed with no hold
+								</Tip>
+							)}
 						</div>
-						{normal.length > 0 && (
-							<Tip
-								tip="The normal tasks, replayed against the fixed policy"
-								className="self-start font-mono text-mute text-xs"
-							>
-								normal tasks: {normal.filter((x) => x.ok).length} /{" "}
-								{normal.length} completed with no hold
-							</Tip>
-						)}
-					</div>
+					</>
 				)}
 			</div>
 		</Box>
@@ -208,28 +225,25 @@ function ReplayBox({
 }
 
 function Result({ result: r }: { result: ReplayResult }) {
+	const at = r.step !== null ? ` at step ${r.step}` : "";
 	return (
 		<div
-			className={`flex min-h-9 items-center gap-2.5 border-line border-b px-2.5 py-1.5 ${r.ok ? "bg-surface" : "bg-held"}`}
+			data-tip={
+				r.ok
+					? "The variant stops by itself: the fix held."
+					: `Cressey had to block${r.reason ? `: ${r.reason}` : ""}`
+			}
+			className={`flex min-h-9 items-center gap-2.5 border-line border-b px-2.5 ${r.ok ? "bg-surface" : "bg-held"}`}
 		>
-			{r.ok ? (
-				<Check
-					size={14}
-					aria-label="passed"
-					className="flex-none text-ok-strong"
-				/>
-			) : (
-				<X size={14} aria-label="failed" className="flex-none text-held-fg" />
-			)}
-			<span className="flex min-w-0 flex-col">
-				<span className="font-medium text-[13px]">{r.session}</span>
-				{r.reason && (
-					<span className="font-mono text-[11px] text-mute">{r.reason}</span>
-				)}
+			<span
+				className={`inline-flex ${r.ok ? "text-ok-strong" : "text-held-fg"}`}
+			>
+				{r.ok ? <Check size={14} /> : <Ban size={14} />}
 			</span>
+			<span className="font-medium text-[13px]">{r.session}</span>
 			<span className="ml-auto whitespace-nowrap font-mono text-[11.5px]">
 				{OUTCOME[r.outcome]}
-				{r.step !== null && ` at step ${r.step}`}
+				{at}
 			</span>
 		</div>
 	);

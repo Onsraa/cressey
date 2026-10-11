@@ -1,20 +1,22 @@
+import { useRef } from "react";
+import { useLive } from "@/api/live";
+import type { Incident, Leg, Run, Step } from "@/api/types";
 import {
 	Check,
-	KeyRound,
+	Eye,
+	type IconType,
+	KeySquare,
 	List,
-	type LucideIcon,
 	MousePointerClick,
 	Pause,
-} from "lucide-react";
-import { useLive } from "@/api/live";
-import type { Leg, Run, Step } from "@/api/types";
-import { Cells } from "@/components/Cells";
-import { LEGS, TONE } from "@/lib/labels";
+} from "@/components/icons";
+import { LEGS, shown, TONE, VIA } from "@/lib/labels";
+import { animIn, useOnChange } from "@/lib/motion";
 import type { Decision } from "./decide";
 import { Hold } from "./Hold";
-import { argsText, carried, fmt, originText, type Row } from "./run";
+import { callText, carried, fmt, originText, type Row } from "./run";
 import {
-	AgentText,
+	Bar,
 	Code,
 	Labeled,
 	type LegLook,
@@ -30,25 +32,39 @@ const ms = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
 export function Inspector({
 	run,
 	held,
+	incident,
 	tab,
 	onTab,
 	row,
+	pinned,
+	watching,
 	decision,
 	className,
 }: {
-	run: Run;
-	held?: Step;
+	run?: Run;
+	held?: Step; // the call on hold, else the last one that was
+	incident?: Incident;
 	tab: InspectorTab;
 	onTab: (t: InspectorTab) => void;
-	row?: Row;
+	row?: Row; // the selected row, else the latest
+	pinned: boolean; // the row was selected, not just the latest
+	watching: boolean; // the run is going: the watching dot blinks
 	decision: Decision;
 	className: string;
 }) {
-	const { incidents, now, go, focusMode } = useLive();
+	const { focusMode } = useLive();
+	const box = useRef<HTMLElement>(null);
 	// Focus mode has no STEP tab: the hold, or a quiet line.
-	const hold = held && (focusMode || tab === "hold") ? held : undefined;
+	const hold = run && held && (focusMode || tab === "hold") ? held : undefined;
+	const pane = hold ? "hold" : focusMode ? "watch" : "step";
+	useOnChange(pane, () => animIn(box.current, "[data-pane]"));
 	return (
-		<section aria-label="Inspector" className={`panel rise ${className}`}>
+		<section
+			ref={box}
+			data-anim
+			aria-label="Inspector"
+			className={`panel ${className}`}
+		>
 			<div
 				role="tablist"
 				aria-label="Inspector"
@@ -59,46 +75,51 @@ export function Inspector({
 						on={Boolean(hold)}
 						onClick={() => onTab("hold")}
 						Icon={Pause}
-						label="HOLD"
+						label="HELD"
 						dot={held.status === "held"}
 					/>
 				)}
 				{!focusMode && (
 					<Tab
-						on={tab === "step"}
+						on={!hold}
 						onClick={() => onTab("step")}
 						Icon={List}
 						label="STEP"
 					/>
 				)}
+				{focusMode && !held && (
+					<Tab on onClick={() => {}} Icon={Eye} label="WATCHING" />
+				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
-				{hold ? (
-					<Hold
-						run={run}
-						step={hold}
-						incident={incidents.find(
-							(i) => i.run_id === run.id && i.step === hold.n,
-						)}
-						now={now}
-						decision={decision}
-						go={go}
-						focusMode={focusMode}
-					/>
+				{run && hold ? (
+					<Hold run={run} step={hold} incident={incident} decision={decision} />
 				) : focusMode ? (
-					<div className="flex h-full min-h-[220px] items-center justify-center p-6 text-center text-[13px] text-mute-2 leading-[1.45]">
-						Cressey is watching every call.
+					<div
+						data-pane
+						className="flex h-full min-h-[200px] items-center justify-center p-6 text-center"
+					>
+						<span className="inline-flex items-center gap-[9px] text-mute-2 text-sm">
+							<span
+								className={`size-2 flex-none bg-ok-strong ${watching ? "blink" : ""}`}
+							/>
+							Cressey is watching every call.
+						</span>
 					</div>
-				) : row?.kind === "call" ? (
-					<Call run={run} step={row.step} />
-				) : row ? (
-					<Text run={run} row={row} />
+				) : run && row ? (
+					<div data-pane className="flex flex-col gap-[18px] p-5">
+						{row.kind === "call" ? (
+							<Call run={run} step={row.step} pinned={pinned} />
+						) : (
+							<Text run={run} row={row} pinned={pinned} />
+						)}
+					</div>
 				) : (
 					<div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-2.5 p-6 text-center">
 						<MousePointerClick size={22} />
 						<span className="max-w-[220px] text-[13px] text-mute-2 leading-[1.45]">
-							Select a step in the trace to see its arguments, its secrets and
-							its scores.
+							Click a call in the trace to see its arguments, secrets and
+							scores.
 						</span>
 					</div>
 				)}
@@ -116,7 +137,7 @@ function Tab({
 }: {
 	on: boolean;
 	onClick: () => void;
-	Icon: LucideIcon;
+	Icon: IconType;
 	label: string;
 	dot?: boolean;
 }) {
@@ -126,16 +147,33 @@ function Tab({
 			role="tab"
 			aria-selected={on}
 			onClick={onClick}
-			className={`inline-flex items-center gap-[7px] border-mute border-r-[1px] px-3 font-pixel text-[19px] leading-none tracking-[0.04em] ${on ? "bg-surface text-ink" : "bg-ink text-surface"}`}
+			className={`press inline-flex items-center gap-[7px] border-mute border-r-[1px] px-3 font-pixel text-[19px] leading-none tracking-[0.04em] ${on ? "bg-surface text-ink" : "bg-ink text-surface"}`}
 		>
 			<Icon size={13} />
 			{label}
-			{dot && <span className="size-2 bg-held-bd" />}
+			{dot && <span className="size-2 bg-[#e8553e]" />}
 		</button>
 	);
 }
 
-function Call({ run, step }: { run: Run; step: Step }) {
+// What the pane shows first: the step pinned, or the latest one.
+function Kicker({ pinned }: { pinned: boolean }) {
+	return (
+		<span className="label">
+			{pinned ? "selected step" : "latest step · click a row to pin it"}
+		</span>
+	);
+}
+
+function Call({
+	run,
+	step,
+	pinned,
+}: {
+	run: Run;
+	step: Step;
+	pinned: boolean;
+}) {
 	const legs = step.legs;
 	const secrets = carried(step);
 	const timing = [
@@ -145,9 +183,9 @@ function Call({ run, step }: { run: Run; step: Step }) {
 		.filter(Boolean)
 		.join(" · ");
 	return (
-		<div className="rise flex flex-col gap-[18px] p-5">
+		<>
 			<div className="flex flex-col gap-2">
-				<span className="label">selected step</span>
+				<Kicker pinned={pinned} />
 				<div className="flex min-w-0 items-baseline gap-2.5">
 					<span className="font-pixel text-4xl leading-[0.8]">#{step.n}</span>
 					<span className="truncate font-medium font-mono text-[15px]">
@@ -155,25 +193,31 @@ function Call({ run, step }: { run: Run; step: Step }) {
 					</span>
 				</div>
 				<div className="flex flex-wrap gap-1">
-					<RiskChip risk={step.risk} tall />
-					<StatusChip status={step.status} tall />
-					{step.is_error && (
-						<span className={`chip text-[11px] ${TONE.held}`}>failed</span>
+					<RiskChip risk={step.risk} />
+					<StatusChip status={shown(step)} tall />
+					{run.via && (
+						<span
+							data-tip="How Cressey received this call"
+							className="inline-flex h-[22px] items-center border border-line-2 px-[7px] font-mono text-[11px]"
+						>
+							{VIA[run.via]}
+						</span>
 					)}
 				</div>
 			</div>
 			<Labeled label="arguments">
-				<Code>{argsText(run, step.args, "\n") || "no arguments"}</Code>
+				<Code>{callText(run, step)}</Code>
 			</Labeled>
 			{step.reason && (
 				<Labeled label="reason">
-					<span className="font-medium text-sm leading-[1.4]">
+					<span className="text-pretty font-medium text-sm leading-[1.4]">
 						{step.reason}
 					</span>
 				</Labeled>
 			)}
 			{secrets.length > 0 && (
-				<Labeled label="secret · value never shown">
+				<div className="flex flex-col gap-1">
+					<span className="label">secret · value never shown</span>
 					{secrets.map((fp) => {
 						const own = step.secrets.find((s) => s.fingerprint === fp);
 						return (
@@ -181,24 +225,26 @@ function Call({ run, step }: { run: Run; step: Step }) {
 								key={fp}
 								className="flex items-start gap-1.5 text-[13px] leading-[1.4]"
 							>
-								<KeyRound size={14} className="mt-0.5 flex-none text-warn-fg" />
+								<span className="inline-flex text-[#b07a0c]">
+									<KeySquare size={14} />
+								</span>
 								{originText(run, fp)}
 								{own && ` · ${own.kind} · line ${own.line}`}
 							</span>
 						);
 					})}
-				</Labeled>
+				</div>
 			)}
 			{timing && <span className="label">{timing}</span>}
 			{legs && (
-				<div className="flex flex-col">
-					<span className="label mb-1">scores at this step</span>
+				<div className="flex flex-col gap-0.5">
+					<span className="label mb-1">scores for this call</span>
 					{LEGS.map((g) => (
 						<LegRow key={g.k} g={g} leg={legs[g.k]} />
 					))}
 				</div>
 			)}
-		</div>
+		</>
 	);
 }
 
@@ -207,11 +253,9 @@ function LegRow({ g, leg }: { g: LegLook; leg: Leg }) {
 		<div className="flex flex-col gap-[5px] border-line border-t py-2">
 			<div className="flex items-center gap-2">
 				<Letter g={g} on={leg.confirmed} size={20} />
-				<span className="min-w-0 flex-1 truncate font-medium text-[13px]">
-					{g.name}
-				</span>
-				<Cells score={leg.score} color={g.color} n={10} size={7} />
-				<span className="w-10 text-right font-pixel text-[22px] leading-[0.8]">
+				<span className="font-medium text-[13px]">{g.name}</span>
+				<Bar score={leg.score} n={10} h={8} className="mx-1.5 flex-1" />
+				<span className="font-pixel text-[22px] leading-[0.8]">
 					{fmt(leg.score)}
 				</span>
 			</div>
@@ -226,24 +270,39 @@ function Facts({ facts }: { facts: string[] }) {
 			key={f}
 			className="flex items-baseline gap-2 pl-7 text-[12.5px] leading-[1.4]"
 		>
-			<Check size={11} className="flex-none" />
+			<Check size={11} />
 			{f}
 		</span>
 	));
 }
 
-function Text({ run, row }: { run: Run; row: Exclude<Row, { kind: "call" }> }) {
+function Text({
+	run,
+	row,
+	pinned,
+}: {
+	run: Run;
+	row: Exclude<Row, { kind: "call" }>;
+	pinned: boolean;
+}) {
 	const check = row.kind === "report" ? run.report_check : undefined;
 	return (
-		<div className="rise flex flex-col gap-[18px] p-5">
+		<>
 			<div className="flex flex-col gap-2">
-				<span className="label">selected step</span>
-				<span className="font-medium font-mono text-[15px]">
-					{row.kind === "report" ? "final report" : "message"}
-				</span>
+				<Kicker pinned={pinned} />
+				<div className="flex min-w-0 items-baseline gap-2.5">
+					<span className="truncate font-medium font-mono text-[15px]">
+						{row.kind === "report" ? "Final report" : "Message"}
+					</span>
+				</div>
 			</div>
-			<div className="flex flex-col items-start gap-1.5">
-				<AgentText />
+			<div className="flex flex-col gap-1.5">
+				<span
+					data-tip="Untrusted: shown as plain text, never interpreted"
+					className="label self-start"
+				>
+					agent text
+				</span>
 				<p className="m-0 text-pretty text-[15px] leading-normal">{row.text}</p>
 			</div>
 			{check && (
@@ -252,7 +311,9 @@ function Text({ run, row }: { run: Run; row: Exclude<Row, { kind: "call" }> }) {
 					{/* Unconfirmed can also mean unchecked: the facts say which. */}
 					<div className="flex items-center gap-2">
 						{check.confirmed && (
-							<span className={`chip text-[11px] ${TONE.held}`}>
+							<span
+								className={`inline-flex h-[22px] items-center border px-[7px] font-mono text-[11px] ${TONE.held}`}
+							>
 								report contradicted by the log
 							</span>
 						)}
@@ -264,6 +325,6 @@ function Text({ run, row }: { run: Run; row: Exclude<Row, { kind: "call" }> }) {
 					<Facts facts={check.facts} />
 				</div>
 			)}
-		</div>
+		</>
 	);
 }

@@ -1,169 +1,104 @@
-import { useEffect, useState } from "react";
-import type { LegName, Run } from "@/api/types";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { LegName } from "@/api/types";
 import { LEGS } from "@/lib/labels";
-import {
-	CELL,
-	cellRect,
-	edge,
-	heat,
-	type Pt,
-	place,
-	pulse,
-	triangle,
-} from "./geometry";
-import { GLIDE_MS, Marker, type Placed } from "./Marker";
-import { RAMP, scored } from "./run";
-import { useAge, useSize } from "./ui";
+import { type P3, Pixels, pos, type Scene, type Tri } from "./pixels";
+import { type Agg, fmt } from "./run";
+import { Letter } from "./ui";
 
-const GRID = "#efefed"; // the design's faint grid
-const OPEN = "#c9c9c6"; // a side not closed yet
-const PULSE_MS = 1000;
-// A landing pulse's ramps, palest first: amber for a call, salmon for a held one.
-const WARM = ["#f3dfa6", "#ebc97f", "#e2b65c", "#d9a640"];
-const HELD = ["#ffd6ce", "#f1a79a", "#e27865", "#b8331c"];
+// The design keeps one field for the page: its texture and its waves outlive a page switch.
+const sim = new Pixels();
 
-// The sides, each between two legs' vertices.
-const SIDES: [LegName, LegName][] = [
-	["pressure", "opportunity"],
-	["opportunity", "rationalization"],
-	["rationalization", "pressure"],
-];
+// Where each label sits around its vertex.
+const AT = {
+	P: "translate(-50%, calc(-100% - 14px))",
+	O: "translate(-30%, 16px)",
+	R: "translate(-70%, 16px)",
+};
 
-// The fraud triangle. A call scored since the last poll glides in (Marker) and lands
-// GLIDE_MS later: its heat and its point appear then, with a pulse.
-export function Field({ run, focus }: { run: Run; focus?: number }) {
-	const { ref, w, h } = useSize();
-	// Each run has its own texture, the same on every poll and tab switch.
-	const seed = [...run.id].reduce(
-		(s, c) => (s * 31 + c.charCodeAt(0)) % 1000,
-		0,
+export type Hover = { n: number; tool: string; legs: P3 };
+
+// The canvas, the three vertex labels with the gauges' scores, and the hovered call's tip.
+export function Field({
+	run,
+	scene,
+	agg,
+	score,
+	hover,
+}: {
+	run: string;
+	scene: Scene;
+	agg: Agg;
+	score: Record<LegName, number>;
+	hover?: Hover;
+}) {
+	const [tri, setTri] = useState<Tri | null>(null);
+	const latest = useRef(scene);
+	const ref = useCallback(
+		(cv: HTMLCanvasElement | null) => {
+			if (!cv) return;
+			sim.attach(cv, run, () => latest.current, setTri);
+			return () => sim.detach(cv);
+		},
+		[run],
 	);
-	const t = triangle(w, h);
-	const all = scored(run);
-	const landed = useLanded(all.at(-1)?.step.n ?? 0);
-	const calls: Placed[] = all
-		.filter((c) => c.step.n <= landed)
-		.map((c) => ({ ...c, at: place(t, c.legs) }));
-	const last = calls.at(-1);
-	const pending = run.steps.some((s) => s.status === "held");
-	const cells = heat(
-		t,
-		w,
-		h,
-		calls.map((c) => ({
-			at: c.at,
-			score: Math.max(...LEGS.map((g) => c.legs[g.k].score)),
-			held: Boolean(c.step.held_until),
-		})),
-		seed,
-	);
+	useLayoutEffect(() => {
+		latest.current = scene;
+		sim.sync();
+	});
+	const at = hover && tri ? pos(tri, hover.legs) : null;
+	// The tip sits right of the call, or left of it near the right edge.
+	const right = !at || !tri || at[0] < tri.W * 0.6;
 	return (
-		<div
-			ref={ref}
-			className="absolute inset-0"
-			style={{
-				backgroundImage: `linear-gradient(${GRID} 1px, transparent 1px), linear-gradient(90deg, ${GRID} 1px, transparent 1px)`,
-				backgroundSize: `${CELL}px ${CELL}px`,
-			}}
-		>
-			{w > 0 && (
-				<>
-					<svg
-						width={w}
-						height={h}
-						role="img"
-						aria-label={`Fraud triangle: ${calls.length} calls placed by their three scores`}
-						className="absolute inset-0"
-					>
-						<g shapeRendering="crispEdges">
-							{cells.map((c) => (
-								<rect
-									key={`${c.q},${c.r}`}
-									{...cellRect(c.q, c.r)}
-									fill={c.hot ? undefined : RAMP[c.band]}
-									className={c.hot ? "fill-held-bd" : undefined}
-								/>
-							))}
-						</g>
-						<Pulse
-							n={landed}
-							at={last?.at}
-							held={Boolean(last?.step.held_until)}
-						/>
-						{SIDES.map(([a, b]) => {
-							// A side closes once the latest call confirms the legs at both its ends.
-							const shut = Boolean(
-								last?.legs[a].confirmed && last.legs[b].confirmed,
-							);
-							return (
-								<g
-									key={`${a}-${b}`}
-									shapeRendering="crispEdges"
-									fill={pending || shut ? undefined : OPEN}
-									className={
-										pending ? "fill-held-bd" : shut ? "fill-ink" : undefined
-									}
-								>
-									{edge(t[a], t[b], !shut && !pending).map((c) => (
-										<rect key={`${c.q},${c.r}`} {...cellRect(c.q, c.r)} />
-									))}
-								</g>
-							);
-						})}
-						<g shapeRendering="crispEdges" className="fill-ink">
-							{LEGS.map((g) => (
-								<rect
-									key={g.k}
-									{...cellRect(
-										Math.floor(t[g.k].x / CELL) - 1,
-										Math.floor(t[g.k].y / CELL) - 1,
-										3,
-									)}
-								/>
-							))}
-						</g>
-					</svg>
-					<Marker
-						w={w}
-						h={h}
-						t={t}
-						calls={calls}
-						target={all.find((c) => c.step.n === focus) ?? all.at(-1)}
-						last={last}
-					/>
-				</>
+		<>
+			<canvas
+				ref={ref}
+				data-pane
+				role="img"
+				aria-label={`Fraud triangle: ${scene.calls.length} calls placed by pressure, opportunity and rationalization.`}
+				className="absolute inset-0 block cursor-crosshair [image-rendering:pixelated]"
+			/>
+			{tri &&
+				LEGS.map((g) => {
+					const on = agg[g.k].confirmed;
+					return (
+						<div
+							key={g.k}
+							data-tip={`${g.name} · ${on ? "confirmed by facts" : "not confirmed"}`}
+							className="absolute flex items-center gap-[7px] whitespace-nowrap border-[1.2px] border-ink bg-surface py-0.5 pr-2 pl-0.5"
+							style={{
+								left: Math.round(tri[g.L][0]),
+								top: Math.round(tri[g.L][1]),
+								transform: AT[g.L],
+							}}
+						>
+							<Letter g={g} on={on} size={22} />
+							<span className="font-medium text-[13.5px]">{g.name}</span>
+							<span className="ml-0.5 font-pixel text-[22px] leading-[0.8]">
+								{fmt(score[g.k])}
+							</span>
+						</div>
+					);
+				})}
+			{hover && at && (
+				<div
+					className="pointer-events-none absolute whitespace-nowrap bg-ink px-2 py-1.5 font-mono text-[11.5px] text-surface leading-[1.4] shadow-[0_10px_24px_-10px_rgba(30,30,30,.45)]"
+					style={{
+						left: Math.round(at[0] + (right ? 18 : -18)),
+						top: Math.round(at[1] - 10),
+						transform: right
+							? "translate(0, -100%)"
+							: "translate(-100%, -100%)",
+					}}
+				>
+					<div className="font-medium">
+						#{hover.n} {hover.tool}
+					</div>
+					<div>
+						P {fmt(hover.legs.p)} · O {fmt(hover.legs.o)} · R{" "}
+						{fmt(hover.legs.r)}
+					</div>
+				</div>
 			)}
-		</div>
-	);
-}
-
-// The latest call that has landed. One scored since the last poll lands GLIDE_MS later, as
-// the marker reaches it; at once with reduced motion.
-function useLanded(n: number) {
-	const [landed, setLanded] = useState(n);
-	useEffect(() => {
-		if (landed === n) return;
-		const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-		const id = setTimeout(() => setLanded(n), still ? 0 : GLIDE_MS);
-		return () => clearTimeout(id);
-	}, [landed, n]);
-	return landed;
-}
-
-// A ring of heat leaves the call that landed last and cools away, in about a second.
-function Pulse({ n, at, held }: { n: number; at?: Pt; held: boolean }) {
-	const age = useAge(n, PULSE_MS);
-	if (!at || age >= PULSE_MS) return null;
-	const ramp = held ? HELD : WARM;
-	return (
-		<g shapeRendering="crispEdges">
-			{pulse(at, age / PULSE_MS).map((c) => (
-				<rect
-					key={`${c.q},${c.r}`}
-					{...cellRect(c.q, c.r)}
-					fill={ramp[c.band]}
-				/>
-			))}
-		</g>
+		</>
 	);
 }

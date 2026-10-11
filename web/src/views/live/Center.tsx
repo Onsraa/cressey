@@ -1,206 +1,302 @@
+import { useRef } from "react";
+import { useLive } from "@/api/live";
+import type { LegName, Run } from "@/api/types";
 import {
 	Check,
 	ChevronUp,
 	DoorOpen,
+	type IconType,
 	Info,
-	KeyRound,
+	KeySquare,
 	Lock,
-	type LucideIcon,
 	Minus,
-} from "lucide-react";
-import { useLive } from "@/api/live";
-import type { Leg, Run } from "@/api/types";
+	Triangle,
+} from "@/components/icons";
 import { LEGS, TONE } from "@/lib/labels";
+import { animIn, useGlide, useOnChange } from "@/lib/motion";
 import { Chart } from "./Chart";
-import { Field } from "./Field";
-import { fmt, scored, TRAP } from "./run";
-import { FitCells, type LegLook, Letter } from "./ui";
+import { Field, type Hover } from "./Field";
+import type { Phase } from "./Header";
+import type { Scene } from "./pixels";
+import { type Agg, fmt, type Scored, TRAP } from "./run";
+import { Bar, type LegLook, Letter } from "./ui";
+import { Waiting } from "./Waiting";
 
 export type CenterTab = "triangle" | "time";
 
 const TABS: { k: CenterTab; label: string; tip: string }[] = [
-	{ k: "triangle", label: "Triangle", tip: "Where each call lands (T)" },
-	{
-		k: "time",
-		label: "Across steps",
-		tip: "The scores, call by call (T)",
-	},
+	{ k: "triangle", label: "Triangle", tip: "Where each step lands (T)" },
+	{ k: "time", label: "Across steps", tip: "Leg scores step by step (T)" },
 ];
 
+const STATUS: Record<Phase, string> = {
+	waiting: "idle",
+	running: "live scoring",
+	held: "triangle closed · call held",
+	ended: "run ended",
+};
+
 const LEGEND = [
-	"How to read it",
-	"Each call lands by its three scores: the higher a score, the more it pulls toward its vertex.",
-	"Darker grey: higher scores.",
-	"Salmon: the held call.",
-	"A side turns solid once facts confirm both its vertices.",
-	"The frame follows the latest call, or the selected one.",
+	"How to read",
+	"Each call lands where its three scores pull it.",
+	"The marker follows the latest call; its three lines show its scores.",
+	"Darker grey = higher score (0.30 to 0.78+).",
+	"Salmon = the held call.",
+	"Hover a trace row to locate it. Click the field for a pulse.",
 ].join("\n");
 
-const NONE: Leg = { score: 0, confirmed: false, facts: [] };
+const SIDES: [LegName, LegName][] = [
+	["pressure", "opportunity"],
+	["opportunity", "rationalization"],
+	["rationalization", "pressure"],
+];
 
-type Auto = { Icon: LucideIcon; t: string; tip: string };
+type Auto = { Icon: IconType; t: string; tip: string };
+
+// What Cressey did on its own, by leg: the way out and the read-only key on pressure, a
+// decoy key in use on opportunity.
+function autos(run: Run | undefined, g: LegLook): Auto[] {
+	if (!run) return [];
+	const trap = run.steps.find((s) => s.reason?.startsWith(TRAP));
+	if (g.k === "pressure")
+		return [
+			...(run.way_out_step
+				? [
+						{
+							Icon: DoorOpen,
+							t: `Way out sent to the agent · step ${run.way_out_step}`,
+							tip: `Sent to the agent at step ${run.way_out_step}, no human involved`,
+						},
+					]
+				: []),
+			...(run.read_only_step
+				? [
+						{
+							Icon: Lock,
+							t: `Key switched to read-only · step ${run.read_only_step}`,
+							tip: `Run key switched to read-only at step ${run.read_only_step}, no human involved`,
+						},
+					]
+				: []),
+		];
+	if (g.k === "opportunity" && trap)
+		return [
+			{
+				Icon: KeySquare,
+				t: `Decoy key used · step ${trap.n}`,
+				tip: `${trap.reason} (step ${trap.n})`,
+			},
+		];
+	return [];
+}
 
 export function Center({
 	run,
+	phase,
+	calls,
+	agg,
+	scene,
+	hover,
 	tab,
 	setTab,
-	focus,
 	className,
 }: {
-	run: Run;
+	run?: Run;
+	phase: Phase;
+	calls: Scored[];
+	agg: Agg;
+	scene: Scene;
+	hover?: Hover;
 	tab: CenterTab;
 	setTab: (t: CenterTab) => void;
-	focus?: number;
 	className: string;
 }) {
 	const { focusMode } = useLive();
+	const box = useRef<HTMLElement>(null);
 	// Focus mode shows the triangle only.
 	const shown = focusMode ? "triangle" : tab;
-	const legs = scored(run).at(-1)?.legs;
-	const trap = run.steps.find((s) => s.reason?.startsWith(TRAP));
-	const auto = (g: LegLook): Auto[] => {
-		if (g.k === "pressure")
-			return [
-				...(run.way_out_step
-					? [
-							{
-								Icon: DoorOpen,
-								t: `way out sent · step ${run.way_out_step}`,
-								tip: `Sent to the agent with the result of step ${run.way_out_step}, without a human: the pressure is confirmed.`,
-							},
-						]
-					: []),
-				...(run.read_only_step
-					? [
-							{
-								Icon: Lock,
-								t: `key read-only · step ${run.read_only_step}`,
-								tip: `Since step ${run.read_only_step}, without a human: pressure and opportunity confirmed, destructive calls are refused.`,
-							},
-						]
-					: []),
-			];
-		if (g.k === "opportunity" && trap)
-			return [
-				{
-					Icon: KeyRound,
-					t: TRAP,
-					tip: `${trap.reason} (step ${trap.n})`,
-				},
-			];
-		return [];
+	useOnChange(shown, () => animIn(box.current, "[data-pane]"));
+	const glide = useGlide(
+		agg.pressure.score,
+		agg.opportunity.score,
+		agg.rationalization.score,
+	);
+	const score: Record<LegName, number> = {
+		pressure: glide.p,
+		opportunity: glide.o,
+		rationalization: glide.r,
 	};
+	const closed = SIDES.filter(
+		([a, b]) => agg[a].confirmed && agg[b].confirmed,
+	).length;
 	return (
-		<section aria-label="Fraud triangle" className={`panel rise ${className}`}>
+		<section
+			ref={box}
+			data-anim
+			aria-label="Fraud triangle"
+			className={`panel ${className}`}
+		>
 			<div className="panel-head pr-1.5">
-				<span className="min-w-0 truncate">FRAUD TRIANGLE</span>
+				<span className="min-w-0 flex-[0_1_auto] truncate">FRAUD TRIANGLE</span>
+				<span className="min-w-0 truncate font-mono text-[11.5px] tracking-normal opacity-75">
+					{STATUS[phase]}
+				</span>
 				<div className="flex-1" />
+				<span
+					data-tip={`${closed} of 3 sides closed\nA side closes when both its legs are confirmed by facts.`}
+					// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+					tabIndex={0}
+					className="inline-flex flex-none items-center gap-[5px] font-mono text-[11px] tracking-normal opacity-85"
+				>
+					<Triangle size={11} />
+					{closed}/3
+				</span>
 				{!focusMode && (
-					<div
-						role="tablist"
-						aria-label="Triangle view"
-						className="flex flex-none border border-surface"
-					>
-						{TABS.map((x) => (
-							<button
-								key={x.k}
-								type="button"
-								role="tab"
-								aria-selected={tab === x.k}
-								data-tip={x.tip}
-								onClick={() => setTab(x.k)}
-								className={`h-[22px] px-[7px] font-mono text-[11.5px] tracking-normal ${tab === x.k ? "bg-surface text-ink" : "bg-ink text-surface"}`}
-							>
-								{x.label}
-							</button>
-						))}
-					</div>
+					<>
+						<div
+							role="tablist"
+							aria-label="Center view"
+							className="flex flex-none border border-surface"
+						>
+							{TABS.map((x) => (
+								<button
+									key={x.k}
+									type="button"
+									role="tab"
+									aria-selected={tab === x.k}
+									data-tip={x.tip}
+									onClick={() => setTab(x.k)}
+									className={`press h-[22px] px-[9px] font-mono text-[11.5px] tracking-normal ${tab === x.k ? "bg-surface text-ink" : "bg-ink text-surface"}`}
+								>
+									{x.label}
+								</button>
+							))}
+						</div>
+						<span
+							data-tip={LEGEND}
+							// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+							tabIndex={0}
+							role="img"
+							aria-label="How to read the triangle"
+							className="inline-flex size-6 flex-none cursor-help items-center justify-center"
+						>
+							<Info size={15} />
+						</span>
+					</>
 				)}
 			</div>
 			<div className="relative min-h-0 flex-1 overflow-hidden">
 				{shown === "triangle" ? (
 					<>
-						<Field run={run} focus={focus} />
-						{!focusMode && (
-							<button
-								type="button"
-								data-tip={LEGEND}
-								aria-label="How to read the triangle"
-								className="absolute top-2 right-2 inline-flex size-6 cursor-help items-center justify-center bg-surface"
-							>
-								<Info size={15} />
-							</button>
-						)}
+						<Field
+							run={run?.id ?? ""}
+							scene={scene}
+							agg={agg}
+							score={score}
+							hover={hover}
+						/>
+						{phase === "waiting" && <Waiting />}
 					</>
 				) : (
-					<Chart run={run} />
+					<div data-pane className="absolute inset-[20px_22px_14px]">
+						<Chart calls={calls} />
+					</div>
 				)}
 			</div>
 			<div className="grid flex-none grid-cols-3 border-ink border-t-[1.2px]">
 				{LEGS.map((g) => (
-					<Gauge key={g.k} g={g} leg={legs?.[g.k] ?? NONE} auto={auto(g)} />
+					<Gauge
+						key={g.k}
+						g={g}
+						agg={agg}
+						score={score[g.k]}
+						auto={autos(run, g)}
+					/>
 				))}
 			</div>
 		</section>
 	);
 }
 
-// A leg as the latest scored call left it: its score, whether facts confirm it, and those
-// facts.
-function Gauge({ g, leg, auto }: { g: LegLook; leg: Leg; auto: Auto[] }) {
+// A leg: its highest score so far, gliding to each new one, whether facts confirm it, the
+// facts in a popover, and what Cressey did about it on its own.
+function Gauge({
+	g,
+	agg,
+	score,
+	auto,
+}: {
+	g: LegLook;
+	agg: Agg;
+	score: number;
+	auto: Auto[];
+}) {
 	const { focusMode } = useLive();
-	const n = leg.facts.length;
+	const { confirmed, facts } = agg[g.k];
+	const n = facts.length;
 	return (
-		<div className="@container relative flex min-w-0 flex-col gap-[7px] border-line border-r-[1px] px-[18px] py-4 last:border-r-0">
-			{/* In a narrow gauge the name takes its own line, under the letter and the score. */}
-			<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-				<Letter g={g} on={leg.confirmed} size={22} />
-				<span className="min-w-0 truncate font-medium text-sm @max-[190px]:order-last @max-[190px]:basis-full">
-					{g.name}
-				</span>
-				<span className="ml-auto font-pixel text-[34px] leading-[0.8]">
-					{fmt(leg.score)}
+		<div className="relative flex min-w-0 flex-col gap-[7px] border-line border-r-[1px] px-[18px] py-4">
+			<div className="flex min-w-0 items-center gap-2">
+				<Letter g={g} on={confirmed} size={22} />
+				<span className="truncate font-medium text-sm">{g.name}</span>
+				<div className="flex-1" />
+				<span className="font-pixel text-[34px] leading-[0.8]">
+					{fmt(score)}
 				</span>
 			</div>
-			<FitCells score={leg.score} color={g.color} n={20} />
-			<div className="flex min-h-[22px] flex-wrap items-center gap-[5px]">
+			<Bar score={score} n={20} h={9} />
+			<div className="flex min-h-[22px] flex-col items-start gap-[5px]">
 				<span
-					className={`chip h-[22px] gap-1 px-1.5 text-[11px] ${TONE[leg.confirmed ? "warn" : "grey"]}`}
+					className={`inline-flex h-[22px] items-center gap-1 whitespace-nowrap border px-1.5 font-mono text-[11px] ${TONE[confirmed ? "warn" : "grey"]}`}
 				>
-					{leg.confirmed ? <Check size={11} /> : <Minus size={11} />}
-					{leg.confirmed ? "confirmed" : "not confirmed"}
+					{confirmed ? <Check size={11} /> : <Minus size={11} />}
+					{confirmed ? "confirmed" : "not confirmed"}
 				</span>
-				{auto.map((a) => (
-					<span
-						key={a.t}
-						data-tip={a.tip}
-						className={`inline-flex min-h-[22px] items-center gap-1 border px-1.5 py-0.5 font-mono text-[11px] leading-[1.3] ${TONE.info}`}
-					>
-						<a.Icon size={11} className="flex-none" />
-						{a.t}
-					</span>
-				))}
 				{n > 0 && !focusMode && (
-					<details className="ml-auto">
-						<summary className="inline-flex min-h-[22px] items-center gap-1 border border-ink bg-surface px-1.5 py-0.5 font-mono text-[11px] leading-[1.3]">
-							{n} fact{n > 1 ? "s" : ""} from the log
+					<details data-pop>
+						<summary className="inline-flex h-[22px] items-center gap-1 whitespace-nowrap border border-ink bg-surface px-1.5 font-mono text-[11px]">
+							{n} fact{n > 1 ? "s" : ""}
 							<ChevronUp size={11} />
 						</summary>
-						<div className="absolute right-2 bottom-[calc(100%+8px)] left-2 z-[5] flex flex-col gap-1.5 border-[1.2px] border-ink bg-surface px-3 py-2.5 shadow-[0_18px_40px_-16px_rgba(30,30,30,0.32),0_2px_6px_rgba(30,30,30,0.06)]">
+						<div
+							data-pop-body
+							className="absolute right-2 bottom-[calc(100%+8px)] left-2 z-[5] flex origin-bottom flex-col gap-1.5 border-[1.2px] border-ink bg-surface px-3 py-2.5 shadow-[0_18px_40px_-16px_rgba(30,30,30,.32),0_2px_6px_rgba(30,30,30,.06)]"
+						>
 							<span className="label">{g.name} · facts from the log</span>
-							{leg.facts.map((f) => (
-								<span
-									key={f}
-									className="grid grid-cols-[8px_minmax(0,1fr)] items-baseline gap-2 text-[12.5px] leading-[1.4]"
+							{facts.map((f) => (
+								<div
+									key={f.t}
+									className="grid grid-cols-[8px_minmax(0,1fr)_auto] items-baseline gap-2 text-[12.5px] leading-[1.4]"
 								>
 									<span className="size-1.5 bg-ink" />
-									{f}
-								</span>
+									<span>{f.t}</span>
+									<span className="whitespace-nowrap font-mono text-[11px] text-mute-2">
+										{f.at}
+									</span>
+								</div>
 							))}
 						</div>
 					</details>
 				)}
 			</div>
+			{auto.length > 0 && (
+				<div className="flex flex-col items-start gap-1">
+					{auto.map((a) => (
+						<span
+							key={a.t}
+							data-tip={a.tip}
+							// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+							tabIndex={0}
+							className={`inline-flex min-h-[22px] max-w-full items-start gap-1 text-pretty border px-1.5 py-[3px] font-mono text-[11px] leading-[1.3] ${TONE.info}`}
+						>
+							<span className="mt-px inline-flex flex-none">
+								<a.Icon size={11} />
+							</span>
+							<span className="min-w-0">{a.t}</span>
+						</span>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }

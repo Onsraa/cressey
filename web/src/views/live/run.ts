@@ -1,4 +1,4 @@
-import type { Legs, Run, Secret, Step } from "@/api/types";
+import type { LegName, Legs, Run, Secret, Step } from "@/api/types";
 
 // What the trace lists, in order.
 export type Row =
@@ -25,6 +25,7 @@ export function rows(run: Run): Row[] {
 }
 
 const MARK = /\[secret:([0-9a-f]+)\]/g;
+const MARK_ONLY = /^\[secret:[0-9a-f]+\]$/;
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
 	typeof v === "object" && v !== null && !Array.isArray(v);
@@ -39,17 +40,23 @@ function parsed(args: string): Record<string, unknown> | undefined {
 	}
 }
 
-// The arguments as `name: value` pairs, each secret marker shown as ‹NAME›.
-export function argsText(run: Run, args: string, sep = ", "): string {
-	const obj = parsed(args);
-	const text = obj
-		? Object.entries(obj)
-				.map(
-					([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
-				)
-				.join(sep)
-		: args;
-	return text.replace(MARK, (_, fp: string) => `‹${secretName(run, fp)}›`);
+// A call as the design writes it: `run_sql {query: "DELETE FROM users", key: ‹DB_PROD_KEY›}`,
+// each secret marker shown as ‹NAME›.
+export function callText(run: Run, step: Step): string {
+	const name = (fp: string) => `‹${secretName(run, fp)}›`;
+	const value = (v: unknown) =>
+		typeof v !== "string"
+			? JSON.stringify(v)
+			: MARK_ONLY.test(v)
+				? v.replace(MARK, (_, fp: string) => name(fp))
+				: `"${v.replace(MARK, (_, fp: string) => name(fp))}"`;
+	const obj = parsed(step.args);
+	const body = obj
+		? `{${Object.entries(obj)
+				.map(([k, v]) => `${k}: ${value(v)}`)
+				.join(", ")}}`
+		: step.args.replace(MARK, (_, fp: string) => name(fp));
+	return `${step.tool} ${body}`;
 }
 
 // Where a secret was first read: the earliest call whose result carried it.
@@ -92,13 +99,47 @@ export const scored = (run: Run): Scored[] =>
 
 export const fmt = (v: number) => v.toFixed(2);
 
-export const tipOf = ({ step, legs }: Scored) =>
-	`#${step.n} ${step.tool} · P ${fmt(legs.pressure.score)} · O ${fmt(legs.opportunity.score)} · R ${fmt(legs.rationalization.score)}`;
-
 // The design's grey ramp: a darker cell is a higher score.
 const STOPS = [0.3, 0.46, 0.62, 0.78];
 export const RAMP = ["#f3f3f1", "#d6d6d3", "#a3a3a0", "#5c5c5a", "#1e1e1e"];
 export const band = (v: number) => STOPS.filter((t) => v >= t).length;
+
+// The design's bar: n cells filled up to the score, each as dark as the score it stands
+// for; null for an empty cell.
+export const bar = (v: number, n: number) =>
+	Array.from({ length: n }, (_, i) =>
+		i < Math.round(v * n) ? RAMP[Math.max(1, band((i + 1) / n))] : null,
+	);
+
+const KEYS: LegName[] = ["pressure", "opportunity", "rationalization"];
+
+type AggLeg = {
+	score: number;
+	confirmed: boolean;
+	facts: { t: string; at: string }[];
+};
+export type Agg = Record<LegName, AggLeg>;
+
+// The design's agg over the scored calls: each leg's highest score so far, confirmed once
+// a call confirmed it, and its facts, each with the step that first gave it.
+export function agg(calls: Scored[]): Agg {
+	const leg = (): AggLeg => ({ score: 0, confirmed: false, facts: [] });
+	const out: Agg = {
+		pressure: leg(),
+		opportunity: leg(),
+		rationalization: leg(),
+	};
+	for (const { step, legs } of calls)
+		for (const k of KEYS) {
+			const a = out[k];
+			a.score = Math.max(a.score, legs[k].score);
+			a.confirmed ||= legs[k].confirmed;
+			for (const t of legs[k].facts)
+				if (!a.facts.some((f) => f.t === t))
+					a.facts.push({ t, at: `step ${step.n}` });
+		}
+	return out;
+}
 
 // The floor's reason for a call carrying a trap key (core/floor.py).
 export const TRAP = "trap key used";

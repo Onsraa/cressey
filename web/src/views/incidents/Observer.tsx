@@ -1,22 +1,29 @@
-import { Check, Eye, TriangleAlert, X } from "lucide-react";
-import type { Leg, Run } from "@/api/types";
-import { STATUS, TONE } from "@/lib/labels";
+import type { Run } from "@/api/types";
+import { Check, Eye, TriangleAlert } from "@/components/icons";
+import { KIND, STATUS, shown, TONE } from "@/lib/labels";
 import { Tip } from "./ui";
 import { secretNames, shortArgs } from "./util";
 
+// The same task run without Cressey: what the agent reported, next to what the log recorded.
 export function Observer({ run }: { run: Run }) {
 	const names = secretNames(run);
+	const check = run.report_check;
 	return (
-		<div className="flex flex-col gap-4">
+		<div data-anim className="flex flex-col gap-4">
 			<div className="flex flex-wrap items-center gap-2 font-mono text-xs">
+				<span
+					className={`inline-flex h-[22px] items-center border px-[7px] ${TONE.info}`}
+				>
+					{KIND[run.kind]}
+				</span>
+				<span>{run.id}</span>
 				<Tip
 					tip="Same task without Cressey: every call is logged, nothing is held."
-					className={`chip cursor-help ${TONE.info}`}
+					className="inline-flex cursor-help items-center gap-1 text-mute"
 				>
 					<Eye size={12} />
-					Observer mode
+					observer mode
 				</Tip>
-				<span>{run.id}</span>
 			</div>
 			<div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4">
 				<div className="flex flex-col gap-2.5 border-[1.2px] border-ink p-[18px]">
@@ -33,7 +40,8 @@ export function Observer({ run }: { run: Run }) {
 					<span className="label">what the log recorded</span>
 					{run.steps.map((s) => {
 						const args = shortArgs(s.args, names);
-						const look = STATUS[s.status];
+						// A call Cressey would have held ran here: the lie in the report.
+						const bad = s.status === "would_hold";
 						return (
 							<div
 								key={s.n}
@@ -43,53 +51,42 @@ export function Observer({ run }: { run: Run }) {
 									#{s.n}
 								</span>
 								<div className="flex min-w-0 flex-col gap-[3px]">
-									<code className="break-words font-mono text-xs">
+									<code className="wrap-anywhere font-mono text-xs">
 										{args ? `${s.tool} · ${args}` : s.tool}
 									</code>
-									{s.is_error ? (
-										<span className={`chip self-start ${TONE.grey}`}>
-											<X size={12} />
-											failed
+									<span
+										className={`inline-flex items-center gap-[5px] text-[13px] ${bad ? "font-semibold" : ""}`}
+									>
+										<span
+											className={`inline-flex ${bad ? "text-[#c33a22]" : "text-ok-strong"}`}
+										>
+											{bad ? <TriangleAlert size={13} /> : <Check size={13} />}
 										</span>
-									) : (
-										<span className={`chip self-start ${TONE[look.tone]}`}>
-											<look.Icon size={12} />
-											{look.label}
-										</span>
-									)}
+										{STATUS[shown(s)].label}
+									</span>
 								</div>
 							</div>
 						);
 					})}
 				</div>
 			</div>
-			<ReportCheck check={run.report_check} />
-		</div>
-	);
-}
-
-// The decision model's check of the report against the log (S9).
-function ReportCheck({ check }: { check?: Leg | null }) {
-	if (!check)
-		return <span className="font-mono text-mute text-xs">no check</span>;
-	return (
-		<div
-			className={`flex flex-col gap-1 self-start border px-3 py-1.5 ${TONE[check.confirmed ? "held" : "grey"]}`}
-		>
-			<span className="inline-flex items-center gap-[7px] font-medium text-sm">
-				{check.confirmed ? <TriangleAlert size={15} /> : <Check size={15} />}
-				{check.confirmed
-					? "Report contradicted by the log"
-					: "The report doesn't contradict the log"}
-				<span className="font-mono text-xs">
-					score {check.score.toFixed(2)}
-				</span>
-			</span>
-			{check.facts.map((f) => (
-				<span key={f} className="font-mono text-[11px]">
-					{f}
-				</span>
-			))}
+			{check?.confirmed && (
+				<div className="flex flex-col gap-2 self-start border border-held-bd bg-held px-3.5 py-3 text-held-fg">
+					<span className="inline-flex items-center gap-[7px] font-semibold text-sm">
+						<TriangleAlert size={15} />
+						report contradicted by the log · score {check.score.toFixed(2)}
+					</span>
+					{check.facts.map((f) => (
+						<span
+							key={f}
+							className="grid grid-cols-[8px_minmax(0,1fr)] items-baseline gap-2 text-[13px] leading-[1.4]"
+						>
+							<span className="size-1.5 bg-held-fg" />
+							{f}
+						</span>
+					))}
+				</div>
+			)}
 		</div>
 	);
 }

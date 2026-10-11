@@ -193,9 +193,15 @@
 	summary::-webkit-details-marker {
 		display: none;
 	}
+	button:disabled {
+		cursor: not-allowed;
+	}
 	::-webkit-scrollbar {
 		width: 10px;
 		height: 10px;
+	}
+	::-webkit-scrollbar-track {
+		background: transparent;
 	}
 	::-webkit-scrollbar-thumb {
 		background: var(--color-line-2);
@@ -245,10 +251,23 @@
 		font-weight: 500;
 		white-space: nowrap;
 		cursor: pointer;
+	}
+	/* The design's pressables: colours fade in 0.15 s, a press sinks in 0.1 s. */
+	.btn,
+	.fade,
+	.press {
 		transition:
 			background-color 0.15s ease,
+			color 0.15s ease,
+			border-color 0.15s ease,
 			box-shadow 0.15s ease,
 			transform 0.1s ease;
+	}
+	.press:active:not(:disabled) {
+		transform: translateY(1px) scale(0.985);
+	}
+	.shade:hover:not(:disabled) {
+		box-shadow: inset 0 0 0 999px rgba(30, 30, 30, 0.07);
 	}
 	.btn:hover:not(:disabled) {
 		box-shadow: inset 0 0 0 999px rgba(30, 30, 30, 0.07);
@@ -267,17 +286,6 @@
 	.btn-dark:hover:not(:disabled) {
 		box-shadow: none;
 		background: #3a3a38;
-	}
-	.chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		height: 22px;
-		padding: 0 7px;
-		border: 1px solid var(--color-line-2);
-		font-family: var(--font-mono);
-		font-size: 12px;
-		white-space: nowrap;
 	}
 	.label {
 		font-family: var(--font-mono);
@@ -298,17 +306,15 @@
 		pointer-events: none;
 		box-shadow: 0 10px 24px -10px rgba(30, 30, 30, 0.45);
 		opacity: 0;
-		transition: opacity 0.12s ease;
+		transform: translateY(4px);
+		transition:
+			opacity 0.14s ease,
+			transform 0.14s ease;
 	}
+	/* The design's blink: on for 0.55 s, at 15 % for 0.55 s. */
 	@media (prefers-reduced-motion: no-preference) {
 		.blink {
 			animation: blink 1.1s steps(1) infinite;
-		}
-		.rise {
-			animation: rise 0.34s cubic-bezier(0.2, 0.7, 0.2, 1) both;
-		}
-		.beacon {
-			animation: beacon 1.2s ease-in-out infinite alternate;
 		}
 	}
 }
@@ -316,21 +322,5 @@
 @keyframes blink {
 	50% {
 		opacity: 0.15;
-	}
-}
-
-@keyframes beacon {
-	from {
-		fill: var(--color-held);
-	}
-	to {
-		fill: var(--color-held-bd);
-	}
-}
-
-@keyframes rise {
-	from {
-		opacity: 0;
-		transform: translateY(10px);
 	}
 }

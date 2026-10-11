@@ -14,6 +14,7 @@ export function useTooltips() {
 			clearTimeout(timer);
 			target = null;
 			tip.style.opacity = "0";
+			tip.style.transform = "translateY(3px)";
 		};
 		const show = (t: Element) => {
 			const text = t.getAttribute("data-tip");
@@ -30,6 +31,7 @@ export function useTooltips() {
 			tip.style.left = `${x}px`;
 			tip.style.top = `${y}px`;
 			tip.style.opacity = "1";
+			tip.style.transform = "translateY(0)";
 		};
 		const tipped = (e: Event) =>
 			e.target instanceof Element ? e.target.closest("[data-tip]") : null;

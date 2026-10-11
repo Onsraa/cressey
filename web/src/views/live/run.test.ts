@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Legs, Run, Step } from "@/api/types";
-import { heat, place, pulse, triangle } from "./geometry";
-import { argsText, carried, originText, rows } from "./run";
+import { layout, pos } from "./pixels";
+import { agg, bar, callText, carried, originText, RAMP, rows } from "./run";
 
 const step = (
 	n: number,
@@ -56,12 +56,6 @@ const run = (extra: Partial<Run> = {}): Run => ({
 	...extra,
 });
 
-const legs = (p: number, o: number, r: number): Legs => ({
-	pressure: { score: p, confirmed: false, facts: [] },
-	opportunity: { score: o, confirmed: false, facts: [] },
-	rationalization: { score: r, confirmed: false, facts: [] },
-});
-
 describe("rows", () => {
 	test("a message said after k calls comes before call #k+1, the report last", () => {
 		const r = run({
@@ -86,24 +80,25 @@ describe("rows", () => {
 	});
 });
 
-describe("arguments", () => {
+describe("a call as the design writes it", () => {
 	const r = run();
-	test("pairs, each secret by its name", () => {
-		expect(argsText(r, r.steps[2].args)).toBe(
-			"query: DELETE FROM users, key: ‹DB_PROD_KEY›",
+	const as = (args: string) => callText(r, step(9, "tool", args));
+	test("the tool, then its arguments, each secret by its name", () => {
+		expect(callText(r, r.steps[2])).toBe(
+			'run_sql {query: "DELETE FROM users", key: ‹DB_PROD_KEY›}',
 		);
-		expect(argsText(r, r.steps[2].args, "\n")).toBe(
-			"query: DELETE FROM users\nkey: ‹DB_PROD_KEY›",
+		expect(as('{"cmd": "echo [secret:0a1b2c3d4e5f]"}')).toBe(
+			'tool {cmd: "echo ‹DB_PROD_KEY›"}',
 		);
 	});
 	test("not a JSON object: as served, markers still named", () => {
-		expect(argsText(r, "[1, 2]")).toBe("[1, 2]");
-		expect(argsText(r, "rm [secret:0a1b2c3d4e5f]")).toBe("rm ‹DB_PROD_KEY›");
-		expect(argsText(r, "[secret:ffffffffffff]")).toBe("‹secret›");
+		expect(as("[1, 2]")).toBe("tool [1, 2]");
+		expect(as("rm [secret:0a1b2c3d4e5f]")).toBe("tool rm ‹DB_PROD_KEY›");
+		expect(as("[secret:ffffffffffff]")).toBe("tool ‹secret›");
 	});
 	test("non-string values stay JSON", () => {
-		expect(argsText(r, '{"n": 2, "to": ["a@example.test"]}')).toBe(
-			'n: 2, to: ["a@example.test"]',
+		expect(as('{"n": 2, "to": ["a@example.test"]}')).toBe(
+			'tool {n: 2, to: ["a@example.test"]}',
 		);
 	});
 });
@@ -132,40 +127,71 @@ describe("secrets", () => {
 });
 
 describe("triangle", () => {
-	const t = triangle(600, 500);
-	const centre = {
-		x: (t.pressure.x + t.opportunity.x + t.rationalization.x) / 3,
-		y: (t.pressure.y + t.opportunity.y + t.rationalization.y) / 3,
-	};
-	test("a call sits at the barycentre of its scores", () => {
-		for (const p of [place(t, legs(0, 0, 0)), place(t, legs(0.4, 0.4, 0.4))]) {
-			expect(p.x).toBeCloseTo(centre.x);
-			expect(p.y).toBeCloseTo(centre.y);
+	const t = layout(600, 500);
+	const centre = [
+		(t.P[0] + t.O[0] + t.R[0]) / 3,
+		(t.P[1] + t.O[1] + t.R[1]) / 3,
+	];
+	const at = (p: number, o: number, r: number) => pos(t, { p, o, r });
+	test("an equilateral triangle, centred, with room for the labels", () => {
+		expect(t.P[0]).toBe(300);
+		expect(t.O[1]).toBe(t.R[1]);
+		expect(t.R[0] - t.O[0]).toBeCloseTo(t.s);
+		expect(t.P[1]).toBeGreaterThanOrEqual(62);
+	});
+	test("equal scores, or none at all, land in the centre", () => {
+		for (const p of [at(0, 0, 0), at(0.4, 0.4, 0.4)]) {
+			expect(p[0]).toBeCloseTo(centre[0]);
+			expect(p[1]).toBeCloseTo(centre[1]);
 		}
-		expect(place(t, legs(0.7, 0, 0))).toEqual(t.pressure);
-		expect(place(t, legs(0, 0.5, 0.5)).y).toBeCloseTo(t.opportunity.y);
 	});
-	test("a landing pulse: a hot ring leaves the point, then cools away", () => {
-		const p = { x: 105, y: 105 }; // the centre of cell (10, 10)
-		const reach = (cells: { q: number; r: number }[]) =>
-			Math.max(...cells.map((c) => Math.hypot(c.q - 10, c.r - 10)));
-		const hottest = (cells: { band: number }[]) =>
-			Math.max(...cells.map((c) => c.band));
-		const early = pulse(p, 0.1);
-		const later = pulse(p, 0.4);
-		expect(hottest(early)).toBe(3);
-		expect(reach(later)).toBeGreaterThan(reach(early));
-		expect(later.some((c) => c.q === 10 && c.r === 10)).toBe(false);
-		expect(hottest(later)).toBeLessThan(3);
-		expect(pulse(p, 1)).toEqual([]);
+	test("a call is pulled toward its strongest leg, never onto the vertex", () => {
+		const [x, y] = at(0.7, 0, 0);
+		expect(x).toBeCloseTo(t.P[0]);
+		expect(y).toBeGreaterThan(t.P[1]);
+		expect(y).toBeLessThan(centre[1]);
+		expect(at(0, 0.5, 0.5)[1]).toBeGreaterThan(centre[1]);
 	});
-	test("only a held call's heat is salmon", () => {
-		const at = place(t, legs(1, 1, 1));
-		expect(
-			heat(t, 600, 500, [{ at, score: 1, held: false }], 1).some((c) => c.hot),
-		).toBe(false);
-		expect(
-			heat(t, 600, 500, [{ at, score: 1, held: true }], 1).some((c) => c.hot),
-		).toBe(true);
+});
+
+describe("the gauges", () => {
+	const leg = (score: number, confirmed = false, facts: string[] = []) => ({
+		score,
+		confirmed,
+		facts,
+	});
+	const scored = (n: number, l: Legs) => ({
+		step: step(n, "t", "{}"),
+		legs: l,
+	});
+	test("each leg's highest score, confirmed once, facts from their first step", () => {
+		const a = agg([
+			scored(1, {
+				pressure: leg(0.8, true, ["deadline"]),
+				opportunity: leg(0.2),
+				rationalization: leg(0),
+			}),
+			scored(2, {
+				pressure: leg(0.5, false, ["deadline", "2 failures"]),
+				opportunity: leg(0.9),
+				rationalization: leg(0),
+			}),
+		]);
+		expect(a.pressure.score).toBe(0.8);
+		expect(a.pressure.confirmed).toBe(true);
+		expect(a.pressure.facts).toEqual([
+			{ t: "deadline", at: "step 1" },
+			{ t: "2 failures", at: "step 2" },
+		]);
+		expect(a.opportunity.score).toBe(0.9);
+		expect(a.opportunity.confirmed).toBe(false);
+	});
+	test("a bar fills up to the score, darker toward its end", () => {
+		const b = bar(0.5, 10);
+		expect(b.filter(Boolean)).toHaveLength(5);
+		expect(b[0]).toBe(RAMP[1]);
+		expect(b[4]).toBe(RAMP[2]);
+		expect(b[5]).toBeNull();
+		expect(bar(1, 10)[9]).toBe(RAMP[4]);
 	});
 });

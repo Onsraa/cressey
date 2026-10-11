@@ -21,7 +21,7 @@ export const ms = (v: number | null) =>
 
 export const seconds = (v: number) => num(v / 1000, 1);
 
-export const day = (iso: string) => new Date(iso).toLocaleDateString("en-US");
+export const day = (iso: string) => iso.slice(0, 10); // 2026-10-10
 
 // The share of sessions held; a report with no session of a kind shows 0.
 export const share = (held: number, total: number) =>

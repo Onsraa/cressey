@@ -1,193 +1,134 @@
-import type { LegName, Run } from "@/api/types";
-import { LEGS } from "@/lib/labels";
-import { scored, tipOf } from "./run";
-import { useSize } from "./ui";
+import type { ChartConfiguration } from "chart.js";
+import { useCallback, useEffect, useRef } from "react";
+import { Chart as ChartJS } from "@/lib/chart";
+import { fmt, type Scored } from "./run";
 
-// Room for the axis labels and the “HELD” marks.
-const PAD = { left: 38, right: 8, top: 22, bottom: 24 };
-const TICKS = [0, 0.25, 0.5, 0.75, 1];
-const LABEL_W = 34; // the room an x label needs, so that a long run thins them out
-const DOT = 7;
-const BAND = 16; // the held mark's width
+type Line = ChartJS<"line", number[], string>;
 
-// Each leg also has its own dash and point shape: colour is never the only signal.
-const DASH: Record<LegName, string | undefined> = {
-	pressure: undefined,
-	opportunity: "6 4",
-	rationalization: "2 3",
-};
-
-export function Chart({ run }: { run: Run }) {
-	const { ref, w, h } = useSize();
-	const calls = scored(run);
-	const pw = w - PAD.left - PAD.right;
-	const ph = h - PAD.top - PAD.bottom;
-	const dx = pw / Math.max(1, calls.length);
-	const X = (i: number) => PAD.left + (i + 0.5) * dx;
-	const Y = (v: number) => PAD.top + (1 - v) * ph;
-	const every = Math.ceil(LABEL_W / dx);
-	return (
-		<div className="absolute inset-[20px_22px_14px] flex flex-col gap-1">
-			<div className="flex flex-wrap justify-end gap-x-3.5 gap-y-1 font-mono text-[11px] text-mute">
-				{LEGS.map((g) => (
-					<span key={g.k} className="inline-flex items-center gap-1.5">
-						<svg width={18} height={4} aria-hidden="true">
-							<line
-								x1={0}
-								x2={18}
-								y1={2}
-								y2={2}
-								strokeWidth={2}
-								strokeDasharray={DASH[g.k]}
-								style={{ stroke: g.color }}
-							/>
-						</svg>
-						{g.L} · {g.name}
-					</span>
-				))}
-			</div>
-			<div ref={ref} className="relative min-h-0 flex-1">
-				{w > 0 && (
-					<svg
-						width={w}
-						height={h}
-						role="img"
-						aria-label="Pressure, opportunity and rationalization at each call, with the held call marked"
-						className="absolute inset-0 font-mono text-[11px]"
-					>
-						{calls.map((c, i) =>
-							c.step.held_until ? (
-								<g key={c.step.n}>
-									<rect
-										x={X(i) - BAND / 2}
-										y={PAD.top}
-										width={BAND}
-										height={ph}
-										className="fill-held"
-									/>
-									<text
-										x={X(i)}
-										y={PAD.top - 6}
-										textAnchor="middle"
-										className="fill-held-fg font-pixel text-[17px]"
-									>
-										HELD
-									</text>
-								</g>
-							) : null,
-						)}
-						{TICKS.map((v) => (
-							<g key={v}>
-								<line
-									x1={PAD.left}
-									x2={w - PAD.right}
-									y1={Y(v)}
-									y2={Y(v)}
-									className="stroke-grey"
-								/>
-								<text
-									x={PAD.left - 6}
-									y={Y(v)}
-									textAnchor="end"
-									dominantBaseline="middle"
-									className="fill-mute"
-								>
-									{v.toFixed(2)}
-								</text>
-							</g>
-						))}
-						<path
-							d={`M${PAD.left} ${PAD.top}V${PAD.top + ph}H${w - PAD.right}`}
-							fill="none"
-							className="stroke-ink"
-						/>
-						{LEGS.map((g) => (
-							<polyline
-								key={g.k}
-								points={calls
-									.map((c, i) => `${X(i)},${Y(c.legs[g.k].score)}`)
-									.join(" ")}
-								fill="none"
-								strokeWidth={g.k === "rationalization" ? 2 : 1.8}
-								strokeDasharray={DASH[g.k]}
-								style={{ stroke: g.color }}
-							/>
-						))}
-						{calls.map((c, i) => (
-							<g key={c.step.n}>
-								{LEGS.map((g) => (
-									<Dot
-										key={g.k}
-										leg={g.k}
-										x={X(i)}
-										y={Y(c.legs[g.k].score)}
-										color={g.color}
-									/>
-								))}
-							</g>
-						))}
-						{calls.map((c, i) =>
-							i % every === 0 ? (
-								<text
-									key={c.step.n}
-									x={X(i)}
-									y={h - 6}
-									textAnchor="middle"
-									className="fill-mute"
-								>
-									#{c.step.n}
-								</text>
-							) : null,
-						)}
-						{calls.map((c, i) => (
-							<rect
-								key={c.step.n}
-								x={X(i) - dx / 2}
-								y={PAD.top}
-								width={dx}
-								height={ph}
-								fill="transparent"
-								data-tip={tipOf(c)}
-							/>
-						))}
-					</svg>
-				)}
-			</div>
-		</div>
-	);
+// The design's legsCfg: one line per leg, each with its own dash and point so colour is
+// never the only signal, and the held call marked with a salmon band.
+function config(hold: {
+	at: number;
+}): ChartConfiguration<"line", number[], string> {
+	const line = (label: string, color: string, more: object) => ({
+		label,
+		data: [],
+		borderColor: color,
+		borderWidth: 1.8,
+		pointStyle: "rect" as const,
+		pointRadius: 3.5,
+		pointHoverRadius: 5,
+		pointBackgroundColor: color,
+		pointBorderColor: color,
+		tension: 0,
+		fill: false,
+		...more,
+	});
+	return {
+		type: "line",
+		data: {
+			labels: [],
+			datasets: [
+				line("P · Pressure", "#3D64D8", {}),
+				line("O · Opportunity", "#0E8F86", {
+					borderDash: [6, 4],
+					pointBackgroundColor: "#FEFEFE",
+				}),
+				line("R · Rationalization", "#8A55D1", {
+					borderDash: [2, 3],
+					borderWidth: 2,
+					pointStyle: "triangle",
+					pointRadius: 4.5,
+				}),
+			],
+		},
+		options: {
+			responsive: true,
+			maintainAspectRatio: false,
+			interaction: { mode: "index", intersect: false },
+			scales: {
+				y: {
+					min: 0,
+					max: 1,
+					ticks: { stepSize: 0.25 },
+					grid: { color: "#EDEDEB" },
+					border: { color: "#1E1E1E" },
+				},
+				x: { grid: { display: false }, border: { color: "#1E1E1E" } },
+			},
+			plugins: {
+				legend: {
+					display: true,
+					position: "top",
+					align: "end",
+					labels: { boxWidth: 18, boxHeight: 2, font: { size: 11 } },
+				},
+				tooltip: {
+					callbacks: {
+						label: (c) => `${c.dataset.label}: ${fmt(c.parsed.y ?? 0)}`,
+					},
+				},
+			},
+		},
+		plugins: [
+			{
+				id: "holdMark",
+				beforeDatasetsDraw: (ch) => {
+					if (hold.at < 0) return;
+					const x = ch.scales.x.getPixelForValue(hold.at);
+					const a = ch.chartArea;
+					const k = ch.ctx;
+					k.save();
+					k.fillStyle = "#FFD6CE";
+					k.fillRect(x - 8, a.top, 16, a.bottom - a.top);
+					k.fillStyle = "#1E1E1E";
+					k.font = "17px VT323, monospace";
+					k.textBaseline = "top";
+					k.fillText("HELD", Math.min(x + 11, a.right - 36), a.top + 2);
+					k.restore();
+				},
+			},
+		],
+	};
 }
 
-// P a square, O a hollow square, R a triangle, as in the design.
-function Dot({
-	leg,
-	x,
-	y,
-	color,
-}: {
-	leg: LegName;
-	x: number;
-	y: number;
-	color: string;
-}) {
-	const r = DOT / 2;
-	if (leg === "rationalization")
-		return (
-			<polygon
-				points={`${x},${y - r - 1} ${x + r + 1},${y + r} ${x - r - 1},${y + r}`}
-				style={{ fill: color }}
-			/>
-		);
+// Pressure, opportunity and rationalization at each scored call; new calls slide in.
+export function Chart({ calls }: { calls: Scored[] }) {
+	const chart = useRef<Line | null>(null);
+	const hold = useRef({ at: -1 });
+	const drawn = useRef("");
+	const ref = useCallback((el: HTMLCanvasElement | null) => {
+		if (!el) return;
+		const c = new ChartJS(el, config(hold.current));
+		chart.current = c;
+		drawn.current = "";
+		return () => {
+			c.destroy();
+			chart.current = null;
+		};
+	}, []);
+	useEffect(() => {
+		const c = chart.current;
+		const now = calls
+			.map(
+				({ step, legs }) =>
+					`${step.n}:${legs.pressure.score},${legs.opportunity.score},${legs.rationalization.score}:${Boolean(step.held_until)}`,
+			)
+			.join();
+		if (!c || now === drawn.current) return;
+		drawn.current = now;
+		c.data.labels = calls.map((x) => `#${x.step.n}`);
+		c.data.datasets[0].data = calls.map((x) => x.legs.pressure.score);
+		c.data.datasets[1].data = calls.map((x) => x.legs.opportunity.score);
+		c.data.datasets[2].data = calls.map((x) => x.legs.rationalization.score);
+		hold.current.at = calls.findIndex((x) => x.step.held_until);
+		c.update();
+	});
 	return (
-		<rect
-			x={x - r}
-			y={y - r}
-			width={DOT}
-			height={DOT}
-			strokeWidth={1.5}
-			style={{
-				fill: leg === "opportunity" ? "var(--color-surface)" : color,
-				stroke: color,
-			}}
+		<canvas
+			ref={ref}
+			role="img"
+			aria-label="Leg scores for each call, with the held call marked"
 		/>
 	);
 }

@@ -1,73 +1,9 @@
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import type { Step, StepStatus } from "@/api/types";
-import { Cells } from "@/components/Cells";
-import { type LEGS, RISK, STATUS, TONE } from "@/lib/labels";
+import type { ReactNode } from "react";
+import type { Step } from "@/api/types";
+import { type LEGS, RISK, type Shown, STATUS, TONE } from "@/lib/labels";
+import { bar } from "./run";
 
 export type LegLook = (typeof LEGS)[number];
-
-// The element's content box, kept up to date.
-export function useSize() {
-	const [size, setSize] = useState({ w: 0, h: 0 });
-	const ref = useCallback((el: HTMLElement | null) => {
-		if (!el) return;
-		const ro = new ResizeObserver(([e]) =>
-			setSize({ w: e.contentRect.width, h: e.contentRect.height }),
-		);
-		ro.observe(el);
-		return () => ro.disconnect();
-	}, []);
-	return { ref, ...size };
-}
-
-// Milliseconds since `key` last changed, counted on each frame until `ms`. Infinite on mount
-// and with reduced motion: nothing moves then.
-export function useAge(key: number, ms: number) {
-	const [start, setStart] = useState({ key, at: Number.NEGATIVE_INFINITY });
-	const [now, setNow] = useState(0);
-	if (start.key !== key)
-		setStart({
-			key,
-			at: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-				? Number.NEGATIVE_INFINITY
-				: performance.now(),
-		});
-	useEffect(() => {
-		if (start.at === Number.NEGATIVE_INFINITY) return;
-		let id = 0;
-		const tick = (ts: number) => {
-			setNow(ts);
-			if (ts - start.at < ms) id = requestAnimationFrame(tick);
-		};
-		id = requestAnimationFrame(tick);
-		return () => cancelAnimationFrame(id);
-	}, [start, ms]);
-	return Math.max(0, now - start.at);
-}
-
-// Cells as wide as their box: n cells and Cells' n - 1 one-pixel gaps.
-export function FitCells({
-	score,
-	color,
-	n,
-}: {
-	score: number;
-	color: string;
-	n: number;
-}) {
-	const { ref, w } = useSize();
-	return (
-		<div ref={ref} className="flex">
-			{w > 0 && (
-				<Cells
-					score={score}
-					color={color}
-					n={n}
-					size={Math.floor((w - (n - 1)) / n)}
-				/>
-			)}
-		</div>
-	);
-}
 
 // A leg's letter in its colour, filled once facts confirm the leg.
 export function Letter({
@@ -81,7 +17,7 @@ export function Letter({
 }) {
 	return (
 		<span
-			className="inline-flex flex-none items-center justify-center border-[1.2px] font-pixel leading-none"
+			className="inline-flex flex-none items-center justify-center border-[1.2px] font-pixel leading-none transition-[background-color,border-color,color] duration-300"
 			style={{
 				width: size,
 				height: size,
@@ -96,21 +32,57 @@ export function Letter({
 	);
 }
 
+const EMPTY = "#d6d6d3"; // an empty cell's outline
+
+// The design's pixel bar: n cells up to the score, darker toward its end.
+export function Bar({
+	score,
+	n,
+	h,
+	className = "",
+}: {
+	score: number;
+	n: number;
+	h: number;
+	className?: string;
+}) {
+	return (
+		<span
+			aria-hidden="true"
+			className={`grid gap-0.5 ${className}`}
+			style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+		>
+			{bar(score, n).map((c, i) => (
+				<span
+					// biome-ignore lint/suspicious/noArrayIndexKey: a cell is its position
+					key={i}
+					className="transition-[background-color] duration-[350ms]"
+					style={{
+						height: h,
+						background: c ?? "var(--color-surface)",
+						boxShadow: `inset 0 0 0 1px ${c ? "transparent" : EMPTY}`,
+					}}
+				/>
+			))}
+		</span>
+	);
+}
+
 const chip =
-	"inline-flex flex-none items-center gap-1 whitespace-nowrap border font-mono";
+	"inline-flex flex-none items-center gap-1 whitespace-nowrap border font-mono text-[11px]";
 
 export function StatusChip({
 	status,
 	tall,
 }: {
-	status: StepStatus;
+	status: Shown;
 	tall?: boolean;
 }) {
 	const { label, Icon, tone, tip } = STATUS[status];
 	return (
 		<span
 			data-tip={tip}
-			className={`${chip} text-[11px] ${tall ? "h-[22px] px-[7px]" : "h-5 px-1.5"} ${TONE[tone]}`}
+			className={`${chip} ${tall ? "h-[22px] px-[7px]" : "h-5 px-1.5"} ${TONE[tone]}`}
 		>
 			<Icon size={11} />
 			{label}
@@ -118,45 +90,31 @@ export function StatusChip({
 	);
 }
 
-export function RiskChip({
-	risk,
-	tall,
-}: {
-	risk: Step["risk"];
-	tall?: boolean;
-}) {
+export function RiskChip({ risk }: { risk: Step["risk"] }) {
 	const { label, Icon, tone } = RISK[risk];
 	return (
-		<span
-			className={`${chip} ${tall ? "h-[22px] px-[7px] text-[11px]" : "h-[18px] px-[5px] text-[10.5px]"} ${TONE[tone]}`}
-		>
-			<Icon size={tall ? 11 : 10} />
+		<span className={`${chip} h-[22px] px-[7px] ${TONE[tone]}`}>
+			<Icon size={11} />
 			{label}
 		</span>
 	);
 }
 
-export function AgentText() {
-	return (
-		<span
-			data-tip="Agent text: untrusted, shown as plain text"
-			className={`${chip} h-[18px] border-line-2 px-[5px] text-[10.5px] text-mute-2`}
-		>
-			agent text
-		</span>
-	);
-}
-
+// A small mono caption over a block: « arguments », « attempted »…
 export function Labeled({
 	label,
+	tip,
 	children,
 }: {
 	label: string;
+	tip?: string;
 	children: ReactNode;
 }) {
 	return (
 		<div className="flex flex-col gap-1.5">
-			<span className="label">{label}</span>
+			<span data-tip={tip} className="label self-start">
+				{label}
+			</span>
 			{children}
 		</div>
 	);

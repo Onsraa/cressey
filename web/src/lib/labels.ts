@@ -1,21 +1,3 @@
-import type { LucideIcon } from "lucide-react";
-import {
-	Ban,
-	BellRing,
-	Check,
-	ChevronsUp,
-	CirclePause,
-	Eye,
-	Hourglass,
-	Pause,
-	Pencil,
-	Plug,
-	SquareCheck,
-	Trash,
-	TriangleAlert,
-	Webhook,
-	X,
-} from "lucide-react";
 import type {
 	Incident,
 	LegName,
@@ -25,6 +7,23 @@ import type {
 	Step,
 	StepStatus,
 } from "@/api/types";
+import {
+	Ban,
+	Bell,
+	Check,
+	ChevronsUp,
+	CirclePause,
+	CircleX,
+	Eye,
+	Hourglass,
+	type IconType,
+	Pause,
+	Pencil,
+	SquareCheck,
+	Trash2,
+	TriangleAlert,
+	X,
+} from "@/components/icons";
 
 // The interface is in English; every label the views show lives here.
 
@@ -55,21 +54,24 @@ export const LEGS: {
 	},
 ];
 
-type Look = { label: string; Icon: LucideIcon; tone: Tone; tip: string };
+type Look = { label: string; Icon: IconType; tone: Tone; tip: string };
 
-// A step's status. Rejected and refused are safe outcomes, hence green, as in the design.
-export const STATUS: Record<StepStatus, Look> = {
+// A step's status, as the design's ST map. Rejected and refused are safe outcomes, hence
+// green. « failed » is no status of its own: an allowed call that returned an error.
+export type Shown = StepStatus | "failed";
+
+export const STATUS: Record<Shown, Look> = {
 	allowed: {
 		label: "allowed",
 		Icon: Check,
 		tone: "ok",
-		tip: "Allowed: passed through as is",
+		tip: "Allowed: went straight through",
 	},
 	alerted: {
 		label: "alerted",
-		Icon: BellRing,
+		Icon: Bell,
 		tone: "warn",
-		tip: "Alerted: the response is “Alert”, the call went through and an incident is open",
+		tip: "Alerted: the call went through, an incident is open",
 	},
 	held: {
 		label: "held",
@@ -81,13 +83,13 @@ export const STATUS: Record<StepStatus, Look> = {
 		label: "approved",
 		Icon: SquareCheck,
 		tone: "warn",
-		tip: "Approved by a human, then run",
+		tip: "Approved by a human, then executed",
 	},
 	rejected: {
 		label: "rejected",
 		Icon: X,
 		tone: "ok",
-		tip: "Rejected by a human: not run",
+		tip: "Rejected by a human: not executed",
 	},
 	expired: {
 		label: "expired",
@@ -99,20 +101,29 @@ export const STATUS: Record<StepStatus, Look> = {
 		label: "refused",
 		Icon: Ban,
 		tone: "ok",
-		tip: "Refused by Cressey, without waiting",
+		tip: "Refused outright by Cressey, without waiting",
 	},
 	would_hold: {
 		label: "would have been held",
 		Icon: CirclePause,
-		tone: "held",
-		tip: "Replay: this call would have been held, and the replay fails",
+		tone: "grey",
+		tip: "Replay: would have been held against the real policy",
+	},
+	failed: {
+		label: "failed",
+		Icon: CircleX,
+		tone: "grey",
+		tip: "Failed: the call returned an error",
 	},
 };
+
+export const shown = (s: Step): Shown =>
+	s.status === "allowed" && s.is_error ? "failed" : s.status;
 
 export const RISK: Record<Step["risk"], Omit<Look, "tip">> = {
 	read: { label: "read", Icon: Eye, tone: "grey" },
 	write: { label: "write", Icon: Pencil, tone: "warn" },
-	destructive: { label: "destructive", Icon: Trash, tone: "held" },
+	destructive: { label: "destructive", Icon: Trash2, tone: "held" },
 };
 
 export const SEVERITY: Record<Incident["severity"], Omit<Look, "tip">> = {
@@ -128,9 +139,9 @@ export const ROLE: Record<OwnerGuide["owner_role"], string> = {
 };
 
 export const GUIDE_STATUS: Record<OwnerGuide["status"], string> = {
-	pending: "writing the guide…",
-	ok: "ok",
-	unsure: "I don't know — ask the security team",
+	pending: "writing…",
+	ok: "ready",
+	unsure: "I don’t know",
 	unavailable: "unavailable",
 };
 
@@ -141,20 +152,9 @@ export const KIND: Record<Run["kind"], string> = {
 };
 
 // How a run's calls reach Cressey: the MCP proxy, or the Claude Code hook.
-export const VIA: Record<
-	"mcp" | "hook",
-	{ label: string; Icon: LucideIcon; tip: string }
-> = {
-	mcp: {
-		label: "via MCP",
-		Icon: Plug,
-		tip: "Calls reach Cressey through the MCP proxy",
-	},
-	hook: {
-		label: "via hook",
-		Icon: Webhook,
-		tip: "Calls reach Cressey through the Claude Code hook (shell, files, reasoning)",
-	},
+export const VIA: Record<"mcp" | "hook", string> = {
+	mcp: "via MCP",
+	hook: "via hook",
 };
 
 export const VISIBILITY: Record<Run["visibility"], string> = {
@@ -171,13 +171,21 @@ export const RESPONSE: Record<Responses["floor"], string> = {
 
 export const CHECK: Record<keyof Responses, string> = {
 	floor: "Safety floor",
-	trap_key: "Trap key",
+	trap_key: "Decoy key",
 	triangle: "Triangle",
-	fleet: "Signal across runs",
+	fleet: "Cross-run signal",
 };
 
 export const time = (iso?: string | null) =>
 	iso ? new Date(iso).toLocaleTimeString("en-GB") : ""; // 24-hour, shorter on a projector
+
+// The countdown to `until`, as the design's clock: “03:20”, rounded up.
+export function clock(until: string | null | undefined, now: number) {
+	const v = until
+		? Math.max(0, Math.ceil((Date.parse(until) - now) / 1000))
+		: 0;
+	return `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
+}
 
 // The checks currently on “Alert”: Cressey lets their calls through.
 export const onAlert = (r?: Responses) =>

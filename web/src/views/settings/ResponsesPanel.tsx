@@ -1,8 +1,8 @@
-import { SlidersHorizontal } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import { apiPut } from "@/api/client";
 import { useLive } from "@/api/live";
 import type { Responses } from "@/api/types";
+import { Hash, SlidersHorizontal } from "@/components/icons";
 import { CHECK, RESPONSE } from "@/lib/labels";
 
 type Response = Responses["floor"];
@@ -10,61 +10,62 @@ type Response = Responses["floor"];
 const ALL: readonly Response[] = ["alert", "review", "stop"];
 const NO_REVIEW: readonly Responses["fleet"][] = ["alert", "stop"];
 
-// shortcut: 240 s, 3 runs and 15 min mirror the backend defaults (CRESSEY_HOLD_TIMEOUT,
-// policy.yaml fleet), which the API doesn't serve; read them from /api/status once it does.
+// What each response does, as the design's POLOPT.
 const EFFECT: Record<Response, string> = {
 	alert: "the call goes through and an incident opens",
-	review: "the call waits for a human, safely cancelled after 240 s",
-	stop: "refused at once, run key suspended",
+	review: "the call waits for a human",
+	stop: "refused outright, run key suspended",
 };
 
-function Choice<T extends Response>({
-	label,
+// What each check watches for.
+// shortcut: 3 runs and 15 min mirror policy.yaml's fleet defaults, which the API doesn't
+// serve; read them from /api/status once it does.
+const WHAT: Record<keyof Responses, string> = {
+	floor: "destructive outside the mandate · protected or frozen path",
+	trap_key: "a decoy key was used",
+	triangle: "pressure + opportunity + rationalization",
+	fleet: "3 runs held on the same target within 15 min",
+};
+
+function Row<T extends Response>({
+	check,
 	value,
 	options,
 	pick,
 }: {
-	label: string;
+	check: keyof Responses;
 	value: T;
 	options: readonly T[];
 	pick: (v: T) => void;
 }) {
 	return (
-		<fieldset
-			aria-label={label}
-			className="flex flex-none border-[1.2px] border-ink"
-		>
-			{options.map((o) => (
-				<button
-					key={o}
-					type="button"
-					aria-pressed={o === value}
-					onClick={() => pick(o)}
-					className={`h-8 border-ink border-r-[1px] px-3 font-medium text-[13px] transition-[background-color,box-shadow] last:border-r-0 active:translate-y-px ${o === value ? "bg-ink text-surface" : "bg-surface hover:shadow-[inset_0_0_0_999px_rgba(30,30,30,.07)]"}`}
-				>
-					{RESPONSE[o]}
-				</button>
-			))}
-		</fieldset>
-	);
-}
-
-function Row({
-	check,
-	what,
-	children,
-}: {
-	check: keyof Responses;
-	what: string;
-	children: ReactNode;
-}) {
-	return (
-		<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-line border-b py-3.5">
-			<div className="flex min-w-[180px] flex-1 flex-col gap-0.5">
-				<span className="font-medium text-sm">{CHECK[check]}</span>
-				<span className="text-[13px] text-mute leading-[1.4]">{what}</span>
+		<div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-4 border-line border-b px-[18px] py-4">
+			<div className="flex min-w-0 flex-col gap-[3px]">
+				<span className="font-medium text-[14.5px]">{CHECK[check]}</span>
+				<span className="font-mono text-[11.5px] text-mute-2">
+					{WHAT[check]}
+				</span>
+				<span className="text-[12.5px] text-mute leading-[1.4]">
+					→ {EFFECT[value]}
+				</span>
 			</div>
-			{children}
+			<fieldset
+				aria-label={CHECK[check]}
+				className="flex flex-none border-[1.2px] border-ink"
+			>
+				{options.map((o) => (
+					<button
+						key={o}
+						type="button"
+						aria-pressed={o === value}
+						data-tip={EFFECT[o]}
+						onClick={() => pick(o)}
+						className={`press shade h-[34px] whitespace-nowrap border-ink border-r-[1px] px-[13px] font-medium text-[13px] ${o === value ? "bg-ink text-surface" : "bg-surface text-ink"}`}
+					>
+						{RESPONSE[o]}
+					</button>
+				))}
+			</fieldset>
 		</div>
 	);
 }
@@ -83,83 +84,60 @@ export function ResponsesPanel() {
 	};
 
 	return (
-		<section aria-label="What does Cressey do when…?" className="panel rise">
-			<div className="panel-head">
+		<section
+			data-anim
+			aria-label="What does Cressey do when…?"
+			className="flex-none border-[1.2px] border-ink bg-surface shadow-[0_1px_2px_rgba(30,30,30,.04),0_12px_28px_-18px_rgba(30,30,30,.22)]"
+		>
+			<div className="panel-head gap-2">
 				<SlidersHorizontal size={14} />
 				WHAT DOES CRESSEY DO WHEN…?
 			</div>
-			<div className="flex flex-col gap-4 px-5 pt-1.5 pb-5">
+			<div className="flex flex-col">
 				{r ? (
-					<div className="flex flex-col">
+					<>
 						<Row
 							check="floor"
-							what="destructive outside the mandate, protected or frozen path"
-						>
-							<Choice
-								label={CHECK.floor}
-								value={r.floor}
-								options={ALL}
-								pick={(floor) => save({ ...r, floor })}
-							/>
-						</Row>
+							value={r.floor}
+							options={ALL}
+							pick={(floor) => save({ ...r, floor })}
+						/>
 						<Row
 							check="trap_key"
-							what="a call carries a decoy key, even encoded"
-						>
-							<Choice
-								label={CHECK.trap_key}
-								value={r.trap_key}
-								options={ALL}
-								pick={(trap_key) => save({ ...r, trap_key })}
-							/>
-						</Row>
+							value={r.trap_key}
+							options={ALL}
+							pick={(trap_key) => save({ ...r, trap_key })}
+						/>
 						<Row
 							check="triangle"
-							what="a write, with rationalization confirmed alongside pressure or opportunity"
-						>
-							<Choice
-								label={CHECK.triangle}
-								value={r.triangle}
-								options={ALL}
-								pick={(triangle) => save({ ...r, triangle })}
-							/>
-						</Row>
+							value={r.triangle}
+							options={ALL}
+							pick={(triangle) => save({ ...r, triangle })}
+						/>
 						<Row
 							check="fleet"
-							what="3 runs held for the same target outside their mandate within 15 min. Alert: the banner shows; Stop: their calls to that target are refused"
-						>
-							<Choice
-								label={CHECK.fleet}
-								value={r.fleet}
-								options={NO_REVIEW}
-								pick={(fleet) => save({ ...r, fleet })}
-							/>
-						</Row>
-					</div>
+							value={r.fleet}
+							options={NO_REVIEW}
+							pick={(fleet) => save({ ...r, fleet })}
+						/>
+					</>
 				) : (
-					<p className="py-3 font-mono text-[13px] text-mute">
+					<p className="px-[18px] py-4 font-mono text-[13px] text-mute">
 						Reading the responses…
 					</p>
 				)}
-				<ul className="flex flex-col gap-1 text-[13px] leading-[1.4]">
-					{ALL.map((o) => (
-						<li key={o}>
-							<span className="font-medium">{RESPONSE[o]}</span>
-							<span className="text-mute">: {EFFECT[o]}</span>
-						</li>
-					))}
-				</ul>
-				<p className="font-mono text-[12px] text-mute-2 leading-[1.5]">
-					Every change is written to the log. Replays never stop for a human.
-				</p>
 				{error && (
 					<p
 						role="alert"
-						className="border border-held-bd bg-held px-2.5 py-1.5 text-[13px] text-held-fg"
+						className="mx-[18px] mt-3 border border-held-bd bg-held px-2.5 py-1.5 text-[13px] text-held-fg"
 					>
 						The change wasn't saved: {error}
 					</p>
 				)}
+				<span className="flex items-center gap-[7px] px-[18px] py-3 font-mono text-[11.5px] text-mute">
+					<Hash size={12} />A change applies live and is written to the event
+					log.
+				</span>
 			</div>
 		</section>
 	);
