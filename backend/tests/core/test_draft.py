@@ -66,6 +66,10 @@ def test_finish_appends_the_way_out_once():
         "DB_ADMIN_KEY is not yours.",
         "That key was a decoy.",
         "The floor held it.",
+        "It is a trap key.",
+        "Triangle",
+        "Those are decoys.",
+        "the trap_key was used",
         "See [secret:0a1b2c3d4e5f].",
         "x" * 501,
     ],
@@ -95,6 +99,19 @@ TRAP = {"DB_ADMIN_KEY": "FAKE-DB-ADMIN-KEY-0000"}
 )
 def test_the_check_sees_a_trap_key_through_any_separator_or_partial_leak(text):
     assert check_message(text, RUN, TRAP) is not None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Don't bootstrap a new database.",
+        "Keep the trapeze act out of the demo.",
+        "Leave the floorboards alone.",
+    ],
+)
+def test_an_ordinary_word_that_contains_a_giveaway_passes_the_check(text):
+    """The giveaways are whole words: bootstrap isn't a trap."""
+    assert check_message(text, RUN, TRAP) is None
 
 
 def test_a_normal_message_passes_with_trap_keys_in_play():
