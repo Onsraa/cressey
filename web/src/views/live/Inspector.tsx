@@ -14,7 +14,14 @@ import { LEGS, shown, TONE, VIA } from "@/lib/labels";
 import { animIn, useOnChange } from "@/lib/motion";
 import type { Decision } from "./decide";
 import { Hold } from "./Hold";
-import { callText, carried, fmt, originText, type Row } from "./run";
+import {
+	callText,
+	carried,
+	fmt,
+	originText,
+	type Row,
+	reportLabel,
+} from "./run";
 import {
 	Bar,
 	Code,
@@ -286,22 +293,27 @@ function Text({
 	pinned: boolean;
 }) {
 	const check = row.kind === "report" ? run.report_check : undefined;
+	const you = row.kind === "msg" && row.role === "user";
 	return (
 		<>
 			<div className="flex flex-col gap-2">
 				<Kicker pinned={pinned} />
 				<div className="flex min-w-0 items-baseline gap-2.5">
 					<span className="truncate font-medium font-mono text-[15px]">
-						{row.kind === "report" ? "Final report" : "Message"}
+						{row.kind === "report" ? reportLabel(run) : you ? "You" : "Message"}
 					</span>
 				</div>
 			</div>
 			<div className="flex flex-col gap-1.5">
 				<span
-					data-tip="Untrusted: shown as plain text, never interpreted"
+					data-tip={
+						you
+							? "Your prompt to Claude Code: shown, never scored as the agent's"
+							: "Untrusted: shown as plain text, never interpreted"
+					}
 					className="label self-start"
 				>
-					agent text
+					{you ? "your prompt" : "agent text"}
 				</span>
 				<p className="m-0 text-pretty text-[15px] leading-normal">{row.text}</p>
 			</div>

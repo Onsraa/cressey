@@ -9,25 +9,54 @@ import {
 } from "@/components/icons";
 import { KIND, TONE, type Tone, time, VISIBILITY } from "@/lib/labels";
 
-export type Phase = "waiting" | "running" | "held" | "ended";
+export type Phase =
+	| "waiting"
+	| "offline"
+	| "prompt"
+	| "thinking"
+	| "writing"
+	| "tool"
+	| "running"
+	| "held"
+	| "ended";
 
-// The design's run status: waiting for a first word from the agent, running, a call held,
-// or ended by the agent's final report.
+// The design's run status: no run yet, nothing arrived, a call held, or ended. Claude Code's
+// hooks tell its turn: waiting for a prompt, or working on one (thinking, writing, running a
+// tool). An MCP agent has no turns: it is running once it acts.
 export function phaseOf(run?: Run): Phase {
 	if (!run) return "waiting";
 	if (run.steps.some((s) => s.status === "held")) return "held";
 	if (run.ended_at) return "ended";
-	return run.steps.length || run.messages.length ? "running" : "waiting";
+	if (run.turn === "waiting") return "prompt";
+	if (run.turn === "working") {
+		if (run.steps.some((s) => s.running)) return "tool";
+		return run.messages.some((m) => m.streaming) ? "writing" : "thinking";
+	}
+	return run.steps.length || run.messages.length ? "running" : "offline";
 }
 
+// The agent is at work: the dot blinks and the inspector follows the newest row.
+export const busy = (p: Phase) =>
+	p === "running" || p === "thinking" || p === "writing" || p === "tool";
+
 // The chip keeps the ink text: only its fill and its outline change.
+const WORKING = { look: "border-ok-bd bg-ok", dot: "var(--color-ok-strong)" };
 const PHASE: Record<Phase, { label: string; look: string; dot: string }> = {
 	waiting: { label: "Waiting", look: "border-grey-bd bg-grey", dot: "#a3a3a0" },
-	running: {
-		label: "Running",
-		look: "border-ok-bd bg-ok",
+	offline: {
+		label: "Not connected",
+		look: "border-grey-bd bg-grey",
+		dot: "#a3a3a0",
+	},
+	prompt: {
+		label: "Waiting for prompt",
+		look: "border-grey-bd bg-grey",
 		dot: "var(--color-ok-strong)",
 	},
+	thinking: { label: "Thinking", ...WORKING },
+	writing: { label: "Writing", ...WORKING },
+	tool: { label: "Running tool", ...WORKING },
+	running: { label: "Running", ...WORKING },
 	held: { label: "Call held", look: "border-held-bd bg-held", dot: "#d9452b" },
 	ended: { label: "Ended", look: "border-grey-bd bg-grey", dot: "#5c5c5a" },
 };
@@ -86,9 +115,22 @@ export function Header({ run, phase }: { run?: Run; phase: Phase }) {
 	const { focusMode } = useLive();
 	const st = PHASE[phase];
 	const key = run && keyLook(run);
+	// A Claude Code run ends with its session; an MCP agent's, with its final report.
 	const startedTip = run?.ended_at
-		? `Started ${time(run.started_at)}\nEnded ${time(run.ended_at)}, final report received`
-		: "The run ends when the agent sends its final report.";
+		? `Started ${time(run.started_at)}\nEnded ${time(run.ended_at)}${run.turn ? ", session closed" : ", final report received"}`
+		: run?.turn
+			? "The run ends when the Claude Code session ends."
+			: "The run ends when the agent sends its final report.";
+	// Shown in focus mode too: the demo watches it.
+	const chip = (
+		<span className={`${CHIP} gap-1.5 border ${st.look}`}>
+			<span
+				className={`size-[7px] ${busy(phase) ? "blink" : ""}`}
+				style={{ background: st.dot }}
+			/>
+			{st.label}
+		</span>
+	);
 	return (
 		<header data-anim className="flex flex-none flex-wrap items-end gap-4">
 			<div className="flex min-w-0 flex-[1_1_420px] flex-col gap-[7px]">
@@ -110,13 +152,7 @@ export function Header({ run, phase }: { run?: Run; phase: Phase }) {
 									</span>
 								</>
 							)}
-							<span className={`${CHIP} gap-1.5 border ${st.look}`}>
-								<span
-									className={`size-[7px] ${phase === "running" ? "blink" : ""}`}
-									style={{ background: st.dot }}
-								/>
-								{st.label}
-							</span>
+							{chip}
 							{run && (
 								<>
 									<span
@@ -141,6 +177,7 @@ export function Header({ run, phase }: { run?: Run; phase: Phase }) {
 							)}
 						</>
 					)}
+					{focusMode && chip}
 					{key && (
 						<span
 							data-tip={key.tip}

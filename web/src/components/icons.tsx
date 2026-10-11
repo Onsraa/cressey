@@ -53,6 +53,7 @@ import {
 	Triangle as triangle,
 	TriangleAlert as triangleAlert,
 	Unplug as unplug,
+	UserRound as userRound,
 	Wrench as wrench,
 	X as x,
 } from "lucide";
@@ -496,5 +497,6 @@ export const Trash2 = make(trash2);
 export const Triangle = make(triangle);
 export const TriangleAlert = make(triangleAlert);
 export const Unplug = make(unplug);
+export const UserRound = make(userRound);
 export const Wrench = make(wrench);
 export const X = make(x);

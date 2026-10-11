@@ -31,6 +31,11 @@ const TABS: { k: CenterTab; label: string; tip: string }[] = [
 
 const STATUS: Record<Phase, string> = {
 	waiting: "idle",
+	offline: "idle",
+	prompt: "idle",
+	thinking: "live scoring",
+	writing: "live scoring",
+	tool: "live scoring",
 	running: "live scoring",
 	held: "triangle closed · call held",
 	ended: "run ended",
@@ -195,7 +200,7 @@ export function Center({
 							score={score}
 							hover={hover}
 						/>
-						{phase === "waiting" && <Waiting />}
+						{(phase === "waiting" || phase === "offline") && <Waiting />}
 					</>
 				) : (
 					<div data-pane className="absolute inset-[20px_22px_14px]">

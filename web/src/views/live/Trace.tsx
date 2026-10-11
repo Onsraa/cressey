@@ -8,6 +8,7 @@ import {
 	MessageSquare,
 	Terminal,
 	TriangleAlert,
+	UserRound,
 } from "@/components/icons";
 import { LEGS, STATUS, shown } from "@/lib/labels";
 import { revealRow, scrollToEnd } from "@/lib/motion";
@@ -19,6 +20,7 @@ import {
 	originText,
 	RAMP,
 	type Row,
+	reportLabel,
 } from "./run";
 import { StatusChip } from "./ui";
 
@@ -187,8 +189,9 @@ function TextRow({
 }) {
 	const { focusMode } = useLive();
 	const report = row.kind === "report";
+	const you = row.kind === "msg" && row.role === "user";
 	const check = report ? run?.report_check : undefined;
-	const Icon = report ? FileText : MessageSquare;
+	const Icon = report ? FileText : you ? UserRound : MessageSquare;
 	return (
 		<>
 			<span className="pt-px">
@@ -199,14 +202,18 @@ function TextRow({
 			<span className="flex min-w-0 flex-col gap-[3px]">
 				<span className="flex min-w-0 items-center gap-1.5">
 					<span className="truncate font-medium font-mono text-[12.5px]">
-						{report ? "Final report" : "Message"}
+						{report ? reportLabel(run) : you ? "You" : "Message"}
 					</span>
 					{!focusMode && (
 						<span
-							data-tip="Agent text: untrusted, shown as plain text"
+							data-tip={
+								you
+									? "Your prompt to Claude Code: shown, never scored as the agent's"
+									: "Agent text: untrusted, shown as plain text"
+							}
 							className="whitespace-nowrap font-mono text-[10.5px] text-mute-2"
 						>
-							agent text
+							{you ? "your prompt" : "agent text"}
 						</span>
 					)}
 					{check?.confirmed && (

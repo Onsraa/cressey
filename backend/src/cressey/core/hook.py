@@ -1,7 +1,8 @@
 """The agents' second way in: Claude Code's http hooks. The same decision as the MCP
 proxy's, run on every tool call before it runs (PreToolUse) and once it has (PostToolUse,
-PostToolUseFailure); the agent's reasoning streamed in live (MessageDisplay); the final
-report taken when the turn ends (Stop)."""
+PostToolUseFailure); the agent's reasoning streamed in live (MessageDisplay); the user's
+prompts (UserPromptSubmit); the report taken when a turn ends (Stop); the session's start
+and end (SessionStart, SessionEnd)."""
 
 from typing import Annotated
 
@@ -39,21 +40,36 @@ async def claude_hook(
 ) -> dict[str, JsonValue]:
     """One hook event, with the run's own key.
 
+    - Each Claude Code session on the key gets its own run: /clear starts a new session.
     - MessageDisplay streams a slice of the agent's reasoning; it grows one message live, so
       the dashboard shows it as it is produced and the next call's judgment reads it.
+    - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key.
     - PreToolUse gets Cressey's decision: nothing when the call may run, a deny with the way
       out when it may not.
     - PostToolUse / PostToolUseFailure record what the call returned and read the step.
-    - Stop ends the run with the agent's last message as its report, checked against the log.
+    - Stop takes the agent's last message as the report, checked against the log. It ends
+      the turn; the run ends with the session (SessionEnd). A run that never saw its
+      session start (a replay, older settings) has no other end: its Stop ends it.
     """
     runs: Runs = request.app.state.runs
     guard: Guard = request.app.state.guard
     run = runs.by_key(authorization.removeprefix("Bearer ").strip())
     if run is None:
         raise HTTPException(403)
-    runs.route(run, "hook")
     event = await request.json()
+    if session := event.get("session_id"):  # the replays send none
+        run = runs.for_session(run, str(session))
+    runs.route(run, "hook")
     kind = event["hook_event_name"]
+    if kind == "SessionStart":
+        runs.connect(run)
+        return {}
+    if kind == "SessionEnd":
+        runs.disconnect(run)
+        return {}
+    if kind == "UserPromptSubmit":
+        runs.prompt(run, event.get("prompt") or "")
+        return {}
     if kind == "MessageDisplay":
         runs.stream(
             run,
@@ -64,7 +80,11 @@ async def claude_hook(
         return {}
     if kind == "Stop":
         state = request.app.state
-        runs.end(run, event.get("last_assistant_message") or "(no final message)")
+        last = event.get("last_assistant_message") or "(no final message)"
+        if run.turn is None:
+            runs.end(run, last)
+        else:
+            runs.answered(run, last)
         runs.checked(run, await report_check(run, state.judge, state.thresholds))
         return {}
     name = event["tool_name"]

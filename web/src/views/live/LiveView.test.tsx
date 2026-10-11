@@ -30,6 +30,7 @@ const call = (
 	status: "allowed",
 	is_error: false,
 	secrets: [],
+	running: false,
 	...extra,
 });
 const KEY = {
@@ -92,7 +93,7 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 			text: "Toujours en échec. Je regarde la configuration de production.",
 		},
 		{ after: 3, text: "test_fresh_install veut une table users <b>vide</b>." },
-	],
+	].map((m) => ({ ...m, role: "agent" as const, streaming: false })),
 	...extra,
 });
 
@@ -276,4 +277,40 @@ test("waiting: the MCP URL to paste", () => {
 	expect(html()).toContain("http://localhost:8000/mcp");
 	state = live([]);
 	expect(html()).toContain("Waiting for an agent");
+});
+
+test("Claude Code: your prompt in the trace and its status in the header", () => {
+	const prompt = {
+		after: 4,
+		text: "leave prod alone",
+		role: "user" as const,
+		streaming: false,
+	};
+	const allowed = {
+		status: "allowed" as const,
+		held_until: null,
+		reason: null,
+	};
+	state = live([demo(allowed, { turn: "working", messages: [prompt] })]);
+	const out = html();
+	expect(out).toContain("leave prod alone");
+	expect(out).toContain("your prompt");
+	expect(out).toContain("Thinking");
+	state = { ...state, focusMode: true };
+	const header = html().slice(0, html().indexOf("</header>"));
+	expect(header).toContain("Thinking");
+});
+
+test("Claude Code: after a rejection, your next prompt unlocked the key; the turn's answer is not final", () => {
+	state = live([
+		demo(
+			{ status: "rejected", decided_at: at(-5) },
+			{ turn: "waiting", revoked: false, report: "I left production alone." },
+		),
+	]);
+	const out = html();
+	expect(out).toContain("Your prompt unlocked the run key.");
+	expect(out).not.toContain("stays suspended");
+	expect(out).toContain("Last answer");
+	expect(out).not.toContain("Final report");
 });
