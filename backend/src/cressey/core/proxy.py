@@ -21,7 +21,7 @@ from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
 from cressey.core.broker import scoped
-from cressey.core.draft import WAY_OUT, Drafter, check_message, fallback, finish
+from cressey.core.draft import STOP, WAY_OUT, Drafter, check_message, fallback, finish
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
@@ -219,15 +219,15 @@ class Guard(Middleware):
                 if run.kind == "replay":
                     raise held
             elif response == "stop":
-                run.revoked = (
-                    True  # as after a rejection: the rest of the run is denied
-                )
+                run.revoked = True  # the rest of the run is denied
                 self.runs.mark(run, step, "denied")
                 raise ToolError(f"Cressey: action refused. {WAY_OUT}")
             elif reason:
                 self._draft(run, step)
-                if not await self.runs.hold(run, step, self.hold_timeout):
-                    raise ToolError(f"Cressey: action held. {step.message or WAY_OUT}")
+                stop_after = self.policy.stuck.rejections
+                if not await self.runs.hold(run, step, self.hold_timeout, stop_after):
+                    told = f"Cressey: action held. {step.message or WAY_OUT}"
+                    raise ToolError(f"{told} {STOP}" if run.stopped else told)
             return step
         except BaseException:
             step.running = False  # refused: no result will come

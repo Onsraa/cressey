@@ -128,6 +128,7 @@ async def status(request: Request, runs: RunsDep) -> Status:
         model_mode=request.app.state.settings.model_mode,
         mcp_path=MCP_PATH,
         hook_path=HOOK_PATH,
+        stop_after=request.app.state.policy.stuck.rejections,
         log=LogHead(hash=head, count=count, intact=verify(runs.log.events) is None),
     )
 
@@ -210,6 +211,15 @@ async def eval_reports() -> list[EvalFile]:
             )
         )
     return files
+
+
+@router.post("/runs/{run_id}/unlock", status_code=204)
+async def unlock(run_id: str, runs: RunsDep) -> None:
+    """Give a stopped run its key back and reset the count of refused calls."""
+    run = runs.get(run_id)
+    if run is None:
+        raise HTTPException(404)
+    runs.unlock(run)
 
 
 @router.get("/holds")

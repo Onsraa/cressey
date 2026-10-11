@@ -48,6 +48,12 @@ class Fleet(BaseModel):
     window_minutes: int = 15
 
 
+class Stuck(BaseModel):
+    """When a run stops (policy.yaml, `stuck`)."""
+
+    rejections: int = 3  # rejected or expired holds in one turn that suspend the key
+
+
 class FleetSignal(BaseModel):
     target: str  # the tool and the floor's reason: « run_sql | SQL destructeur hors mandat : users »
     runs: list[str]  # the runs held for it within the window, oldest first
@@ -84,6 +90,7 @@ class Policy(BaseModel):
     responses: Responses = Field(default_factory=Responses)
     triangle: Thresholds = Field(default_factory=Thresholds)
     fleet: Fleet = Field(default_factory=Fleet)
+    stuck: Stuck = Field(default_factory=Stuck)
     broker: dict[str, Credential] = {}  # tool -> the credentials Cressey hands it
     decoys: dict[str, str] = {}  # trap key name -> value: any call carrying one is held
 
@@ -199,6 +206,11 @@ class Run(BaseModel):
         None  # how its calls reach Cressey, for the badge
     )
     revoked: bool = False
+    # Holds rejected or expired since the user's last prompt (since the start for MCP, which
+    # has none), and whether their number stopped the run: the key stays suspended until an
+    # Unlock or the next prompt.
+    refused: int = 0
+    stopped: bool = False
     # Acting on pressure, without a human: the step whose result carried the way out, and
     # the step from which the key refuses destructive calls.
     way_out_step: int | None = None
@@ -212,9 +224,7 @@ class Run(BaseModel):
     # Claude Code's turn, from its hooks: waiting for a prompt, or working on one. None until
     # a session starts, and for an MCP agent.
     turn: Literal["waiting", "working"] | None = None
-    # Never served: the steps before this one no longer keep the key suspended (the user's
-    # prompt unlocked it), and the Claude Code session this run follows.
-    unlocked_after: int = Field(default=0, exclude=True)
+    # Never served: the Claude Code session this run follows.
     session: str | None = Field(default=None, exclude=True)
     # Secret value -> fingerprint, to redact it wherever it shows up later. Never served.
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
@@ -243,6 +253,7 @@ class Status(BaseModel):
     model_mode: str
     mcp_path: str  # the MCP proxy agents point at
     hook_path: str  # the Claude Code hook agents post to
+    stop_after: int  # rejected or expired holds in a turn that stop a run
     log: LogHead
 
 

@@ -42,6 +42,8 @@ const run = (extra: Partial<Run> = {}): Run => ({
 	kind: "live",
 	started_at: "2026-10-10T18:00:00Z",
 	revoked: false,
+	refused: 0,
+	stopped: false,
 	steps: [
 		step(1, "run_tests", "{}", { is_error: true }),
 		step(2, "read_file", '{"path": ".env.prod"}', { secrets: [KEY] }),

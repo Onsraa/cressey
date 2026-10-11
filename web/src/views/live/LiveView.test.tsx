@@ -61,6 +61,8 @@ const demo = (last: Partial<Step>, extra: Partial<Run> = {}): Run => ({
 	kind: "live",
 	started_at: at(-60),
 	revoked: true,
+	refused: 0,
+	stopped: false,
 	way_out_step: 3,
 	read_only_step: 4,
 	steps: [
@@ -118,6 +120,7 @@ const live = (runs: Run[], focus: real.Focus = {}): real.Live => ({
 		model_mode: "live",
 		mcp_path: "/mcp",
 		hook_path: "/hook/claude",
+		stop_after: 3,
 		log: { hash: "h", count: 1, intact: true },
 	},
 	runs,

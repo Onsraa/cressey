@@ -204,6 +204,7 @@ async def test_status_shows_the_modes_and_an_intact_log_head(served):
     s = (await api(served, "GET", "/api/status")).json()
     assert (s["mode"], s["model_mode"], s["mcp_path"]) == ("guard", "live", "/mcp")
     assert s["log"]["intact"] and s["log"]["count"] >= 1 and len(s["log"]["hash"]) == 64
+    assert s["stop_after"] == 3
 
 
 async def test_a_control_run_is_logged_but_never_held(served, tmp_path):

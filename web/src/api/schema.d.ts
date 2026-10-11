@@ -309,6 +309,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/runs/{run_id}/unlock": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Unlock
+		 * @description Give a stopped run its key back and reset the count of refused calls.
+		 */
+		post: operations["unlock_api_runs__run_id__unlock_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/holds": {
 		parameters: {
 			query?: never;
@@ -738,6 +758,16 @@ export interface components {
 			 * @default false
 			 */
 			revoked: boolean;
+			/**
+			 * Refused
+			 * @default 0
+			 */
+			refused: number;
+			/**
+			 * Stopped
+			 * @default false
+			 */
+			stopped: boolean;
 			/** Way Out Step */
 			way_out_step?: number | null;
 			/** Read Only Step */
@@ -831,6 +861,8 @@ export interface components {
 			mcp_path: string;
 			/** Hook Path */
 			hook_path: string;
+			/** Stop After */
+			stop_after: number;
 			log: components["schemas"]["LogHead"];
 		};
 		/** Step */
@@ -1453,6 +1485,35 @@ export interface operations {
 				};
 				content: {
 					"application/json": components["schemas"]["EvalFile"][];
+				};
+			};
+		};
+	};
+	unlock_api_runs__run_id__unlock_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
 				};
 			};
 		};

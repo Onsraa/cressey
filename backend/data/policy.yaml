@@ -82,6 +82,11 @@ fleet:
   runs: 3
   window_minutes: 15
 
+# Rejected or expired holds in one turn (since the user's last prompt) that stop the run:
+# its key is suspended until an Unlock or the next prompt.
+stuck:
+  rejections: 3
+
 # The key broker: Cressey, not the agent, picks the credential each call gets. The read one
 # unless the mandate grants changes (may_destroy) or a human approved the call. Fake values.
 broker:

@@ -5,7 +5,7 @@ import asyncio
 
 import pytest
 
-from cressey.core.draft import WAY_OUT
+from cressey.core.draft import STOP, WAY_OUT
 from cressey.demo.tools import TRAP_KEY
 from tests.server import api, next_hold
 
@@ -82,10 +82,9 @@ async def test_a_command_carrying_a_trap_key_waits_for_a_human(served):
     assert "Declaring the task impossible" in out["permissionDecisionReason"]
     assert "trap" not in out["permissionDecisionReason"]  # never told why
     read = event("PreToolUse", "Read", "toolu_2", tool_input={"file_path": "README.md"})
-    after = (await hook(served, run["key"], read)).json()["hookSpecificOutput"]
-    assert "suspended" in after["permissionDecisionReason"]
+    assert (await hook(served, run["key"], read)).json() == {}  # one rejection steers
     statuses = [s["status"] for s in (await run_of(served, run))["steps"]]
-    assert statuses == ["rejected", "denied"]
+    assert statuses == ["rejected", "allowed"]
 
 
 async def test_a_trap_key_that_only_reads_is_flagged_and_one_that_writes_is_held(
@@ -113,12 +112,24 @@ async def test_a_trap_key_that_only_reads_is_flagged_and_one_that_writes_is_held
     assert len(incidents) == 2  # the first read, then the write: not one per read
 
 
-def trap_write() -> dict:
+def trap_write(call: str = "toolu_1") -> dict:
     """A PreToolUse event for a command that writes with a trap key: it is held."""
     curl = {
         "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
     }
-    return event("PreToolUse", "Bash", tool_input=curl)
+    return event("PreToolUse", "Bash", call, tool_input=curl)
+
+
+async def reject_trap_writes(base: str, run: dict, count: int) -> list[str]:
+    """`count` trap-key writes, each held and rejected: what the agent was told each time."""
+    told = []
+    for i in range(count):
+        held = asyncio.create_task(hook(base, run["key"], trap_write(f"toolu_w{i}")))
+        n = (await next_hold(base))["step"]["n"]
+        await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+        out = (await held).json()["hookSpecificOutput"]
+        told.append(out["permissionDecisionReason"])
+    return told
 
 
 async def test_a_rejection_with_a_reason_reaches_the_agent(served):
@@ -154,6 +165,26 @@ async def test_a_reason_that_names_the_trap_key_is_refused(served):
     await api(served, "POST", reject)
     out = (await held).json()["hookSpecificOutput"]
     assert out["permissionDecisionReason"] == f"Cressey: action held. {WAY_OUT}"
+
+
+async def test_the_third_rejection_in_a_turn_stops_the_agent_until_you_unlock(served):
+    run = await new_run(served)
+    first, second, third = await reject_trap_writes(served, run, 3)
+    assert STOP not in first + second
+    assert third == f"Cressey: action held. {WAY_OUT} {STOP}"
+    readme = {"file_path": "README.md"}
+    read = event("PreToolUse", "Read", "toolu_r", tool_input=readme)
+    refused = (await hook(served, run["key"], read)).json()["hookSpecificOutput"]
+    assert "suspended" in refused["permissionDecisionReason"]
+    got = await run_of(served, run)
+    assert (got["refused"], got["stopped"], got["revoked"]) == (3, True, True)
+    assert (await api(served, "POST", "/api/runs/nope/unlock")).status_code == 404
+    assert (
+        await api(served, "POST", f"/api/runs/{run['id']}/unlock")
+    ).status_code == 204
+    assert (await hook(served, run["key"], read)).json() == {}
+    got = await run_of(served, run)
+    assert (got["refused"], got["stopped"], got["revoked"]) == (0, False, False)
 
 
 async def test_a_reason_sent_after_the_hold_expired_finds_no_hold(served_short_holds):
@@ -276,18 +307,10 @@ async def test_your_prompt_shows_where_you_typed_it_even_mid_turn(served):
     ]
 
 
-async def test_your_next_prompt_unlocks_a_suspended_key(served):
+async def test_your_next_prompt_unlocks_a_stopped_run(served):
     run = await new_run(served)
     key = run["key"]
-    curl = {
-        "command": f'curl -s -X POST https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
-    }
-    held = asyncio.create_task(
-        hook(served, key, event("PreToolUse", "Bash", tool_input=curl))
-    )
-    n = (await next_hold(served))["step"]["n"]
-    await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
-    await held
+    await reject_trap_writes(served, run, 3)
     readme = {"file_path": "README.md"}
     refused = await hook(
         served, key, event("PreToolUse", "Read", "toolu_2", tool_input=readme)
@@ -299,7 +322,8 @@ async def test_your_next_prompt_unlocks_a_suspended_key(served):
     allowed = await hook(
         served, key, event("PreToolUse", "Read", "toolu_3", tool_input=readme)
     )
-    assert allowed.json() == {} and not (await run_of(served, run))["revoked"]
+    got = await run_of(served, run)
+    assert allowed.json() == {} and (got["revoked"], got["refused"]) == (False, 0)
 
 
 async def test_stop_ends_a_turn_and_session_end_ends_the_run(served):
