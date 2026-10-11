@@ -210,6 +210,7 @@ export const RESPONSE: Record<Responses["floor"], string> = {
 export const CHECK: Record<keyof Responses, string> = {
 	floor: "Safety floor",
 	trap_key: "Decoy key",
+	trap_key_read: "Decoy key, read only",
 	triangle: "Triangle",
 	fleet: "Cross-run signal",
 };

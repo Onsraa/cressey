@@ -102,7 +102,8 @@ function RunView({ run }: { run?: Run }) {
 	});
 
 	// T switches the centre view (not in focus mode, which shows the triangle only), R
-	// rejects, A approves (twice), Esc clears the selection. App handles 1–4 and F.
+	// rejects, Shift+R opens the reason box, A approves (twice), Esc clears the selection.
+	// App handles 1–4 and F.
 	useEffect(() => {
 		const key = (e: KeyboardEvent) => {
 			const t = e.target;
@@ -114,8 +115,12 @@ function RunView({ run }: { run?: Run }) {
 			const k = e.key.toLowerCase();
 			if (k === "t" && !focusMode)
 				setCenter((c) => (c === "triangle" ? "time" : "triangle"));
-			else if (k === "r" && pending) decision.reject();
-			else if (k === "a" && pending) decision.approve();
+			else if (k === "r" && pending) {
+				if (e.shiftKey) {
+					decision.compose(true, pending.draft);
+					setTab(null); // the hold
+				} else decision.reject();
+			} else if (k === "a" && pending) decision.approve();
 			else if (k === "escape") setSel(null);
 			else return;
 			if (k !== "escape") e.preventDefault();

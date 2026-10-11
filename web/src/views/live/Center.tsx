@@ -38,6 +38,7 @@ const STATUS: Record<Phase, string> = {
 	tool: "live scoring",
 	running: "live scoring",
 	held: "triangle closed · call held",
+	stopped: "run stopped",
 	ended: "run ended",
 };
 

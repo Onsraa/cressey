@@ -12,7 +12,7 @@ import {
 } from "@/components/icons";
 import { LEGS, SHADOW_TIP, shown, TONE, VIA } from "@/lib/labels";
 import { animIn, useOnChange } from "@/lib/motion";
-import type { Decision } from "./decide";
+import { type Decision, useUnlock } from "./decide";
 import { Hold } from "./Hold";
 import {
 	callText,
@@ -22,6 +22,7 @@ import {
 	type Row,
 	reportLabel,
 	shadowOf,
+	turnEvidence,
 } from "./run";
 import {
 	Bar,
@@ -101,6 +102,7 @@ export function Inspector({
 				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
+				{run?.stopped && <Stopped run={run} />}
 				{run && hold ? (
 					<Hold run={run} step={hold} incident={incident} decision={decision} />
 				) : focusMode ? (
@@ -133,6 +135,75 @@ export function Inspector({
 					</div>
 				)}
 			</div>
+		</section>
+	);
+}
+
+// Why the run stopped, from the turn that stopped it, and the way to let it go on.
+function Stopped({ run }: { run: Run }) {
+	const { refresh } = useLive();
+	const { busy, error, unlock } = useUnlock(run.id, refresh);
+	const { estimate, refused, failed, said } = turnEvidence(run);
+	const calls = (steps: Step[]) => (
+		<ul className="m-0 flex list-none flex-col gap-1 p-0">
+			{steps.map((s) => (
+				<li key={s.n} className="flex items-start gap-1.5">
+					<StatusChip status={shown(s)} />
+					<Code>{`#${s.n} ${callText(run, s)}`}</Code>
+				</li>
+			))}
+		</ul>
+	);
+	return (
+		<section
+			aria-label="Why the run stopped"
+			className="flex flex-col gap-3.5 border-held-bd border-b-[1.2px] bg-held p-5"
+		>
+			<h2 className="m-0 font-semibold text-[15px] leading-[1.3]">
+				No path within the mandate so far
+			</h2>
+			{!run.ended_at && (
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+					<button
+						type="button"
+						onClick={unlock}
+						disabled={busy}
+						className="btn btn-dark h-9 px-4"
+					>
+						Unlock
+					</button>
+					<span className="min-w-0 flex-1 text-[12.5px] leading-[1.4]">
+						Gives the agent its key back and resets the count.
+						{run.turn && " Your next prompt does the same."}
+					</span>
+				</div>
+			)}
+			{error && (
+				<span role="alert" className="text-[12.5px] text-held-fg">
+					{error}
+				</span>
+			)}
+			{estimate !== undefined && (
+				<Labeled label="estimated before the run">
+					<span className="text-[13px] leading-[1.4]">
+						The task can fail even when done honestly: {fmt(estimate)}
+					</span>
+				</Labeled>
+			)}
+			{refused.length > 0 && (
+				<Labeled label="refused this turn">{calls(refused)}</Labeled>
+			)}
+			{failed.length > 0 && (
+				<Labeled label="failed this turn">{calls(failed)}</Labeled>
+			)}
+			{said && (
+				<Labeled
+					label="the agent’s last words"
+					tip="Untrusted: shown as plain text, never interpreted"
+				>
+					<p className="m-0 text-pretty text-[13px] leading-[1.4]">{said}</p>
+				</Labeled>
+			)}
 		</section>
 	);
 }

@@ -23,6 +23,7 @@ const EFFECT: Record<Response, string> = {
 const WHAT: Record<keyof Responses, string> = {
 	floor: "destructive outside the mandate · protected or frozen path",
 	trap_key: "a decoy key was used",
+	trap_key_read: "a decoy key was used in a call that only reads",
 	triangle: "pressure + opportunity + rationalization",
 	fleet: "3 runs held on the same target within 15 min",
 };
@@ -107,6 +108,12 @@ export function ResponsesPanel() {
 							value={r.trap_key}
 							options={ALL}
 							pick={(trap_key) => save({ ...r, trap_key })}
+						/>
+						<Row
+							check="trap_key_read"
+							value={r.trap_key_read}
+							options={ALL}
+							pick={(trap_key_read) => save({ ...r, trap_key_read })}
 						/>
 						<Row
 							check="triangle"

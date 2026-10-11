@@ -310,6 +310,26 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/runs/{run_id}/unlock": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Unlock
+		 * @description Give a stopped run its key back and reset the count of refused calls.
+		 */
+		post: operations["unlock_api_runs__run_id__unlock_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 	"/api/holds": {
 		parameters: {
 			query?: never;
@@ -353,7 +373,11 @@ export interface paths {
 		};
 		get?: never;
 		put?: never;
-		/** Reject */
+		/**
+		 * Reject
+		 * @description Reject a held call, optionally with the reason the agent will read. The dashboard
+		 *     shows a checked draft, but the human may have edited it: it is checked again here.
+		 */
 		post: operations["reject_api_runs__run_id__steps__n__reject_post"];
 		delete?: never;
 		options?: never;
@@ -757,6 +781,14 @@ export interface components {
 			facts: string[];
 		};
 		/**
+		 * RejectIn
+		 * @description The reason a human gives the agent when they reject a held call.
+		 */
+		RejectIn: {
+			/** Message */
+			message?: string | null;
+		};
+		/**
 		 * Replay
 		 * @description « Rejouer ×5 »: a regression test of the policy and the fixes on scripted sessions,
 		 *     not proof of how a real agent behaves.
@@ -812,6 +844,12 @@ export interface components {
 			 */
 			trap_key: "alert" | "review" | "stop";
 			/**
+			 * Trap Key Read
+			 * @default alert
+			 * @enum {string}
+			 */
+			trap_key_read: "alert" | "review" | "stop";
+			/**
 			 * Triangle
 			 * @default review
 			 * @enum {string}
@@ -850,6 +888,16 @@ export interface components {
 			 * @default false
 			 */
 			revoked: boolean;
+			/**
+			 * Refused
+			 * @default 0
+			 */
+			refused: number;
+			/**
+			 * Stopped
+			 * @default false
+			 */
+			stopped: boolean;
 			/** Way Out Step */
 			way_out_step?: number | null;
 			/** Read Only Step */
@@ -964,6 +1012,8 @@ export interface components {
 			mcp_path: string;
 			/** Hook Path */
 			hook_path: string;
+			/** Stop After */
+			stop_after: number;
 			log: components["schemas"]["LogHead"];
 		};
 		/** Step */
@@ -1009,6 +1059,10 @@ export interface components {
 			held_until?: string | null;
 			/** Decided At */
 			decided_at?: string | null;
+			/** Draft */
+			draft?: string | null;
+			/** Message */
+			message?: string | null;
 			legs?: components["schemas"]["Legs"] | null;
 			/** Check Ms */
 			check_ms?: number | null;
@@ -1619,6 +1673,35 @@ export interface operations {
 			};
 		};
 	};
+	unlock_api_runs__run_id__unlock_post: {
+		parameters: {
+			query?: never;
+			header?: never;
+			path: {
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
 	list_holds_api_holds_get: {
 		parameters: {
 			query?: never;
@@ -1679,7 +1762,11 @@ export interface operations {
 			};
 			cookie?: never;
 		};
-		requestBody?: never;
+		requestBody?: {
+			content: {
+				"application/json": components["schemas"]["RejectIn"] | null;
+			};
+		};
 		responses: {
 			/** @description Successful Response */
 			204: {

@@ -23,6 +23,7 @@ import {
 	rows,
 	shadowOf,
 	strongestEvent,
+	turnEvidence,
 } from "./run";
 
 // A message's fields beyond its text, role and streaming: where the words come from, and the thoughts cut from them.
@@ -71,6 +72,8 @@ const run = (extra: Partial<Run> = {}): Run => ({
 	kind: "live",
 	started_at: "2026-10-10T18:00:00Z",
 	revoked: false,
+	refused: 0,
+	stopped: false,
 	steps: [
 		step(1, "run_tests", "{}", { is_error: true }),
 		step(2, "read_file", '{"path": ".env.prod"}', { secrets: [KEY] }),
@@ -435,5 +438,72 @@ describe("the run's status", () => {
 
 	test("an MCP agent, with no turns, is running once it acts", () => {
 		expect(phaseOf(run())).toBe("running");
+	});
+
+	test("a stopped run reads Stopped, after a held call and the end", () => {
+		expect(phaseOf(run({ stopped: true }))).toBe("stopped");
+		expect(phaseOf(run({ stopped: true, turn: "waiting" }))).toBe("stopped");
+		const ended = "2026-10-11T02:00:00Z";
+		expect(phaseOf(run({ stopped: true, ended_at: ended }))).toBe("ended");
+		const held = step(1, "Bash", "{}", { status: "held" });
+		expect(phaseOf(run({ stopped: true, steps: [held] }))).toBe("held");
+	});
+});
+
+describe("turnEvidence", () => {
+	const said = (after: number, text: string, role: "agent" | "user") => ({
+		after,
+		text,
+		role,
+		streaming: false,
+		...words,
+	});
+	const steps = [
+		step(1, "run_tests", "{}", { is_error: true }),
+		step(2, "run_sql", "{}", { status: "rejected" }),
+		step(3, "run_tests", "{}", { is_error: true }),
+		step(4, "run_sql", "{}", { status: "rejected" }),
+		step(5, "run_sql", "{}", { status: "expired" }),
+		step(6, "read_file", "{}"),
+	];
+	const scores = { impossible: 0.8, way_out: 0.2 };
+
+	test("keeps what failed or was refused after the last prompt, and the last words", () => {
+		const r = run({
+			steps,
+			preflight: { scores, facts: [] },
+			messages: [
+				said(0, "first prompt", "user"),
+				said(1, "before", "agent"),
+				said(2, "second prompt", "user"),
+				said(3, "middle", "agent"),
+				said(6, "no way through", "agent"),
+			],
+		});
+		const out = turnEvidence(r);
+		expect(out.refused.map((s) => s.n)).toEqual([4, 5]);
+		expect(out.failed.map((s) => s.n)).toEqual([3]);
+		expect(out.said).toBe("no way through");
+		expect(out.estimate).toBe(0.8);
+	});
+
+	test("with no prompt, the turn is the whole run", () => {
+		const out = turnEvidence(
+			run({ steps, messages: [said(1, "alone", "agent")] }),
+		);
+		expect(out.refused.map((s) => s.n)).toEqual([2, 4, 5]);
+		expect(out.failed.map((s) => s.n)).toEqual([1, 3]);
+		expect(out.said).toBe("alone");
+		expect(out.estimate).toBeUndefined();
+	});
+
+	test("the agent's last words are this turn's: none said, none shown", () => {
+		const out = turnEvidence(
+			run({
+				steps,
+				messages: [said(0, "old", "agent"), said(3, "prompt", "user")],
+			}),
+		);
+		expect(out.said).toBeUndefined();
 	});
 });

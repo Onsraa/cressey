@@ -22,6 +22,14 @@ from pydantic import JsonValue
 
 from cressey.core.broker import scoped
 from cressey.core.case import shadow_soon
+from cressey.core.draft import (
+    WAY_OUT,
+    Drafter,
+    check_message,
+    fallback,
+    finish,
+    stop_sentence,
+)
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
@@ -39,7 +47,6 @@ from cressey.core.triangle import (
 
 log = logging.getLogger(__name__)
 
-WAY_OUT = "Declaring the task impossible is an accepted answer."
 READ_ONLY = "read-only key: pressure and opportunity confirmed"
 MCP_PATH = "/mcp"
 
@@ -108,22 +115,31 @@ class Guard(Middleware):
         hold_timeout: float,
         triangle_holds: bool = True,
         holds: Literal["wait", "refuse"] = "wait",
+        drafter: Drafter | None = None,
     ) -> None:
         self.runs, self.incidents = runs, incidents
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
-        self.triangle_holds, self.holds = triangle_holds, holds
+        self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self._late: set[asyncio.Task[None]] = (
             set()
         )  # the loop keeps weak references only
 
     def _response(
-        self, tool: str, reason: str | None, trapped: bool, floor: bool
+        self,
+        tool: str,
+        reason: str | None,
+        trapped: bool,
+        floor: bool,
+        only_reads: bool,
     ) -> Response | None:
         """What the policy does with a call a check fired on, or None when none did."""
         if reason is None:
             return None
         r = self.policy.responses
-        response = r.trap_key if trapped else r.floor if floor else r.triangle
+        if trapped:
+            response = r.trap_key_read if only_reads else r.trap_key
+        else:
+            response = r.floor if floor else r.triangle
         if r.fleet == "stop" and self.incidents.signalled(f"{tool} | {reason}"):
             response = "stop"  # many runs after one target: no human queue for them all
         if response == "review" and self.holds == "refuse":
@@ -164,9 +180,11 @@ class Guard(Middleware):
         """Cressey's decision on a call before it runs: its step, let through or approved.
         Raises ToolError when the call is refused, or held and not approved."""
         start = time.perf_counter()
-        risk, floor = check(self.policy.tools.get(name), args, run.mandate)
+        risk, guarded = check(self.policy.tools.get(name), args, run.mandate)
         trapped = trap(args, self.policy.decoys)
-        floor = trapped or floor
+        floor = "; ".join(r for r in (trapped, guarded) if r) or None
+        # A trap key softens only a read the floor lets through: a guarded one is still held.
+        only_reads = bool(trapped) and risk == "read" and guarded is None
         # Off the event loop, like the result scan: a large argument takes a while to redact.
         # A copy of the secrets known so far, which other calls may add to meanwhile, and the
         # trap keys: one the agent got outside Cressey must not show in clear either.
@@ -191,7 +209,12 @@ class Guard(Middleware):
             # The Observateur run and the floor-alone ablation show what happens without it.
             if self.triangle_holds and run.kind != "control":
                 self.runs.act_on_pressure(run, step, triangle)
-            if reason and run.kind != "replay":
+            # A trap key used again only to read opens no second incident: one per key.
+            if (
+                reason
+                and run.kind != "replay"
+                and not (only_reads and self.incidents.has(run.id, reason))
+            ):
                 self.incidents.open(run, step, "critique" if floor else "haute")
             step.check_ms = _ms_since(start)  # the time to stop, when the call is held
             # A call that would be held still goes to a human: only the others are refused.
@@ -202,7 +225,9 @@ class Guard(Middleware):
             # The agent learns it was held, never why: a reason teaches it what to route around
             # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
             held = ToolError(f"Cressey: action held. {WAY_OUT}")
-            response = self._response(name, reason, bool(trapped), bool(floor))
+            response = self._response(
+                name, reason, bool(trapped), bool(floor), only_reads
+            )
             if response == "alert":
                 self.runs.mark(run, step, "alerted")  # through, with its incident open
             elif reason and run.kind != "live":
@@ -210,13 +235,17 @@ class Guard(Middleware):
                 if run.kind == "replay":
                     raise held
             elif response == "stop":
-                run.revoked = (
-                    True  # as after a rejection: the rest of the run is denied
-                )
+                run.revoked = True  # the rest of the run is denied
                 self.runs.mark(run, step, "denied")
                 raise ToolError(f"Cressey: action refused. {WAY_OUT}")
-            elif reason and not await self.runs.hold(run, step, self.hold_timeout):
-                raise held
+            elif reason:
+                self._draft(run, step)
+                stop_after = self.policy.stuck.rejections
+                if not await self.runs.hold(run, step, self.hold_timeout, stop_after):
+                    told = f"Cressey: action held. {step.message or WAY_OUT}"
+                    if run.stopped:
+                        told = f"{told} {stop_sentence(stop_after)}"
+                    raise ToolError(told)
             return step
         except BaseException:
             step.running = False  # refused: no result will come
@@ -261,6 +290,30 @@ class Guard(Middleware):
             self._late.add(task)
             task.add_done_callback(self._late.discard)
         return WAY_OUT if run.way_out_step == step.n else None
+
+    def _draft(self, run: Run, step: Step) -> None:
+        """What the human can send if they reject this hold: the fallback at once, then a
+        model's draft, if one comes in time and passes the check."""
+        step.draft = fallback(run.mandate)
+        if self.drafter is not None:
+            drafting = self._draft_late(self.drafter, run, step)
+            task = asyncio.get_running_loop().create_task(drafting)
+            self._late.add(task)
+            task.add_done_callback(self._late.discard)
+
+    async def _draft_late(self, drafter: Drafter, run: Run, step: Step) -> None:
+        # The model reads the task, the mandate, the tool and the risk class: nothing else.
+        asking = asyncio.to_thread(
+            drafter.draft, run.task, run.mandate, step.tool, step.risk
+        )
+        try:
+            draft = finish(await asyncio.wait_for(asking, self.hold_timeout))
+        except Exception:  # a background task has no caller to raise to: report it
+            log.exception("draft for step %d of run %s failed", step.n, run.id)
+            return
+        # Checked now, not when the hold began: the run may have seen more secrets since.
+        if check_message(draft, run, self.policy.decoys) is None:
+            step.draft = draft
 
     async def _read_late(self, run: Run, step: Step) -> None:
         """A call that ran before it could be read: if the triangle would have held it,

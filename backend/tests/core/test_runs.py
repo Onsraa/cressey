@@ -57,10 +57,22 @@ def _held_pair() -> tuple[Runs, Run, list[Step]]:
     return runs, run, calls
 
 
+async def _rejected(runs: Runs, run: Run, step: Step, stop_after: int = 3) -> None:
+    """A call held, then rejected by a human."""
+    wait = asyncio.create_task(runs.hold(run, step, 5, stop_after))
+    await asyncio.sleep(0)
+    assert runs.decide(run.id, step.n, False)
+    assert not await wait
+
+
+def _call(runs: Runs, run: Run) -> Step:
+    return runs.add_step(run, "run_sql", {"q": "x"}, "x", "destructive", "hors mandat")
+
+
 @pytest.mark.anyio
 async def test_approving_one_of_two_holds_keeps_the_key_until_the_other_is_decided():
     runs, run, calls = _held_pair()
-    waits = [asyncio.create_task(runs.hold(run, c, 5)) for c in calls]
+    waits = [asyncio.create_task(runs.hold(run, c, 5, 3)) for c in calls]
     await asyncio.sleep(0)
     assert runs.decide(run.id, 1, True)
     assert await waits[0]  # the approved call itself may run
@@ -70,34 +82,139 @@ async def test_approving_one_of_two_holds_keeps_the_key_until_the_other_is_decid
 
 
 @pytest.mark.anyio
-async def test_a_rejection_keeps_the_key_suspended_after_another_hold_is_approved():
+async def test_a_rejection_alone_leaves_the_key_usable():
     runs, run, calls = _held_pair()
-    waits = [asyncio.create_task(runs.hold(run, c, 5)) for c in calls]
+    wait = asyncio.create_task(runs.hold(run, calls[0], 5, 3))
+    await asyncio.sleep(0)
+    assert run.revoked  # while the call is held
+    assert runs.decide(run.id, 1, False)
+    assert not await wait
+    assert (run.revoked, run.refused, run.stopped) == (False, 1, False)
+
+
+@pytest.mark.anyio
+async def test_an_expiry_counts_as_a_refusal_and_an_approval_does_not():
+    runs, run, calls = _held_pair()
+    assert not await runs.hold(run, calls[0], 0.01, 3)  # nobody decides in time
+    assert (calls[0].status, run.refused) == ("expired", 1)
+    wait = asyncio.create_task(runs.hold(run, calls[1], 5, 3))
+    await asyncio.sleep(0)
+    assert runs.decide(run.id, 2, True)
+    assert await wait and (run.revoked, run.refused) == (False, 1)
+
+
+@pytest.mark.anyio
+async def test_the_third_rejection_stops_the_run_and_unlock_undoes_it():
+    runs, run, calls = _held_pair()
+    for step in calls:
+        await _rejected(runs, run, step)
+        assert not run.stopped and not run.revoked
+    await _rejected(runs, run, _call(runs, run))
+    assert (run.refused, run.stopped, run.revoked) == (3, True, True)
+    runs.unlock(run)
+    assert (run.refused, run.stopped, run.revoked) == (0, False, False)
+    unlocked = runs.log.events[-1]
+    assert (unlocked.kind, unlocked.data) == (
+        "unlocked",
+        {"run": run.id, "key": "cleared"},
+    )
+
+
+async def _cancelled(runs: Runs, run: Run, step: Step, stop_after: int = 3) -> None:
+    """A call held, then abandoned: its caller is cancelled."""
+    wait = asyncio.create_task(runs.hold(run, step, 5, stop_after))
+    await asyncio.sleep(0)
+    wait.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await wait
+
+
+@pytest.mark.anyio
+async def test_a_cancelled_hold_counts_as_expired_and_frees_the_key():
+    runs, run, calls = _held_pair()
+    await _cancelled(runs, run, calls[0])
+    assert calls[0].status == "expired"
+    assert (run.refused, run.stopped, run.revoked) == (1, False, False)
+
+
+@pytest.mark.anyio
+async def test_a_cancelled_third_hold_stops_the_run():
+    runs, run, calls = _held_pair()
+    await _rejected(runs, run, calls[0])
+    await _rejected(runs, run, calls[1])
+    await _cancelled(runs, run, _call(runs, run))
+    assert (run.refused, run.stopped, run.revoked) == (3, True, True)
+
+
+@pytest.mark.anyio
+async def test_unlock_leaves_the_key_suspended_while_a_call_is_held():
+    runs, run, calls = _held_pair()
+    wait = asyncio.create_task(runs.hold(run, calls[0], 5, 3))
+    await asyncio.sleep(0)
+    runs.unlock(run)
+    assert run.revoked
+    unlocked = runs.log.events[-1]  # a human's Unlock is logged either way
+    assert (unlocked.kind, unlocked.data) == (
+        "unlocked",
+        {"run": run.id, "key": "held"},
+    )
+    runs.decide(run.id, 1, True)
+    assert await wait and not run.revoked
+
+
+@pytest.mark.anyio
+async def test_two_parallel_holds_both_count_and_the_key_waits_for_both():
+    runs, run, calls = _held_pair()
+    waits = [asyncio.create_task(runs.hold(run, c, 5, 3)) for c in calls]
     await asyncio.sleep(0)
     assert runs.decide(run.id, 1, False)
     assert not await waits[0]
-    assert runs.decide(run.id, 2, True)
-    assert await waits[1] and run.revoked
+    assert run.revoked and run.refused == 1  # the second still waits for a human
+    assert runs.decide(run.id, 2, False)
+    assert not await waits[1]
+    assert (run.refused, run.revoked) == (2, False)
 
 
 @pytest.mark.anyio
 async def test_a_prompt_unlocks_the_key_but_not_while_a_call_is_held():
     runs, run, calls = _held_pair()
-    first = asyncio.create_task(runs.hold(run, calls[0], 5))
+    first = asyncio.create_task(runs.hold(run, calls[0], 5, 1))
     await asyncio.sleep(0)
     runs.prompt(run, "wait, what are you doing?")  # typed while the call is held
     assert run.revoked
     runs.decide(run.id, 1, False)
-    assert not await first and run.revoked
+    assert not await first and run.stopped and run.revoked
     runs.prompt(run, "ok, leave prod alone")
-    assert not run.revoked
+    assert (run.revoked, run.stopped, run.refused) == (False, False, 0)
     # The rejection before the prompt no longer counts: approving a later hold leaves
     # the key open.
-    later = runs.add_step(run, "run_sql", {"q": "x"}, "x", "destructive", "hors mandat")
-    second = asyncio.create_task(runs.hold(run, later, 5))
+    second = asyncio.create_task(runs.hold(run, calls[1], 5, 1))
     await asyncio.sleep(0)
-    runs.decide(run.id, later.n, True)
+    runs.decide(run.id, calls[1].n, True)
     assert await second and not run.revoked
+
+
+@pytest.mark.anyio
+async def test_a_prompt_during_a_hold_starts_a_new_turn_but_the_key_waits():
+    runs, run, calls = _held_pair()
+    await _rejected(runs, run, calls[0])
+    await _rejected(runs, run, calls[1])
+    wait = asyncio.create_task(runs.hold(run, _call(runs, run), 5, 3))
+    await asyncio.sleep(0)
+    runs.prompt(run, "try something else")  # typed while the call is held
+    assert (run.refused, run.revoked) == (0, True)
+    assert runs.decide(run.id, 3, False)
+    assert not await wait
+    assert (run.refused, run.stopped, run.revoked) == (1, False, False)
+
+
+def test_a_prompt_resets_the_count():
+    runs = Runs(EventLog())
+    run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)
+    assert run is not None
+    run.refused = 2
+    runs.prompt(run, "try again")
+    assert run.refused == 0
 
 
 def test_a_prompt_closes_a_message_left_streaming():
