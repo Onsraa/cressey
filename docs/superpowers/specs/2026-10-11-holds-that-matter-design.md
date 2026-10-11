@@ -1,6 +1,6 @@
 # Holds that matter — design
 
-Date: 2026-10-11. Status: draft, for approval.
+Date: 2026-10-11. Status: built and landed 10-11 (`1983b2f`).
 
 ## Why
 

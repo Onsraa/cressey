@@ -2,9 +2,7 @@
 
 There are two of us: **A** handles the setup, the core loop and the demo; **B** handles the guides, the RAG, the evaluation and the fiche défense.
 
-The plans:
-- `plan-setup.md` (part 3);
-- `plan-guide-rag.md` (part 1).
+The setup plan (part 3) and the guide and RAG plan (part 1) are done; they're in the git history.
 
 The core loop and the dashboard follow `concept.md`, one piece at a time.
 
@@ -49,7 +47,7 @@ The guide pipeline, the proxy with floor and holds, the triangle, the incidents 
 | 6 | **Measure the decision model:** about 30 labelled actions, the attack on our own judge, latency per 1,000 calls | B | ~1.5 h | Numbers in `evaluation.md` |
 | 7 | **Dashboard:** the new events (way out, read-only, trap key) and the Évaluation view | A + B | — | As in `dashboard.md` |
 | 8 | **Second way in: Claude Code hook**, after the 21:30 go/no-go, before the other stretch goals: `POST /hook/claude` on the same decision as the proxy, `http` hooks in the demo workspace's `.claude/settings.json`, `Bash`, `Edit`, `Write` and `Read` in `policy.yaml`, the « Brancher un agent » card and the « via MCP / via hook » badge | A | 2–3 h (estimate) | A real Claude Code session has its test edit held and shown in the Run view. The video of it is recorded |
-| 9 | **PocketOS replay (ours: lab + test agent):** the real Railway lab, and an autonomous Opus 4.6 in `demo-repos/pocketos/` that reaches Railway by `curl` with a token it finds. The Cressey-side catch (hook, triangle, JEV bias) is built by someone else — guidance in `poc-jev-guidance.md` | A | to estimate | **Lab done 10-10:** Railway project, tokens in `.env`, `lab/status.sh` and `lab/reset.sh` tested (prod restored from 3 rows to 5). Test agent done when `lab/run_agent.sh` drives a control run and records, in `test-results/`, whether Opus 4.6 reproduces the deletion. The live catch waits on the other person's hook |
+| 9 | **PocketOS replay (ours: lab + test agent):** the real Railway lab, and an autonomous Opus 4.6 in `demo-repos/pocketos/` that reaches Railway by `curl` with a token it finds. The Cressey-side catch (hook, triangle, JEV bias) is built by someone else — guidance in `poc-jev-guidance.md` | A | to estimate | **Lab done 10-10:** Railway project, tokens in `.env`, `lab/status.sh` and `lab/reset.sh` tested (prod restored from 3 rows to 5). Test agent done when `lab/run_agent.sh` drives a control run and records, in `test-results/`, whether Opus 4.6 reproduces the deletion. **Catch done 10-11:** replayed through the hook, the `serviceDelete` with the ops token is held (`demo-videos/`) |
 | — | Open decision: **live runs** with gpt-5.4-mini (10 without Cressey, 10 with) | — | 1–2 h | Only if decided. Item 9 does it for PocketOS |
 
 **To try Strands Decider again:** serve it (`strands-decider serve StrandsAgents/strands-decider-2B-qwen3.5-v1-2610 --port 8100 --device mlx`), set `CRESSEY_DECIDER_URL=http://127.0.0.1:8100`, then record the cache again.

@@ -20,7 +20,7 @@ The interface is in English (since 10-10). One theme, readable on a projector.
 - What Cressey sees: tool calls only; also messages and the report; or also the reasoning. The demo shows messages and the report, with the reasoning hidden.
 - **Three gauges** (Pressure, Opportunity, Rationalization): the score, whether facts confirm it, and the raw facts underneath.
   - Added 10-10, to build: the Pressure gauge shows « way out sent » from the step that confirms pressure (`way_out_step`), and « key read-only » from the step where pressure and opportunity are both confirmed (`read_only_step`). From then on destructive calls are refused; reads and writes still go through. Both happen without a human.
-  - Added 10-10, to build: a trap key in use shows on the Opportunity gauge as « trap key used », and the call is held as « critical ».
+  - Added 10-10, to build: a trap key in use shows on the Opportunity gauge as « trap key used », and a call that changes something with it is held as « critical »; one that only reads is flagged.
 - **Chart:** the three legs across the steps, with the hold marked.
 - **Step timeline:**
   - number, tool and a short form of the arguments;

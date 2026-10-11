@@ -15,7 +15,7 @@ Cressey watches what a company's AI agents do. When the fraud triangle lights up
 
 Auditors don't use the triangle to catch fraud in the act; they reduce the conditions for it. Cressey does the same for agents:
 - **Pressure:** acts on the agent's state. When pressure is confirmed, the next tool result carries the way out. Once a secret outside the mandate has been read too, the run key refuses destructive calls. Neither waits for a human.
-- **Opportunity:** the workspace holds only trap keys. Real keys come from the broker, scoped to the task, and any use of a trap key is held at once.
+- **Opportunity:** the workspace holds only trap keys. Real keys come from the broker, scoped to the task, and a use of a trap key is held when it changes something, flagged when it only reads.
 - **Rationalization:** the agent's report is compared with a log it can't write to.
 
 Fixes go to whoever owns each condition, including the task's author (« votre tâche était impossible »). Drift is a label for the triangle, not the selling point: Lasso's Intent Deputy asks the same question. The prior art, the incidents, the risks and the focus are in `positioning-and-risks.md`.
@@ -178,7 +178,7 @@ See `test-results/`:
 - core algorithms (S4);
 - application stack (S5).
 
-Plans: `plans/plan-setup.md` (part 3) and `plans/plan-guide-rag.md` (part 1).
+The setup plan (part 3) and the guide and RAG plan (part 1) are done; they're in the git history.
 
 ## Open before Saturday
 1. **Test data, written by the team:** the synthetic sessions that the demo agent replays, both incidents and normal sessions, plus the held-out sets written by someone outside the project.

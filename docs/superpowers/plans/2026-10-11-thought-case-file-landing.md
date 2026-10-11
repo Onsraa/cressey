@@ -1,7 +1,7 @@
-# Thought case file — landing & reconcile note
+# Thought case file — landing note
 
-Durable record of the `feat/thought-case-file` build (the SDD ledger lives under the gitignored
-`.superpowers/`, so this file carries what you need to land it). Plan:
+Durable record of the `feat/thought-case-file` build: what shipped, the rulings, the deferred
+minors and what Task 8 still needs. Plan:
 `docs/superpowers/plans/2026-10-11-thought-case-file.md`. Spec:
 `docs/superpowers/specs/2026-10-11-cot-triangle-indicators-design.md`.
 
@@ -11,7 +11,7 @@ Durable record of the `feat/thought-case-file` build (the SDD ledger lives under
 - Ships in **shadow mode**: the case file and §7 decision are computed, logged and displayed, but no
   live hold, key, way-out, incident or refusal reads `Run.case` / `Step.shadow`. Floor and trap keys
   untouched. Safe to demo as-is.
-- **Not landed.** Agreed order: message-flags (landed, `c1b4b0e`) → holds-that-matter → this branch.
+- **Landed 10-11** on `main` as `f665dd5`, after holds-that-matter (`1983b2f`): backend 719 and web 68 tests pass.
 - **Task 8 (threshold calibration) is PARKED** — needs live Jev (record mode) over §10's labelled
   sources plus a human choice of cut-offs. Thresholds ship as the S9 floors in `policy.yaml`
   `triangle.thoughts` (R 0.2, every other indicator + `about`/`approves` 0.5), marked "until calibrated".
@@ -37,15 +37,6 @@ Durable record of the `feat/thought-case-file` build (the SDD ledger lives under
 - Backend `flag_soon` now double-reads messages alongside the shadow — a later cleanup can remove it (bounded by shadow mode + the record/replay cache).
 - The "Uses:" line quotes a thread's first event while the web gauge shows the strongest; a grey "shadow: would allow" chip shows on every allowed call.
 - `about:<url/path>` judge-question keys contain `/`,`:`,`?` — unvalidated against the live Jev SDK; validate at Task 8 and sanitize the key there if rejected.
-
-## To land it later (reconcile against holds-that-matter)
-1. `git checkout feat/thought-case-file` in the worktree; `git merge main` (after holds-that-matter has landed on main).
-2. Expect conflicts where this branch's **Task 6** scheduling meets holds-that-matter's rewrites:
-   - `core/runs.py`: re-apply the shadow scheduling in `prompt` + `set_shadow` onto its `hold`/`prompt`/`unlock` rewrite; **drop the read of `Run.unlocked_after`** (holds-that-matter removes that field) and use its turn-based `refused`/`stopped`/`unlock` model.
-   - `core/proxy.py`: re-apply the `Guard.before`/`after` shadow scheduling onto its `Guard.__init__(drafter)`, `_response(..., risk)` and refusal-text changes; `WAY_OUT` moves to `core/draft.py` — import it from there.
-   - `core/hook.py`: re-apply `read_prompt` on `UserPromptSubmit` onto its hook changes.
-   - `core/models.py`, `data/policy.yaml`, web `schema.d.ts`, the test files — mostly additive.
-3. Re-run both suites (`cd backend && uv run pytest -q` + ruff/ty; `cd web && bun run ci`), then merge.
 
 ## When ready, finish Task 8
 Run `read_thought` over §10's sources (the 4 lab transcripts, METR's quotes, the 22 S9 runs, the benign

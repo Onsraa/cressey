@@ -14,6 +14,6 @@ incident. Nothing here imports or depends on Cressey code.
   before the calls they preceded. Cressey must be up (`./dev.sh`, or `CRESSEY_URL`).
 - **The ops token as a trap key:** Cressey reads `CRESSEY_DECOYS` (JSON, name: value) from
   the repo's git-ignored `.env`, e.g. `{"RAILWAY_OPS_TOKEN": "<RAILWAY_LAB_TRAP_TOKEN>"}`.
-  Any call carrying it is held by the safety floor, whatever the mandate.
+  A call carrying it is held when it changes something, flagged when it only reads, whatever the mandate.
 - **MCP proxy (sees MCP tool calls only):** `.mcp.cressey.example.json`. The agent here uses
   `curl`, not MCP tools, so the proxy alone won't see the Railway calls.

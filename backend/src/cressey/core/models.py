@@ -135,7 +135,7 @@ class Policy(BaseModel):
     fleet: Fleet = Field(default_factory=Fleet)
     stuck: Stuck = Field(default_factory=Stuck)
     broker: dict[str, Credential] = {}  # tool -> the credentials Cressey hands it
-    decoys: dict[str, str] = {}  # trap key name -> value: any call carrying one is held
+    decoys: dict[str, str] = {}  # trap key name -> value: a call carrying one is caught
 
 
 class Mandate(BaseModel):

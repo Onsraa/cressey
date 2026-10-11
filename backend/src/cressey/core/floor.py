@@ -1,6 +1,7 @@
 """Safety floor: code classifies each call and holds irreversible actions, or data
 leaving, outside the task's mandate. Anything it can't classify counts as destructive.
-A call that carries a trap key is held whatever the mandate."""
+A call that carries a trap key is caught whatever the mandate: the proxy holds it when
+it changes something and flags it when it only reads."""
 
 import fnmatch
 import json

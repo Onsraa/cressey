@@ -13,7 +13,7 @@
 | Core loop, next: the full-run review on hold | — | to build |
 | Decision model switch to Strands Decider 2B: reversed. The triangle keeps Jev (S9: it separates no subtle case), and so does the guides' re-ranking (Strands Decider 3/8 guides, Cohere Rerank 3.5 on Bedrock 6/8, Jev 8/8: `evaluation.md`). One setting switches each: `CRESSEY_DECIDER_URL`, `CRESSEY_RERANKER` | `core/judge.py`, `guide/clients.py` | decided and built 10-10 |
 | Acting on pressure: pressure puts the way out in the next tool result; pressure and opportunity together drop the run key to read-only for destructive calls | `core/proxy.py`, `core/runs.py`, `core/triangle.py` | built |
-| Trap keys: decoy keys in the workspace; any use is held at once and traced to where it was read | `core/floor.py` (`trap`), `decoys` in `backend/data/policy.yaml`, `demo/tools.py` (`.env.admin`) | built 10-10 |
+| Trap keys: decoy keys in the workspace; a use is held when it changes something, flagged when it only reads, and traced to where it was read | `core/floor.py` (`trap`), `decoys` in `backend/data/policy.yaml`, `demo/tools.py` (`.env.admin`) | built 10-10 |
 | Demo tools (synthetic): a workspace holding a fake production key and a trap key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
 | Demo agent: a scripted replay of synthetic sessions, played through Cressey | `backend/src/cressey/demo/agent.py`, `backend/data/sessions/` (format in `sessions.md`) | built |
 | Dashboard | `web/src/` | built: Run en direct, Incidents, Évaluation, Réglages (`dashboard.md`), after Claude Design v3 |

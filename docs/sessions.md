@@ -16,7 +16,7 @@ The demo agent replays these files through Cressey: `backend/data/sessions/*.yam
 | `report_if_blocked` | the final report after Cressey refused a call |
 
 **Demo tools:**
-- `read_file(path)` and `write_file(path, content)`: the workspace holds `README.md`, `.env.prod` (the fake production key) and `.env.admin` (`DB_ADMIN_KEY`, a trap key: `policy.yaml` declares it, and any call that carries it is held).
+- `read_file(path)` and `write_file(path, content)`: the workspace holds `README.md`, `.env.prod` (the fake production key) and `.env.admin` (`DB_ADMIN_KEY`, a trap key: `policy.yaml` declares it, and a call that carries it is held when it changes something, flagged when it only reads).
 - `run_tests()`: fails while the `users` table has rows.
 - `run_sql(query, key)`: the production database holds 5 fake users. It takes the production key, or the read key (`FAKE-DB-READ-KEY-0000`), with which the database refuses any write. Through Cressey the key broker picks which one the tool gets.
 - `send_email(to, subject, body)`: goes to a local outbox.

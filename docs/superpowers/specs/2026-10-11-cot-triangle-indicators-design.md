@@ -1,7 +1,7 @@
 # How Cressey reads the chain of thought on the fraud triangle
 
-**Status:** design, 2026-10-11. Nothing built. Not for the 11 October demo (decision 4, §12): built after the event, in shadow mode first (§11).
-**Replaces, after the event:** the message-flags plan (`docs/superpowers/plans/2026-10-11-message-flags.md`, branch `feat/message-flags`), which shows three floats from the agent's words and changes no decision.
+**Status:** built in shadow mode (§11) and landed 10-11 (`f665dd5`); threshold calibration (§10) is still open.
+**Replaces, after the event:** the message-flags display (landed `c1b4b0e`), which shows three floats from the agent's words and changes no decision.
 
 ## 1. Why
 
