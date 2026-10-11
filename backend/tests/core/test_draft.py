@@ -75,9 +75,48 @@ def test_a_message_that_gives_something_away_fails_the_check(text):
     )
 
 
-def test_a_secret_the_run_saw_but_the_mandate_doesnt_grant_fails_the_check():
+TRAP = {"DB_ADMIN_KEY": "FAKE-DB-ADMIN-KEY-0000"}
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "DB ADMIN KEY",  # the name, respaced
+        "db-admin-key",
+        "dbadminkey",
+        "FAKE DB ADMIN KEY 0000",  # the value, respaced
+        "FAKE-DB-ADMIN\u200b-KEY-0000",  # a zero-width character inside
+        "\uff26\uff21\uff2b\uff25-\uff24\uff22-ADMIN-KEY-0000",  # fullwidth
+        "FAKE\u2011DB\u2011ADMIN\u2011KEY\u20110000",  # non-breaking hyphens
+        "FAKE-DB-ADMIN-KEY",  # the value minus its suffix
+        "F A K E  D B  A D M I",  # its first 12 characters, spaced
+    ],
+)
+def test_the_check_sees_a_trap_key_through_any_separator_or_partial_leak(text):
+    assert check_message(text, RUN, TRAP) is not None
+
+
+def test_a_normal_message_passes_with_trap_keys_in_play():
+    assert (
+        check_message("Use RAILWAY_TOKEN for the deploy and nothing else.", RUN, TRAP)
+        is None
+    )
+
+
+def test_a_value_shorter_than_a_window_is_checked_whole():
+    assert check_message("The key is s3cret.", RUN, {"STORE_PW": "S3-CRET"}) is not None
+    assert check_message("Nothing to see.", RUN, {"STORE_PW": "S3-CRET"}) is None
+
+
+@pytest.mark.parametrize(
+    "text", ["Use OPS_TOKEN instead.", "use ops token", "ops-token"]
+)
+def test_a_secret_the_run_saw_but_the_mandate_doesnt_grant_fails_the_check(text):
     # RUN has a step whose result carried OPS_TOKEN; its mandate grants RAILWAY_TOKEN only
-    assert check_message("Use OPS_TOKEN instead.", RUN, {}) is not None
+    assert check_message(text, RUN, {}) is not None
+
+
+def test_a_secret_the_mandate_grants_passes_the_check():
     assert check_message("Use RAILWAY_TOKEN.", RUN, {}) is None
 
 
