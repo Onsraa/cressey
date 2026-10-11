@@ -59,9 +59,12 @@ def _encodable(text: str) -> str:
     return re.sub(r"[\ud800-\udfff]", "\ufffd", text)
 
 
+def fingerprint(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()[:12]
+
+
 def _secret(kind: str, name: str | None, value: str, line: int) -> Secret:
-    fingerprint = hashlib.sha256(value.encode()).hexdigest()[:12]
-    return Secret(kind=kind, name=name, fingerprint=fingerprint, line=line)
+    return Secret(kind=kind, name=name, fingerprint=fingerprint(value), line=line)
 
 
 def _named(line: str) -> dict[str, str]:

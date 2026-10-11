@@ -9,9 +9,11 @@ import {
 	Hourglass,
 	Pause,
 	Pencil,
+	Plug,
 	SquareCheck,
 	Trash,
 	TriangleAlert,
+	Webhook,
 	X,
 } from "lucide-react";
 import type {
@@ -136,6 +138,23 @@ export const KIND: Record<Run["kind"], string> = {
 	live: "live",
 	replay: "replay",
 	control: "Observer",
+};
+
+// How a run's calls reach Cressey: the MCP proxy, or the Claude Code hook.
+export const VIA: Record<
+	"mcp" | "hook",
+	{ label: string; Icon: LucideIcon; tip: string }
+> = {
+	mcp: {
+		label: "via MCP",
+		Icon: Plug,
+		tip: "Calls reach Cressey through the MCP proxy",
+	},
+	hook: {
+		label: "via hook",
+		Icon: Webhook,
+		tip: "Calls reach Cressey through the Claude Code hook (shell, files, reasoning)",
+	},
 };
 
 export const VISIBILITY: Record<Run["visibility"], string> = {

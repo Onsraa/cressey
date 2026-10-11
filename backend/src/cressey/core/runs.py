@@ -40,6 +40,8 @@ class Runs:
         self._runs: dict[str, Run] = {}
         self._keys: dict[str, str] = {}  # sha256 of the key -> run id
         self._waiting: dict[tuple[str, int], asyncio.Future[bool]] = {}
+        # A message being streamed in: (run, message id) -> (its Message, the raw text).
+        self._streaming: dict[tuple[str, str], tuple[Message, str]] = {}
 
     def create(self, spec: RunIn) -> RunCreated:
         run = Run(
@@ -115,6 +117,30 @@ class Runs:
         message = Message(after=len(run.steps), text=redact(text, run.known))
         run.messages.append(message)
         self.log.append("message", {"run": run.id, **message.model_dump()})
+
+    def stream(self, run: Run, message_id: str, delta: str, final: bool) -> None:
+        """A streamed slice of the agent's words (Claude Code's MessageDisplay hook). Deltas
+        for one message grow one Message in place, placed after the calls made before it, so
+        the dashboard shows the reasoning as it is produced and the next call's judgment
+        reads it. Logged once, when the message is final."""
+        key = (run.id, message_id)
+        message, raw = self._streaming.get(
+            key, (Message(after=len(run.steps), text=""), "")
+        )
+        if not raw and message not in run.messages:
+            run.messages.append(message)
+        raw += delta
+        message.text = redact(raw, run.known)
+        self._streaming[key] = (message, raw)
+        if final:
+            del self._streaming[key]
+            self.log.append("message", {"run": run.id, **message.model_dump()})
+
+    def route(self, run: Run, via: Literal["mcp", "hook"]) -> None:
+        """How this run reached Cressey, for the Run view's badge. Set once, on its first call."""
+        if run.via is None:
+            run.via = via
+            self.log.append("run", {"run": run.id, "via": via})
 
     def end(self, run: Run, report: str) -> None:
         run.report, run.ended_at = redact(report, run.known), _now().isoformat()

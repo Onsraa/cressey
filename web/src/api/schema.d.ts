@@ -702,6 +702,8 @@ export interface components {
 			kind: "live" | "replay" | "control";
 			/** Started At */
 			started_at: string;
+			/** Via */
+			via?: ("mcp" | "hook") | null;
 			/**
 			 * Revoked
 			 * @default false
@@ -796,6 +798,8 @@ export interface components {
 			model_mode: string;
 			/** Mcp Path */
 			mcp_path: string;
+			/** Hook Path */
+			hook_path: string;
 			log: components["schemas"]["LogHead"];
 		};
 		/** Step */

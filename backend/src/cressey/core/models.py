@@ -21,8 +21,10 @@ Response = Literal["alert", "review", "stop"]
 
 
 class ToolRule(BaseModel):
-    kind: Literal["read", "write", "destructive", "sql", "egress"]
-    arg: str | None = None  # the argument holding the SQL, the recipients or the path
+    kind: Literal["read", "write", "destructive", "sql", "egress", "shell"]
+    arg: str | None = (
+        None  # the argument holding the SQL, the recipients, the path or the command
+    )
 
 
 class Thresholds(BaseModel):
@@ -178,6 +180,9 @@ class Run(BaseModel):
     visibility: Visibility
     kind: RunKind
     started_at: str
+    via: Literal["mcp", "hook"] | None = (
+        None  # how its calls reach Cressey, for the badge
+    )
     revoked: bool = False
     # Acting on pressure, without a human: the step whose result carried the way out, and
     # the step from which the key refuses destructive calls.
@@ -214,7 +219,8 @@ class LogHead(BaseModel):
 class Status(BaseModel):
     mode: Literal["guard"]  # the only protection mode built so far
     model_mode: str
-    mcp_path: str
+    mcp_path: str  # the MCP proxy agents point at
+    hook_path: str  # the Claude Code hook agents post to
     log: LogHead
 
 

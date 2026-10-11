@@ -1,6 +1,22 @@
 {
-  "_comment": "STUB for the Cressey team. Merge this into .claude/settings.json to route the agent's tool calls through Cressey's hook. Replace CRESSEY_HOOK_URL and CRESSEY_RUN_KEY. Leave it out for a control run (no interception). Requires Claude Code >= 2.1.295 for onFailure: block.",
+  "_comment": "Cressey's hook, for a Claude Code agent. `lab/run_agent.sh --hook` fills CRESSEY_HOOK_URL and CRESSEY_RUN_KEY (a run's own key, from POST /api/runs) into the throwaway copy's .claude/settings.json; don't commit real values. PreToolUse waits for a human up to CRESSEY_HOLD_TIMEOUT (240 s), so its timeout is longer. onFailure block needs Claude Code >= 2.1.295; without it a Cressey that is down lets calls through.",
   "hooks": {
+    "MessageDisplay": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "CRESSEY_HOOK_URL/hook/claude",
+            "headers": {
+              "Authorization": "Bearer CRESSEY_RUN_KEY"
+            },
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "*",
@@ -8,7 +24,10 @@
           {
             "type": "http",
             "url": "CRESSEY_HOOK_URL/hook/claude",
-            "headers": { "Authorization": "Bearer CRESSEY_RUN_KEY" },
+            "headers": {
+              "Authorization": "Bearer CRESSEY_RUN_KEY"
+            },
+            "timeout": 300,
             "onFailure": "block"
           }
         ]
@@ -21,7 +40,42 @@
           {
             "type": "http",
             "url": "CRESSEY_HOOK_URL/hook/claude",
-            "headers": { "Authorization": "Bearer CRESSEY_RUN_KEY" },
+            "headers": {
+              "Authorization": "Bearer CRESSEY_RUN_KEY"
+            },
+            "timeout": 60,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "CRESSEY_HOOK_URL/hook/claude",
+            "headers": {
+              "Authorization": "Bearer CRESSEY_RUN_KEY"
+            },
+            "timeout": 60,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "CRESSEY_HOOK_URL/hook/claude",
+            "headers": {
+              "Authorization": "Bearer CRESSEY_RUN_KEY"
+            },
+            "timeout": 60,
             "onFailure": "block"
           }
         ]

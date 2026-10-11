@@ -18,6 +18,7 @@ from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
+from pydantic import JsonValue
 
 from cressey.core.broker import scoped
 from cressey.core.floor import check, trap
@@ -25,7 +26,7 @@ from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
 from cressey.core.models import Policy, Response, Run, Step
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import redact, scan
+from cressey.core.secret_scan import fingerprint, redact, scan
 from cressey.core.triangle import (
     alarm,
     alarm_reason,
@@ -133,20 +134,46 @@ class Guard(Middleware):
         context: MiddlewareContext[mcp_types.CallToolRequestParams],
         call_next: CallNext[mcp_types.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
-        start = time.perf_counter()
         # A run is the key Cressey issued: session ids change on every call (S1).
         auth = get_http_headers(include={"authorization"}).get("authorization", "")
         run = self.runs.by_key(auth.removeprefix("Bearer ").strip())
         if run is None:
             raise ToolError("Cressey: unknown key.")
         name, args = context.message.name, context.message.arguments or {}
+        self.runs.route(run, "mcp")
+        step = await self.before(run, name, args)
+        try:
+            # The key broker: the tool gets the credential the mandate allows, never the agent's
+            # own key. The Observer measures what happens without Cressey, so it's left alone.
+            credential = self.policy.broker.get(name) if run.kind != "control" else None
+            if credential:
+                sent = scoped(args, credential, run.mandate, step.status == "approved")
+                message = context.message.model_copy(update={"arguments": dict(sent)})
+                context = context.copy(message=message)
+            result = await call_next(context)
+            note = await self.after(run, step, result.is_error, _text(result))
+            # Added after the record: the ledger labels the tool's own text, not Cressey's.
+            if note:
+                result.content.append(mcp_types.TextContent(text=f"Cressey: {note}"))
+            return result
+        finally:
+            step.running = False  # its result is in, or the call failed
+
+    async def before(self, run: Run, name: str, args: dict[str, JsonValue]) -> Step:
+        """Cressey's decision on a call before it runs: its step, let through or approved.
+        Raises ToolError when the call is refused, or held and not approved."""
+        start = time.perf_counter()
         risk, floor = check(self.policy.tools.get(name), args, run.mandate)
         trapped = trap(args, self.policy.decoys)
         floor = trapped or floor
         # Off the event loop, like the result scan: a large argument takes a while to redact.
-        # A copy of the secrets known so far, which other calls may add to meanwhile.
+        # A copy of the secrets known so far, which other calls may add to meanwhile, and the
+        # trap keys: one the agent got outside Cressey must not show in clear either.
         dumped = json.dumps(args, ensure_ascii=False)
-        shown = await asyncio.to_thread(redact, dumped, dict(run.known))
+        known = dict(run.known) | {
+            v: fingerprint(v) for v in self.policy.decoys.values()
+        }
+        shown = await asyncio.to_thread(redact, dumped, known)
         step = self.runs.add_step(run, name, args, shown, risk, floor)
         try:
             if run.revoked:
@@ -188,36 +215,32 @@ class Guard(Middleware):
                 raise ToolError(f"Cressey: action refused. {WAY_OUT}")
             elif reason and not await self.runs.hold(run, step, self.hold_timeout):
                 raise held
-            # The key broker: the tool gets the credential the mandate allows, never the agent's
-            # own key. The Observer measures what happens without Cressey, so it's left alone.
-            credential = self.policy.broker.get(name) if run.kind != "control" else None
-            if credential:
-                sent = scoped(args, credential, run.mandate, step.status == "approved")
-                message = context.message.model_copy(update={"arguments": dict(sent)})
-                context = context.copy(message=message)
-            result = await call_next(context)
-            text = _text(result)
-            scanned = time.perf_counter()
-            found = await asyncio.to_thread(scan, text)
-            step.scan_ms = _ms_since(scanned)
-            self.runs.record(run, step, result.is_error, text, found)
+            return step
+        except BaseException:
+            step.running = False  # refused: no result will come
+            raise
+
+    async def after(
+        self, run: Run, step: Step, is_error: bool, text: str, label: bool = True
+    ) -> str | None:
+        """What the call returned, read: the secret scan, the ledger, and the triangle on a
+        call too long to read before it ran. Without `label`, the caller reads the step
+        later, once the agent's words are in. The way out, when this call carries it."""
+        scanned = time.perf_counter()
+        found = await asyncio.to_thread(scan, text)
+        step.scan_ms = _ms_since(scanned)
+        self.runs.record(run, step, is_error, text, found)
+        if label:
             label_soon(
                 run, step.n - 1, self.judge
             )  # read now: the next write won't wait for it
-            # Too long to read before it ran: read now, without holding the developer's work.
-            late = not reason and risk != "read" and not read_before(step)
-            if late and run.kind != "replay":
-                task = asyncio.get_running_loop().create_task(
-                    self._read_late(run, step)
-                )
-                self._late.add(task)
-                task.add_done_callback(self._late.discard)
-            # Added after the record: the ledger labels the tool's own text, not Cressey's.
-            if run.way_out_step == step.n:
-                result.content.append(mcp_types.TextContent(text=f"Cressey: {WAY_OUT}"))
-            return result
-        finally:
-            step.running = False  # its result is in, or it was refused
+        # Too long to read before it ran: read now, without holding the developer's work.
+        late = step.reason is None and step.risk != "read" and not read_before(step)
+        if late and run.kind != "replay":
+            task = asyncio.get_running_loop().create_task(self._read_late(run, step))
+            self._late.add(task)
+            task.add_done_callback(self._late.discard)
+        return WAY_OUT if run.way_out_step == step.n else None
 
     async def _read_late(self, run: Run, step: Step) -> None:
         """A call that ran before it could be read: if the triangle would have held it,

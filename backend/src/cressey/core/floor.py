@@ -15,6 +15,20 @@ from cressey.core.models import Mandate, Risk, ToolRule
 from cressey.core.trace import decoded, strings
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
+# Shell commands (the Claude Code hook). A command made only of these, with no redirection,
+# reads; one that deletes files, rows or tables, or rewrites history, is destructive; any
+# other is a write the triangle judges.
+READ_COMMANDS = {
+    "cat", "cd", "diff", "echo", "env", "file", "find", "grep", "head", "jq", "ls",
+    "printenv", "pwd", "rg", "sort", "stat", "tail", "tree", "uniq", "wc", "which",
+    "git status", "git diff", "git log", "git show", "git branch", "sed -n",
+}  # fmt: skip
+DESTRUCTIVE_COMMAND = re.compile(
+    r"\brm\s|\bdrop\s+(?:table|database|schema|index)\b|\btruncate\b|\bdelete\s+from\b"
+    r"|\bgit\s+push\b[^|;&]*(?:--force\b|\s-f\b)|\bgit\s+(?:reset\s+--hard|clean\s)",
+    re.IGNORECASE,
+)
+SEGMENT = re.compile(r"\|\|?|&&|;|\n")
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
 REPLACE_INTO = re.compile(r"(^|;)(\s*)REPLACE\s+INTO\b", re.IGNORECASE)
 
@@ -67,6 +81,19 @@ def sql_risk(sql: str) -> tuple[Risk, set[str] | None]:
     return risk, tables
 
 
+def shell_risk(command: str) -> Risk:
+    """Risk of a shell command, from the commands it runs (see READ_COMMANDS)."""
+    if DESTRUCTIVE_COMMAND.search(command):
+        return "destructive"
+    if ">" in command:
+        return "write"
+    for segment in SEGMENT.split(command):
+        words = segment.split()
+        if words and not {words[0], " ".join(words[:2])} & READ_COMMANDS:
+            return "write"
+    return "read"
+
+
 def _may_send(address: str, mandate: Mandate) -> bool:
     a = address.strip().lower()
     return any(
@@ -110,6 +137,11 @@ def check(
             return rule.kind, _guarded(value, mandate, rule.kind == "write")
         case "destructive":
             return "destructive", "irreversible action"
+        case "shell":
+            # shortcut: protected and frozen paths aren't matched inside a command, add it
+            # when a mandate guards paths from a shell agent
+            risk = shell_risk(value if isinstance(value, str) else "")
+            return risk, "destructive shell command" if risk == "destructive" else None
         case "sql":
             risk, tables = sql_risk(value if isinstance(value, str) else "")
             if risk != "destructive":

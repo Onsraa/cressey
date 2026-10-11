@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from cressey.core.eventlog import verify
+from cressey.core.hook import HOOK_PATH
 from cressey.core.incidents import AssessTask, Incidents
 from cressey.core.models import (
     EvalFile,
@@ -124,6 +125,7 @@ async def status(request: Request, runs: RunsDep) -> Status:
         mode="guard",
         model_mode=request.app.state.settings.model_mode,
         mcp_path=MCP_PATH,
+        hook_path=HOOK_PATH,
         log=LogHead(hash=head, count=count, intact=verify(runs.log.events) is None),
     )
 
