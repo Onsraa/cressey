@@ -10,7 +10,7 @@ import {
 	TriangleAlert,
 	UserRound,
 } from "@/components/icons";
-import { LEGS, STATUS, shown } from "@/lib/labels";
+import { byWords, FROM_WORDS, LEGS, level, STATUS, shown } from "@/lib/labels";
 import { revealRow, scrollToEnd } from "@/lib/motion";
 import {
 	band,
@@ -22,7 +22,7 @@ import {
 	type Row,
 	reportLabel,
 } from "./run";
-import { StatusChip } from "./ui";
+import { Letter, StatusChip } from "./ui";
 
 // The statuses whose reason the row shows: Cressey acted on the call.
 const REASONED = new Set<Step["status"]>([
@@ -31,6 +31,9 @@ const REASONED = new Set<Step["status"]>([
 	"would_hold",
 	"alerted",
 ]);
+
+// The legs a message can light: the agent's words say nothing of opportunity.
+const SPOKEN = LEGS.filter((g) => g.k !== "opportunity");
 
 // The design's held-call chips: salmon, outlined by an inset line.
 const CHIP_HELD =
@@ -83,7 +86,9 @@ export function Trace({
 				<span className="opacity-70">{rows.length || ""}</span>
 				<div className="flex-1" />
 				<span
-					data-tip="Scores per call: Pressure · Opportunity · Rationalization (calls only)"
+					data-tip={
+						"Scores per call: Pressure · Opportunity · Rationalization\nA thought lights P or R when its words are flagged"
+					}
 					// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 					tabIndex={0}
 					className="font-mono text-[11px] tracking-normal opacity-80"
@@ -234,13 +239,45 @@ function TextRow({
 					{row.text}
 				</span>
 			</span>
-			<span className="flex gap-[3px] pt-px" />
+			{row.kind === "msg" && !you ? (
+				<Flags row={row} />
+			) : (
+				<span className="flex gap-[3px] pt-px" />
+			)}
 		</>
 	);
 }
 
-// A call's three scores as pixel cells: darker is higher, ringed in the leg's colour once
-// facts confirm it at this step.
+// A message's flags in the calls' P, O, R columns: the P and R chips, lit when its words are
+// flagged for that leg, and an empty slot where O goes. The backend's floors decide; a
+// message that was never read says so.
+function Flags({ row }: { row: Extract<Row, { kind: "msg" }> }) {
+	const says = SPOKEN.map(
+		(g) =>
+			`${g.name} ${row.flagged.includes(g.k) ? "flagged" : row.labels ? "not flagged" : "not read"}`,
+	);
+	return (
+		<span
+			role="img"
+			aria-label={says.join(", ")}
+			className="flex gap-[3px] pt-px"
+		>
+			{LEGS.map((g) => {
+				const i = SPOKEN.indexOf(g);
+				return i < 0 ? (
+					<span key={g.k} className="size-5" />
+				) : (
+					<span key={g.k} data-tip={says[i]}>
+						<Letter g={g} on={row.flagged.includes(g.k)} size={20} />
+					</span>
+				);
+			})}
+		</span>
+	);
+}
+
+// A call's three levels as pixel cells: darker is higher, ringed in the leg's colour once
+// facts confirm it at this step. A level the agent's words lead says so.
 function Legs({ step }: { step: Step }) {
 	const legs = step.legs;
 	return (
@@ -248,7 +285,10 @@ function Legs({ step }: { step: Step }) {
 			role="img"
 			aria-label={
 				legs
-					? LEGS.map((g) => `${g.name} ${fmt(legs[g.k].score)}`).join(", ")
+					? LEGS.map(
+							(g) =>
+								`${g.name} ${fmt(level(legs[g.k]))}${byWords(legs[g.k]) ? ` ${FROM_WORDS}` : ""}`,
+						).join(", ")
 					: "no score"
 			}
 			className="flex gap-[3px] pt-px"
@@ -256,12 +296,16 @@ function Legs({ step }: { step: Step }) {
 			{legs &&
 				LEGS.map((g) => {
 					const leg = legs[g.k];
-					const b = band(leg.score);
+					const b = band(level(leg));
 					return (
 						<span
 							key={g.k}
 							data-cell
-							data-tip={`${g.name} ${fmt(leg.score)}${leg.confirmed ? "\nconfirmed by facts at this step" : ""}`}
+							data-tip={[
+								`${g.name} ${fmt(level(leg))}`,
+								...(leg.confirmed ? ["confirmed by facts at this step"] : []),
+								...(byWords(leg) ? [FROM_WORDS] : []),
+							].join("\n")}
 							className="inline-flex size-5 items-center justify-center font-pixel text-base leading-none"
 							style={{
 								background: RAMP[b],

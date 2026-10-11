@@ -1,9 +1,10 @@
 import type { LegName, Legs, Message, Run, Secret, Step } from "@/api/types";
+import { level } from "@/lib/labels";
 
 // What the trace lists, in order.
 export type Row =
 	| { id: string; kind: "call"; step: Step }
-	| { id: string; kind: "msg"; text: string; role: Message["role"] }
+	| ({ id: string; kind: "msg" } & Message)
 	| { id: string; kind: "report"; text: string };
 
 // A message said after k calls goes just before call #k+1; the report comes last, once
@@ -15,7 +16,7 @@ export function rows(run: Run): Row[] {
 	]);
 	const said = run.messages.map((m, i): [number, Row] => [
 		m.after + 0.5,
-		{ id: `m${i}`, kind: "msg", text: m.text, role: m.role },
+		{ ...m, id: `m${i}`, kind: "msg" },
 	]);
 	const all = [...calls, ...said]
 		.sort((a, b) => a[0] - b[0])
@@ -102,6 +103,13 @@ export type Scored = { step: Step; legs: Legs };
 export const scored = (run: Run): Scored[] =>
 	run.steps.flatMap((step) => (step.legs ? [{ step, legs: step.legs }] : []));
 
+// A call's three levels, where the triangle places it and the chart draws it.
+export const levels = (legs: Legs) => ({
+	p: level(legs.pressure),
+	o: level(legs.opportunity),
+	r: level(legs.rationalization),
+});
+
 export const fmt = (v: number) => v.toFixed(2);
 
 // What the stopped run shows: since the user's last prompt (a message said after k calls
@@ -144,15 +152,22 @@ const KEYS: LegName[] = ["pressure", "opportunity", "rationalization"];
 
 type AggLeg = {
 	score: number;
+	words: number;
 	confirmed: boolean;
 	facts: { t: string; at: string }[];
 };
 export type Agg = Record<LegName, AggLeg>;
 
-// The design's agg over the scored calls: each leg's highest score so far, confirmed once
-// a call confirmed it, and its facts, each with the step that first gave it.
+// The design's agg over the scored calls: each leg's highest score so far and the most the
+// agent's words said of it, confirmed once a call confirmed it, and its facts, each with the
+// step that first gave it.
 export function agg(calls: Scored[]): Agg {
-	const leg = (): AggLeg => ({ score: 0, confirmed: false, facts: [] });
+	const leg = (): AggLeg => ({
+		score: 0,
+		words: 0,
+		confirmed: false,
+		facts: [],
+	});
 	const out: Agg = {
 		pressure: leg(),
 		opportunity: leg(),
@@ -162,6 +177,7 @@ export function agg(calls: Scored[]): Agg {
 		for (const k of KEYS) {
 			const a = out[k];
 			a.score = Math.max(a.score, legs[k].score);
+			a.words = Math.max(a.words, legs[k].words ?? 0);
 			a.confirmed ||= legs[k].confirmed;
 			for (const t of legs[k].facts)
 				if (!a.facts.some((f) => f.t === t))

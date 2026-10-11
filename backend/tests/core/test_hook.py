@@ -2,6 +2,7 @@
 result, and the agent's words come from the transcript the hook names."""
 
 import asyncio
+from collections.abc import Mapping
 
 import pytest
 
@@ -21,8 +22,8 @@ def anyio_backend():
     return "asyncio"
 
 
-async def new_run(base: str) -> dict:
-    body = {"task": TASK, "visibility": "messages"}
+async def new_run(base: str, visibility: str = "messages") -> dict:
+    body = {"task": TASK, "visibility": visibility}
     r = await api(base, "POST", "/api/runs", json=body)
     assert r.status_code == 201
     return r.json()
@@ -36,6 +37,18 @@ def event(kind: str, tool: str, call: str = "toolu_1", **extra) -> dict:
         "session_id": "s1",
         "cwd": "/work",
         **extra,
+    }
+
+
+def display(mid: str, delta: str, final: bool) -> dict:
+    return {
+        "hook_event_name": "MessageDisplay",
+        "session_id": "s1",
+        "cwd": "/work",
+        "message_id": mid,
+        "index": 0,
+        "delta": delta,
+        "final": final,
     }
 
 
@@ -243,18 +256,6 @@ async def test_a_failed_call_is_recorded_as_a_failure(served):
 async def test_reasoning_streams_in_live_and_the_run_is_tagged_via_hook(served):
     run = await new_run(served)
     key = run["key"]
-
-    def display(mid: str, delta: str, final: bool) -> dict:
-        return {
-            "hook_event_name": "MessageDisplay",
-            "session_id": "s1",
-            "cwd": "/work",
-            "message_id": mid,
-            "index": 0,
-            "delta": delta,
-            "final": final,
-        }
-
     # A message arrives in slices; it grows one row the dashboard can watch.
     await hook(served, key, display("m1", "I'll reset ", False))
     mid = await run_of(served, run)
@@ -308,6 +309,109 @@ async def test_stop_ends_the_run_with_the_agents_last_message_as_its_report(serv
     got = await run_of(served, run)
     assert got["report"] == "Staging is healthy again." and got["ended_at"]
     assert got["report_check"]["confirmed"] is False  # no model in these tests
+
+
+class WordsJudge:
+    """Hears pressure in every message the agent says, after a short wait, and records
+    what it was shown. The task assessed before a run gets zeros."""
+
+    def __init__(self) -> None:
+        self.read: list[str] = []
+        self.delay = 0.05
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "current_step" not in state:
+            return dict.fromkeys(questions, 0.0)
+        [said] = state["current_step"]["agent_said"]
+        self.read.append(said)
+        await asyncio.sleep(self.delay)
+        return {q: 0.9 if q == "pressure" else 0.0 for q in questions}
+
+
+@pytest.fixture
+def judged(tmp_path):
+    """Cressey with a decision model that records the messages it reads."""
+    judge = WordsJudge()
+    settings = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+    )
+    with serve(create_app(settings, make_guide=fake_guide, judge=judge)) as base:
+        yield base, judge
+
+
+async def flagged_message(base: str, run: dict) -> dict:
+    """The run's only message, once the model has read it."""
+    for _ in range(200):
+        [message] = (await run_of(base, run))["messages"]
+        if message["labels"] is not None:
+            return message
+        await asyncio.sleep(0.02)
+    raise AssertionError("the message was not flagged")
+
+
+async def test_message_flagged_once_when_final(judged):
+    base, judge = judged
+    run = await new_run(base)
+    key = run["key"]
+    await hook(base, key, display("m1", "The deploy ", False))
+    await hook(base, key, display("m1", "keeps failing; ", False))
+    await asyncio.sleep(0.2)  # a read of a half message would have started by now
+    assert judge.read == []
+    await hook(base, key, display("m1", "I cannot finish in time.", True))
+    message = await flagged_message(base, run)
+    await asyncio.sleep(0.2)  # and no second read follows
+    assert judge.read == ["The deploy keeps failing; I cannot finish in time."]
+    assert message["flagged"] == ["pressure"]
+    assert message["labels"] == {
+        "pressure": 0.9,
+        "rationalization": 0.0,
+        "manipulation": 0.0,
+    }
+
+
+async def test_a_late_flag_raises_the_call_already_scored(judged):
+    base, judge = judged
+    judge.delay = 0.5  # the call is scored and served well before the flag lands
+    run = await new_run(base)
+    await hook(base, run["key"], display("m1", "I cannot finish in time.", True))
+    read = {"file_path": "README.md"}
+    await hook(base, run["key"], event("PreToolUse", "Read", tool_input=read))
+    # The call did not wait for the read in flight; the flag raises it when it lands.
+    [step] = (await run_of(base, run))["steps"]
+    assert step["legs"]["pressure"]["words"] is None
+    await flagged_message(base, run)
+    [step] = (await run_of(base, run))["steps"]
+    assert step["legs"]["pressure"]["words"] == 0.9
+    assert step["legs"]["pressure"]["score"] == 0.0
+    assert step["legs"]["opportunity"]["words"] is None
+
+
+async def test_a_tools_run_flags_no_message(judged):
+    base, judge = judged
+    run = await new_run(base, visibility="tools")
+    await hook(base, run["key"], display("m1", "I cannot finish in time.", True))
+    await asyncio.sleep(0.2)
+    [message] = (await run_of(base, run))["messages"]
+    assert judge.read == []
+    assert message["labels"] is None and message["flagged"] == []
+
+
+async def test_a_message_posted_to_the_api_is_flagged(judged):
+    base, judge = judged
+    run = await new_run(base)
+    auth = {"Authorization": f"Bearer {run['key']}"}
+    said = {"text": "I cannot finish in time."}
+    r = await api(
+        base, "POST", f"/api/runs/{run['id']}/messages", json=said, headers=auth
+    )
+    assert r.status_code == 204
+    message = await flagged_message(base, run)
+    assert judge.read == ["I cannot finish in time."]
+    assert message["flagged"] == ["pressure"]
 
 
 def session_event(kind: str, session: str = "s1", **extra) -> dict:
@@ -413,3 +517,31 @@ async def test_claude_codes_own_tools_pass_and_an_unknown_tool_is_held(
         ("ToolSearch", None),
         ("mcp__github__delete_repo", "tool not in the policy"),
     ]
+
+
+async def test_your_prompt_is_never_flagged(judged):
+    base, judge = judged
+    run = await new_run(base)
+    key = run["key"]
+    await hook(base, key, display("m1", "I cannot finish in time.", True))
+    await flagged_message(base, run)
+    await hook(
+        base, key, session_event("UserPromptSubmit", prompt="Hurry, we're late.")
+    )
+    await asyncio.sleep(0.2)  # a read of the prompt would have started by now
+    assert judge.read == ["I cannot finish in time."]
+    you = (await run_of(base, run))["messages"][-1]
+    assert (you["role"], you["labels"], you["flagged"]) == ("user", None, [])
+
+
+async def test_a_message_cut_short_is_never_flagged(judged):
+    base, judge = judged
+    run = await new_run(base)
+    key = run["key"]
+    # Esc sends no final slice: the next prompt closes the message, never final.
+    await hook(base, key, display("m1", "I cannot finish in ", False))
+    await hook(base, key, session_event("UserPromptSubmit", prompt="stop"))
+    await asyncio.sleep(0.2)  # a read of the message would have started by now
+    assert judge.read == []
+    cut = (await run_of(base, run))["messages"][0]
+    assert (cut["streaming"], cut["labels"]) == (False, None)
