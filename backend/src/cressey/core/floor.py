@@ -30,12 +30,17 @@ DESTRUCTIVE_COMMAND = re.compile(
     re.IGNORECASE,
 )
 SEGMENT = re.compile(r"\|\|?|&&|;|\n")
-# NAME=value, but not NAME=$(...) or NAME=`...`: those run a command.
-ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=(?!.*(?:\$\(|`))")
+# $(...), `...` and <(...) run a command wherever they sit, whatever the first word.
+SUBSTITUTION = re.compile(r"\$\(|`|<\(")
+ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
+# find's actions that run or delete something.
+FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
 MUTATION = re.compile(r"\bmutation\b", re.IGNORECASE)
+# GraphQL's {"query": "..."}: the query is a string, unlike an Elasticsearch {"query": {...}}.
+QUERY_FIELD = re.compile(r'"query"\s*:\s*"')
 # A body whose text isn't what the server sees: read from a file, expanded by the shell, or
 # JSON-escaped (\u006dutation).
-INDIRECT = re.compile(r"^@|[$`]|\\u")
+INDIRECT = re.compile(r"^@|\$|\\u")
 WRITE_FLAGS = {"-F", "--form", "-T", "--upload-file", "--post-file", "--post-data"}
 METHOD_FLAGS = {"-X", "--request", "--method"}
 # curl's short options that take a value; in a cluster (-sXPOST, -sd) the first one ends it.
@@ -134,14 +139,29 @@ def _http_risk(words: list[str]) -> Risk:
 
 def _is_query(body: str) -> bool:
     """An inline GraphQL query, not a mutation."""
-    return '"query"' in body and not INDIRECT.search(body) and not MUTATION.search(body)
+    return bool(
+        QUERY_FIELD.search(body)
+        and not INDIRECT.search(body)
+        and not MUTATION.search(body)
+    )
+
+
+def _reads(words: list[str]) -> bool:
+    """Whether a command other than curl or wget only reads (see READ_COMMANDS)."""
+    if not {words[0], " ".join(words[:2])} & READ_COMMANDS:
+        return False
+    if words[0] == "env":  # env running a command
+        return not _command(words[1:])
+    if words[0] == "find":
+        return not FIND_ACTIONS & set(words)
+    return True
 
 
 def shell_risk(command: str) -> Risk:
     """Risk of a shell command, from the commands it runs (see READ_COMMANDS)."""
     if DESTRUCTIVE_COMMAND.search(command):
         return "destructive"
-    if ">" in command:
+    if ">" in command or SUBSTITUTION.search(command):
         return "write"
     for segment in SEGMENT.split(command.replace("\\\n", " ")):
         words = _command(segment.split())
@@ -154,7 +174,7 @@ def shell_risk(command: str) -> Risk:
                 return "write"
             if risk != "read":
                 return risk
-        elif not {words[0], " ".join(words[:2])} & READ_COMMANDS:
+        elif not _reads(words):
             return "write"
     return "read"
 

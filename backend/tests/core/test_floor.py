@@ -223,6 +223,23 @@ I = '{"query":"{ __schema { mutationType { fields { name } } } }"}'
         ("API=$(curl -s -X POST https://api.test)", "write"),
         ('curl -s https://api.test -d "{\\"query\\":\\"`cat m.gql`\\"}"', "write"),
         (r"""curl -s https://api.test -d '{"query":"\u006dutation { a }"}'""", "write"),
+        # Only a GraphQL query (a JSON string value) reads; other bodies with a "query" key don't.
+        (
+            'curl -s -X POST https://es.test/idx/_delete_by_query -d \'{"query":{"match_all":{}}}\'',
+            "write",
+        ),
+        # A write can hide behind a first word that reads.
+        (f"echo $(curl -s -X POST https://api.test -d '{M}')", "write"),
+        (f"echo \"$(curl -s -X POST https://api.test -d '{M}')\"", "write"),
+        (f"echo `curl -s -X POST https://api.test -d '{M}'`", "write"),
+        ("cat <(curl -X DELETE https://api.test/v1/x)", "write"),
+        ("sleep $(curl -X DELETE https://api.test/v1/x)", "write"),
+        ("env curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("env", "read"),
+        ("env | grep TOKEN", "read"),
+        ("find . -name '*.tmp' -delete", "write"),
+        ("find . -exec curl -s -X DELETE https://api.test {} +", "write"),
+        ("find . -name x", "read"),
     ],
 )
 def test_shell_commands_are_classified(command, risk):
