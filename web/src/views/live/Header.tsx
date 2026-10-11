@@ -18,15 +18,18 @@ export type Phase =
 	| "tool"
 	| "running"
 	| "held"
+	| "stopped"
 	| "ended";
 
-// The design's run status: no run yet, nothing arrived, a call held, or ended. Claude Code's
+// The design's run status: no run yet, nothing arrived, a call held, ended, or stopped
+// (refused too often: its key is suspended until Unlock). Claude Code's
 // hooks tell its turn: waiting for a prompt, or working on one (thinking, writing, running a
 // tool). An MCP agent has no turns: it is running once it acts.
 export function phaseOf(run?: Run): Phase {
 	if (!run) return "waiting";
 	if (run.steps.some((s) => s.status === "held")) return "held";
 	if (run.ended_at) return "ended";
+	if (run.stopped) return "stopped";
 	if (run.turn === "waiting") return "prompt";
 	if (run.turn === "working") {
 		if (run.steps.some((s) => s.running)) return "tool";
@@ -58,6 +61,7 @@ const PHASE: Record<Phase, { label: string; look: string; dot: string }> = {
 	tool: { label: "Running tool", ...WORKING },
 	running: { label: "Running", ...WORKING },
 	held: { label: "Call held", look: "border-held-bd bg-held", dot: "#d9452b" },
+	stopped: { label: "Stopped", look: "border-held-bd bg-held", dot: "#d9452b" },
 	ended: { label: "Ended", look: "border-grey-bd bg-grey", dot: "#5c5c5a" },
 };
 
@@ -112,7 +116,7 @@ const CHIP = "inline-flex h-[22px] items-center gap-[5px] px-[7px]";
 const VIS_TIP = "What Cressey sees: set when the run starts";
 
 export function Header({ run, phase }: { run?: Run; phase: Phase }) {
-	const { focusMode } = useLive();
+	const { focusMode, status } = useLive();
 	const st = PHASE[phase];
 	const key = run && keyLook(run);
 	// A Claude Code run ends with its session; an MCP agent's, with its final report.
@@ -187,6 +191,16 @@ export function Header({ run, phase }: { run?: Run; phase: Phase }) {
 						>
 							<key.Icon size={12} />
 							{key.label}
+						</span>
+					)}
+					{run && status && run.refused > 0 && (
+						<span
+							data-tip={`Calls refused in this turn. At ${status.stop_after} the run stops until you unlock it${run.turn ? " or send your next prompt" : ""}.`}
+							// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
+							tabIndex={0}
+							className={`${CHIP} border ${TONE[run.stopped ? "held" : "warn"]}`}
+						>
+							{run.refused} of {status.stop_after} refused
 						</span>
 					)}
 				</div>

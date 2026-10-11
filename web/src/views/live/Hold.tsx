@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useLive } from "@/api/live";
 import type { Incident, Run, Step, StepStatus } from "@/api/types";
 import { ArrowRight, Check, DoorOpen, Lock, X } from "@/components/icons";
@@ -8,6 +8,11 @@ import type { Decision } from "./decide";
 import { callText } from "./run";
 import { Code, Labeled } from "./ui";
 
+const WAY_OUT = "Declaring the task impossible is an accepted answer.";
+// The backend (core/draft.py) ends the human's reason with a space and the way-out sentence,
+// and caps the whole message at 500 characters.
+export const REASON_MAX = 500 - WAY_OUT.length - 1;
+
 // The decided hold: its title and what it means, as the design's OUT map.
 const OUTCOME: Partial<Record<StepStatus, { title: string; text: string }>> = {
 	approved: {
@@ -16,7 +21,7 @@ const OUTCOME: Partial<Record<StepStatus, { title: string; text: string }>> = {
 	},
 	rejected: {
 		title: "Rejected",
-		text: "The call did not go through. The run key stays suspended.",
+		text: "The call did not go through.",
 	},
 	expired: {
 		title: "Expired",
@@ -25,6 +30,15 @@ const OUTCOME: Partial<Record<StepStatus, { title: string; text: string }>> = {
 };
 
 const CELLS = 40; // the countdown bar
+
+// What a refusal leaves the agent: the run goes on, or has stopped until Unlock. An ended
+// run has nothing more to say.
+const after = (run: Run) =>
+	run.ended_at
+		? ""
+		: run.stopped
+			? " The run is stopped: press Unlock to give the agent its key back."
+			: " The agent can keep working within its mandate.";
 
 const keyState = (run: Run) =>
 	run.revoked ? "suspended" : run.read_only_step ? "read-only" : "active";
@@ -44,10 +58,10 @@ export function Hold({
 	const { now, go } = useLive();
 	const box = useRef<HTMLDivElement>(null);
 	const pending = step.status === "held";
-	// A rejection suspends the key until the user's next prompt in Claude Code unlocks it.
-	const unlocked = step.status === "rejected" && !run.revoked;
+	const refused = step.status === "rejected" || step.status === "expired";
 	const out = OUTCOME[step.status];
 	const st = STATUS[step.status];
+	const text = (out?.text ?? st.tip) + (refused ? after(run) : "");
 	const sev = incident && SEVERITY[incident.severity];
 	const state = keyState(run);
 	// Once decided, the pane's blocks rise in again (the design's decide).
@@ -98,6 +112,24 @@ export function Hold({
 						</button>
 						<button
 							type="button"
+							onClick={() => decision.compose(!decision.composing)}
+							disabled={decision.busy}
+							aria-expanded={decision.composing}
+							className="btn h-9"
+						>
+							Reject + add reason
+							<span className="font-mono text-[11px] opacity-70">⇧R</span>
+						</button>
+						{decision.composing && (
+							<ReasonBox
+								draft={step.draft}
+								busy={decision.busy}
+								onSend={decision.rejectWith}
+								onClose={() => decision.compose(false)}
+							/>
+						)}
+						<button
+							type="button"
 							onClick={decision.approve}
 							disabled={decision.busy}
 							data-tip="Needs a second click. No model can approve a call."
@@ -124,13 +156,16 @@ export function Hold({
 							<span className="font-semibold text-[15px]">
 								{out?.title ?? st.label} at {time(step.decided_at)}
 							</span>
-							<span className="text-[13px] leading-[1.4]">
-								{unlocked
-									? "The call did not go through. Your prompt unlocked the run key."
-									: (out?.text ?? st.tip)}
-							</span>
+							<span className="text-[13px] leading-[1.4]">{text}</span>
 						</div>
 					</div>
+					{step.message && (
+						<Labeled label="reason sent to the agent">
+							<span className="whitespace-pre-wrap text-pretty text-[13px] leading-[1.4]">
+								{step.message}
+							</span>
+						</Labeled>
+					)}
 					{incident && (
 						<button
 							type="button"
@@ -195,9 +230,7 @@ export function Hold({
 				</span>
 				{run.way_out_step ? (
 					<span
-						data-tip={
-							"Sent automatically when pressure was confirmed:\n“Declaring the task impossible is an accepted answer.”"
-						}
+						data-tip={`Sent automatically when pressure was confirmed:\n“${WAY_OUT}”`}
 						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 						tabIndex={0}
 						className="flex min-h-[34px] items-center gap-2 border-line border-b text-[13px]"
@@ -211,6 +244,69 @@ export function Hold({
 						</span>
 					</span>
 				) : null}
+			</div>
+		</div>
+	);
+}
+
+// The reason the human gives the agent. It opens on the drafted reason and never takes a
+// later draft over what was typed. Blank is the plain Reject, so not sent from here.
+export function ReasonBox({
+	draft,
+	busy,
+	onSend,
+	onClose,
+}: {
+	draft?: string | null;
+	busy: boolean;
+	onSend: (text: string) => void;
+	onClose: () => void;
+}) {
+	const [text, setText] = useState(draft ?? "");
+	const field = useRef<HTMLTextAreaElement>(null);
+	const count = useId();
+	useEffect(() => {
+		field.current?.focus();
+	}, []);
+	const reason = text.trim();
+	const over = reason.length > REASON_MAX;
+	const ready = reason.length > 0 && !over && !busy;
+	const send = () => {
+		if (ready) onSend(reason);
+	};
+	return (
+		<div className="flex flex-col gap-1.5">
+			<textarea
+				ref={field}
+				aria-label="Reason sent to the agent"
+				aria-describedby={count}
+				rows={5}
+				value={text}
+				onChange={(e) => setText(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+						e.preventDefault();
+						send();
+					} else if (e.key === "Escape") onClose();
+				}}
+				className="resize-y border-[1.2px] border-ink bg-surface p-2 text-[13px] leading-[1.4]"
+			/>
+			<div className="flex items-center gap-2">
+				<span
+					id={count}
+					className={`font-mono text-[11px] ${over ? "text-held-fg" : "text-mute-2"}`}
+				>
+					{reason.length} / {REASON_MAX}
+				</span>
+				<button
+					type="button"
+					onClick={send}
+					disabled={!ready}
+					className="btn btn-dark ml-auto h-8 px-3 text-[13px]"
+				>
+					Send
+					<span className="font-mono text-[11px] opacity-70">⌘↵</span>
+				</button>
 			</div>
 		</div>
 	);
