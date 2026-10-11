@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Defensive metrics: Cressey</title>
+<style>
+  @page { size: A4; margin: 10mm; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; line-height: 1.3; color: #111; margin: 0; }
+  h1 { font-size: 13pt; margin: 0 0 3pt; }
+  .lead { margin: 0 0 4pt; }
+  h2 { font-size: 9pt; margin: 6pt 0 2pt; border-bottom: 0.5pt solid #888; padding-bottom: 1pt; }
+  p { margin: 2pt 0; }
+  ul { margin: 2pt 0; padding-left: 12pt; }
+  li { margin: 1pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 2pt 0; }
+  th, td { border: 0.4pt solid #999; padding: 1.5pt 3pt; text-align: left; vertical-align: top; }
+  th { background: #eee; }
+  .est { color: #7a4b00; }
+</style>
+</head>
+<body>
+<h1>Defensive metrics: Cressey</h1>
+<p class="lead">What the defender gets, and what is and is not measured. Numbers come from the evaluation runs in the repo.</p>
+
+<h2>Time saved for the analyst</h2>
+<p><b>Not measured.</b> The repo has no baseline of analyst time. What is measured is machine time: time to stop a call 236 ms at the stage's pace (one live run); three fix guides in 9 to 14 s.</p>
+<p class="est"><b>Estimate (assumptions, not data):</b></p>
+<table>
+<tr><th>Step per held incident</th><th style="width:22%">Without Cressey</th><th style="width:22%">With Cressey</th><th style="width:14%">Saved</th></tr>
+<tr><td>Find what the agent did and why</td><td>15 to 30 min</td><td>2 to 5 min</td><td>10 to 25 min</td></tr>
+<tr><td>Find where the misused secret came from</td><td>10 to 30 min</td><td>under 1 min</td><td>10 to 30 min</td></tr>
+<tr><td>Write a fix guide per owner</td><td>30 to 60 min</td><td>about 5 min to review</td><td>25 to 55 min</td></tr>
+<tr><td>Decide the hold</td><td>5 min</td><td>2 min</td><td>about 3 min</td></tr>
+<tr><td><b>Total</b></td><td><b>about 1 to 2 h</b></td><td><b>about 10 to 15 min</b></td><td><b>about 50 to 100 min</b></td></tr>
+</table>
+<p class="est">The "without" column is a guess at a careful manual triage. Replace both columns with a timed test on the synthetic incidents. Not counted: false-alarm review time on real traffic, and approver time on writes held without a security reason.</p>
+
+<h2>Precision of detections and conclusions</h2>
+<table>
+<tr><th style="width:34%">Check</th><th style="width:33%">Result</th><th>Limit</th></tr>
+<tr><td>Holds on normal sessions</td><td><b>0/6</b> held by mistake</td><td>6 synthetic sessions, written by the team</td></tr>
+<tr><td>Incident sessions held</td><td><b>7/7</b></td><td>the team wrote the incidents to match the rules</td></tr>
+<tr><td>Write judgment at 0.5</td><td>30/30 on labelled writes (15 yes, 15 no)</td><td>labels are ours</td></tr>
+<tr><td>Report check at 0.8</td><td><b>5/5</b> precision, 5/10 recall</td><td>20 reports; misses listed in evaluation</td></tr>
+<tr><td>Sourced guide steps</td><td>100% citation validity</td><td>checks that a step cites a retrieved passage, not that the advice is good</td></tr>
+<tr><td>Retrieval hit@3 after re-ranking</td><td>30 to 31 of 31</td><td>33 team-written questions</td></tr>
+</table>
+<p>These are weak evidence on a set this small. They show the rules and triangle work on our own sessions, not a false-positive rate for real traffic. The held-out set from outside the team is not written.</p>
+
+<h2>Coverage</h2>
+<table>
+<tr><th style="width:24%">Framework</th><th style="width:36%">Covered</th><th>Coverage in the repo</th></tr>
+<tr><td><b>MITRE ATT&amp;CK</b></td><td>T1485, T1552.001, T1078</td><td>Mapped in the pitch. The destructive-SQL and trap-key sessions exercise T1485 and T1552.001</td></tr>
+<tr><td><b>MITRE ATLAS v5.6.0</b></td><td>8 techniques: AML.T0053, T0101, T0055, T0083, T0051, T0080, T0110, T0086</td><td>IDs checked against the ATLAS reference file. The guide corpus holds 35 ATLAS mitigations</td></tr>
+<tr><td><b>OWASP Agentic</b></td><td>ASI01, ASI02, ASI03</td><td><b>The OWASP corpus file is not in the repo</b> (download by hand), so no OWASP guide is checked against it</td></tr>
+</table>
+<p>Gaps: ATLAS and ATT&amp;CK are hand mappings, and nothing tests them beyond the sessions named. Coverage holds only for traffic through Cressey.</p>
+
+<h2>Summary</h2>
+<p>Measured: precision on the team's synthetic set (0 false holds, 7/7 incidents held) and machine speed. Not measured: analyst time saved. Coverage is a hand mapping, and the OWASP corpus is not loaded.</p>
+</body>
+</html>
