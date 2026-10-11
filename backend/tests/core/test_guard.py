@@ -532,7 +532,9 @@ async def test_the_agent_isnt_told_that_a_key_is_a_trap(served_short_holds):
     told = r.content[0].text
     assert r.is_error and told == f"Cressey: action held. {WAY_OUT}"
     [step] = await steps(base, run)
-    assert step["reason"] == "trap key used: DB_ADMIN_KEY"
+    assert step["reason"] == (
+        "trap key used: DB_ADMIN_KEY; destructive SQL outside the mandate: users"
+    )
 
 
 async def test_the_agent_is_told_it_was_held_but_never_why(served_short_holds):

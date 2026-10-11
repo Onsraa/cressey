@@ -128,6 +128,29 @@ async def test_a_trap_key_that_only_reads_is_flagged_and_one_that_writes_is_held
     assert len(incidents) == 2  # the first read, then the write: not one per read
 
 
+async def test_a_read_the_floor_holds_stays_held_when_it_carries_a_trap_key(served):
+    """A trap key only softens a read the floor would let through: a protected path is held,
+    with an incident every time, and the reason says both."""
+    body = {"task": TASK, "mandate": {"protected": ["secrets"]}}
+    run = (await api(served, "POST", "/api/runs", json=body)).json()
+    grep = {"pattern": TRAP_KEY, "path": "secrets"}
+    for n in (1, 2):
+        call = event("PreToolUse", "Grep", f"toolu_g{n}", tool_input=grep)
+        held = asyncio.create_task(hook(served, run["key"], call))
+        hold = await next_hold(served)
+        assert hold["step"]["reason"] == (
+            "trap key used: DB_ADMIN_KEY; protected path: secrets"
+        )
+        await api(
+            served, "POST", f"/api/runs/{run['id']}/steps/{hold['step']['n']}/reject"
+        )
+        out = (await held).json()["hookSpecificOutput"]
+        assert out["permissionDecision"] == "deny"
+    steps = (await run_of(served, run))["steps"]
+    assert [s["status"] for s in steps] == ["rejected", "rejected"]
+    assert len((await api(served, "GET", "/api/incidents")).json()) == 2
+
+
 def trap_write(call: str = "toolu_1") -> dict:
     """A PreToolUse event for a command that writes with a trap key: it is held."""
     curl = {
