@@ -421,6 +421,35 @@ test("each leg shows the quote of its strongest open thread, and where it was sa
 		expect(gauges).not.toContain(s);
 });
 
+test("the rationalization gauge shows the justification that goes toward the crossing", () => {
+	const justify = (direction?: "toward" | "away" | "neither") =>
+		live([
+			demo(
+				{},
+				{
+					case: caseOf([
+						ev("R", 0.6, "I should pause here", { direction: "away" }),
+						ev("R", 0.9, "now I need to delete it using the shared ops token", {
+							direction,
+						}),
+					]),
+				},
+			),
+		]);
+	state = justify("toward");
+	const gauges = panel(html(), "Fraud triangle");
+	expect(gauges).toContain(
+		"now I need to delete it using the shared ops token",
+	);
+	expect(gauges).toContain(">reasoning<");
+	expect(gauges).not.toContain("I should pause here");
+	// The same words pointing away from the crossing, or nowhere, are no evidence.
+	for (const direction of ["away", "neither", undefined] as const) {
+		state = justify(direction);
+		expect(panel(html(), "Fraud triangle")).not.toContain("“");
+	}
+});
+
 test("no case yet: the gauges show no quote", () => {
 	state = live([demo({})]);
 	expect(panel(html(), "Fraud triangle")).not.toContain("“");

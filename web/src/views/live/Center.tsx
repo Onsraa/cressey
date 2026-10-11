@@ -18,14 +18,7 @@ import { Chart } from "./Chart";
 import { Field, type Hover } from "./Field";
 import type { Phase } from "./Header";
 import type { Scene } from "./pixels";
-import {
-	type Agg,
-	fmt,
-	legThreads,
-	type Scored,
-	strongestEvent,
-	TRAP,
-} from "./run";
+import { type Agg, fmt, legEvidence, type Scored, TRAP } from "./run";
 import { Bar, type LegLook, Letter } from "./ui";
 import { Waiting } from "./Waiting";
 
@@ -102,13 +95,6 @@ function autos(run: Run | undefined, g: LegLook): Auto[] {
 	return [];
 }
 
-// What the case holds on a leg: the strongest event of its strongest open thread.
-function said(run: Run | undefined, g: LegLook): CaseEvent | undefined {
-	if (!run) return;
-	const thread = legThreads(run)[g.k];
-	return thread && strongestEvent(run, thread);
-}
-
 export function Center({
 	run,
 	phase,
@@ -145,6 +131,7 @@ export function Center({
 		opportunity: glide.o,
 		rationalization: glide.r,
 	};
+	const evidence = run && legEvidence(run);
 	const closed = SIDES.filter(
 		([a, b]) => agg[a].confirmed && agg[b].confirmed,
 	).length;
@@ -229,7 +216,7 @@ export function Center({
 						g={g}
 						agg={agg}
 						score={score[g.k]}
-						said={said(run, g)}
+						said={evidence?.[g.k]}
 						auto={autos(run, g)}
 					/>
 				))}
@@ -239,7 +226,7 @@ export function Center({
 }
 
 // A leg: its highest score so far, gliding to each new one, whether facts confirm it, the
-// facts in a popover, what its strongest open thread says, and what Cressey did about it on
+// facts in a popover, what the case says of it, and what Cressey did about it on
 // its own.
 function Gauge({
 	g,

@@ -16,6 +16,7 @@ import {
 	callText,
 	carried,
 	indicatorsOn,
+	legEvidence,
 	legThreads,
 	originText,
 	RAMP,
@@ -278,6 +279,44 @@ describe("the case", () => {
 		expect(got.rationalization).toBeUndefined();
 		const lead = got.pressure;
 		expect(lead && strongestEvent(r, lead)?.quote).toBe("P1 at 0.9");
+	});
+
+	test("rationalization shows its strongest justification that goes toward the crossing", () => {
+		const r = withCase([
+			event("R", 0.9, { direction: "away", quote: "I should pause" }),
+			event("R", 0.5, { direction: "toward", quote: "weak" }),
+			event("C1", 0.7, { direction: "toward", quote: "hide the trace" }),
+			event("R", 0.95, { quote: "no direction" }),
+			event("P1", 0.99, { direction: "toward", quote: "not a justification" }),
+		]);
+		expect(legEvidence(r).rationalization?.quote).toBe("hide the trace");
+		// Away from the crossing, or neither: not evidence.
+		const away = withCase([
+			event("R", 0.9, { direction: "away" }),
+			event("R", 0.8, { direction: "neither" }),
+			event("C1", 0.8),
+		]);
+		expect(legEvidence(away).rationalization).toBeUndefined();
+		expect(legEvidence(run()).rationalization).toBeUndefined();
+	});
+
+	test("pressure and opportunity keep the strongest open thread's strongest event", () => {
+		const r = withCase(
+			[
+				event("P1", 0.5, { objects: ["a"] }),
+				event("P1", 0.9, { objects: ["a"] }),
+				event("P3", 0.99, { objects: ["b"] }),
+				event("O1", 0.6, { objects: ["c"] }),
+			],
+			[
+				thread("pressure", [0, 1]),
+				thread("pressure", [2], "shared"),
+				thread("opportunity", [3]),
+			],
+		);
+		const got = legEvidence(r);
+		expect(got.pressure?.quote).toBe("P1 at 0.9");
+		expect(got.opportunity?.quote).toBe("O1 at 0.6");
 	});
 
 	test("no case yet: no thread on any leg", () => {

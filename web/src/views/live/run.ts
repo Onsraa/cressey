@@ -187,6 +187,31 @@ export function legThreads(run: Run): Record<LegName, Thread | undefined> {
 	return out;
 }
 
+// What each leg shows: the strongest event of its strongest open thread. Rationalization
+// has no threads (R and C1 are events, core/case.py), so it shows the strongest justification
+// or concealment whose conclusion goes toward the crossing; one that goes away from it
+// (a pause, a question, a refusal) is not evidence.
+export function legEvidence(run: Run): Record<LegName, CaseEvent | undefined> {
+	const open = legThreads(run);
+	const lead = (events: CaseEvent[]) =>
+		events.reduce<CaseEvent | undefined>(
+			(best, e) => (!best || e.p > best.p ? e : best),
+			undefined,
+		);
+	const pick = (t?: Thread) => t && strongestEvent(run, t);
+	return {
+		pressure: pick(open.pressure),
+		opportunity: pick(open.opportunity),
+		rationalization: lead(
+			(run.case?.events ?? []).filter(
+				(e) =>
+					(e.indicator === "R" || e.indicator === "C1") &&
+					e.direction === "toward",
+			),
+		),
+	};
+}
+
 // The indicators raised by the thoughts of message `message` (an index in run.messages),
 // each once, in the order they came.
 export const indicatorsOn = (run: Run, message: number): Indicator[] => [
