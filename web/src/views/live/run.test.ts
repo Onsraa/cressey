@@ -271,6 +271,14 @@ describe("a thought on the triangle", () => {
 		const row = rows(said).find((x) => x.kind === "msg");
 		expect(row?.kind === "msg" && row.legs?.pressure.score).toBe(0.97);
 	});
+	test("the thought whose excuse stopped the agent carries the call it stopped", () => {
+		const held = step(2, "read_file", "{}", { stopped_by: 0, status: "held" });
+		const stopped = rows({ ...said, steps: [step(1, "t", "{}"), held] });
+		const msg = stopped.find((x) => x.kind === "msg");
+		expect(msg?.kind === "msg" && msg.stops?.n).toBe(2);
+		const quiet = rows(said).find((x) => x.kind === "msg");
+		expect(quiet?.kind === "msg" && quiet.stops).toBeUndefined();
+	});
 });
 
 describe("the gauges", () => {

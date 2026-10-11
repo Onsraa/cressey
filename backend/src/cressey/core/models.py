@@ -275,6 +275,9 @@ class Step(BaseModel):
     # Served: the dashboard shows a tool running.
     running: bool = False
     shadow: Shadow | None = None
+    # The excuse in the agent's words that stopped the agent at this call, as an index in
+    # run.case.events (CRESSEY_THOUGHT_HOLDS); None when the words didn't stop it.
+    stopped_by: int | None = None
 
 
 class RejectIn(BaseModel):

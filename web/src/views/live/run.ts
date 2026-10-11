@@ -20,6 +20,7 @@ export type Row =
 			kind: "msg";
 			indicators: Indicator[];
 			legs?: Legs;
+			stops?: Step; // the call this thought's excuse stopped (CRESSEY_THOUGHT_HOLDS)
 	  } & Message)
 	| { id: string; kind: "report"; text: string };
 
@@ -38,6 +39,10 @@ export function rows(run: Run): Row[] {
 			kind: "msg",
 			indicators: indicatorsOn(run, i),
 			legs: thoughtLegs(run, i),
+			stops: run.steps.find(
+				(s) =>
+					s.stopped_by != null && run.case?.events[s.stopped_by]?.message === i,
+			),
 		},
 	]);
 	const all = [...calls, ...said]

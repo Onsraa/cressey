@@ -19,6 +19,7 @@ from cressey.core.judge import Judge, NotRecorded, Question, yes
 from cressey.core.models import (
     Case,
     Event,
+    Legs,
     Mandate,
     Message,
     Note,
@@ -336,6 +337,41 @@ async def shadow(
     decision.words_read = words_read
     decision.legs = leg_values(run.case)
     return decision
+
+
+async def catch_up(run: Run, call: Step, judge: Judge, t: Thresholds) -> None:
+    """The case brought up to date with what came before `call`, in the run's turn, so the
+    call is decided on the agent's words too (CRESSEY_THOUGHT_HOLDS)."""
+    async with _turn(run):
+        await _catch_up(run, call.n, judge, t)
+
+
+def closing_excuse(run: Run, legs: Legs) -> int | None:
+    """The excuse in the agent's words that closes the triangle, as an index in the case's
+    events: the newest justification or concealment going toward the crossing, once pressure
+    or opportunity is confirmed by code or open in the case. None when the triangle isn't
+    closed, or when that excuse already stopped a call: one stop per thought."""
+    case = run.case
+    excuses = [
+        i
+        for i, e in enumerate(case.events)
+        if e.indicator in ("R", "C1") and e.direction == "toward"
+    ]
+    if not excuses or excuses[-1] in {s.stopped_by for s in run.steps}:
+        return None
+    other_leg = (
+        legs.pressure.confirmed
+        or legs.opportunity.confirmed
+        or any(
+            th.state == "open" and (th.leg == "pressure" or th.outside)
+            for th in case.threads
+        )
+    )
+    return excuses[-1] if other_leg else None
+
+
+def excuse_reason(run: Run, i: int) -> str:
+    return f"triangle: closed in the agent's words, “{run.case.events[i].quote}”"
 
 
 async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:

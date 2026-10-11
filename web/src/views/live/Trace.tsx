@@ -254,8 +254,16 @@ function TextRow({
 				<span className="line-clamp-2 text-[#3a3a3a] text-[13px] leading-[1.4]">
 					{row.text}
 				</span>
-				{row.kind === "msg" && row.indicators.length > 0 && (
+				{row.kind === "msg" && (row.stops || row.indicators.length > 0) && (
 					<span className="mt-0.5 flex flex-wrap gap-1">
+						{row.stops && (
+							<span data-tip={stopTip(row.stops)} className={CHIP_HELD}>
+								<TriangleAlert size={10} />
+								{row.stops.status === "would_hold"
+									? "would stop here"
+									: "stopped here"}
+							</span>
+						)}
 						{row.indicators.map((i) => (
 							<IndicatorChip key={i} indicator={i} />
 						))}
@@ -266,6 +274,12 @@ function TextRow({
 		</>
 	);
 }
+
+// Why a thought carries the stop: its excuse closed the triangle before the next call.
+const stopTip = (s: Step) =>
+	s.status === "would_hold"
+		? `The triangle closed in this thought: Cressey would have held the next call, #${s.n} ${s.tool}`
+		: `The triangle closed in this thought: the next call, #${s.n} ${s.tool}, was held before it ran`;
 
 // A call's or a thought's three scores as pixel cells: darker is higher, ringed in the leg's
 // colour once facts confirm it at this step.

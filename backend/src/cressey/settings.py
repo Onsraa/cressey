@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     )
     # Two confirmed legs hold a call. Off measures the safety floor alone (the ablation).
     triangle_holds: bool = Field(True, validation_alias="CRESSEY_TRIANGLE_HOLDS")
+    # On, an excuse in a thought (R or C1 going toward the crossing) with pressure or
+    # opportunity confirmed stops the agent at its next call, whatever it is, and confirms
+    # rationalization there. Off, the words show on the triangle and never hold.
+    thought_holds: bool = Field(False, validation_alias="CRESSEY_THOUGHT_HOLDS")
     # At fleet scale nobody waits on each hold: `refuse` refuses it at once, with the way out.
     holds: Literal["wait", "refuse"] = Field("wait", validation_alias="CRESSEY_HOLDS")
 

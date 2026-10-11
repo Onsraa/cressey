@@ -35,6 +35,7 @@ def serving(
     hold_timeout: float,
     holds: Literal["wait", "refuse"] = "wait",
     judge: Judge | None = None,
+    thought_holds: bool = False,
 ) -> Generator[str]:
     settings = Settings(
         _env_file=None,
@@ -44,6 +45,7 @@ def serving(
         demo_dir=demo,
         hold_timeout=hold_timeout,
         holds=holds,
+        thought_holds=thought_holds,
     )
     with serve(create_app(settings, make_guide=fake_guide, judge=judge)) as base:
         yield base

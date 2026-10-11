@@ -383,6 +383,7 @@ function Text({
 	const check = row.kind === "report" ? run.report_check : undefined;
 	const you = row.kind === "msg" && row.role === "user";
 	const legs = row.kind === "msg" ? row.legs : undefined;
+	const stops = row.kind === "msg" ? row.stops : undefined;
 	return (
 		<>
 			<div className="flex flex-col gap-2">
@@ -406,6 +407,22 @@ function Text({
 				</span>
 				<p className="m-0 text-pretty text-[15px] leading-normal">{row.text}</p>
 			</div>
+			{stops && (
+				<Labeled
+					label={
+						stops.status === "would_hold"
+							? "would have stopped the agent"
+							: "stopped the agent"
+					}
+				>
+					<span className="text-pretty font-medium text-held-fg text-sm leading-[1.4]">
+						The triangle closed in this thought: call #{stops.n}, {stops.tool},{" "}
+						{stops.status === "would_hold"
+							? "would have been held."
+							: "was held before it ran."}
+					</span>
+				</Labeled>
+			)}
 			{legs && (
 				<div className="flex flex-col gap-0.5">
 					<span className="label mb-1">scores for this thought</span>

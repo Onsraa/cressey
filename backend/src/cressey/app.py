@@ -68,6 +68,7 @@ def create_app(
         s.triangle_holds,
         s.holds,
         drafter,
+        s.thought_holds,
     )
     mcp = build_mcp(guard, upstream)
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)

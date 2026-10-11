@@ -29,3 +29,11 @@ def served_scored(tmp_path):
     judge = ServedJudge()
     with serving(tmp_path, hold_timeout=10, judge=judge) as base:
         yield base, judge
+
+
+@pytest.fixture
+def served_thought_holds(tmp_path):
+    """served_scored, with an excuse in the agent's words stopping it (CRESSEY_THOUGHT_HOLDS)."""
+    judge = ServedJudge()
+    with serving(tmp_path, hold_timeout=10, judge=judge, thought_holds=True) as base:
+        yield base, judge

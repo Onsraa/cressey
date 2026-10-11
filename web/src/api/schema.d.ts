@@ -1096,6 +1096,8 @@ export interface components {
 			 */
 			running: boolean;
 			shadow?: components["schemas"]["Shadow"] | null;
+			/** Stopped By */
+			stopped_by?: number | null;
 		};
 		/**
 		 * TextIn

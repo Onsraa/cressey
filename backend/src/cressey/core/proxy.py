@@ -22,7 +22,7 @@ from pydantic import JsonValue
 from typesafe_sdk import Choice
 
 from cressey.core.broker import scoped
-from cressey.core.case import shadow_soon
+from cressey.core.case import catch_up, closing_excuse, excuse_reason, shadow_soon
 from cressey.core.draft import (
     WAY_OUT,
     Drafter,
@@ -145,8 +145,10 @@ class Guard(Middleware):
         triangle_holds: bool = True,
         holds: Literal["wait", "refuse"] = "wait",
         drafter: Drafter | None = None,
+        thought_holds: bool = False,
     ) -> None:
         self.runs, self.incidents = runs, incidents
+        self.thought_holds = thought_holds
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
         self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self._late: set[asyncio.Task[None]] = (
@@ -261,20 +263,32 @@ class Guard(Middleware):
             if run.revoked:
                 self.runs.mark(run, step, "denied")
                 raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
-            # Side by side: the floor's label waits for no more than the triangle already does.
-            triangle, irreversible = await asyncio.gather(
+            # Side by side: the floor's label waits for no more than the triangle already does,
+            # and with thought holds on, the agent's words before the call are read meanwhile.
+            triangle, irreversible, _ = await asyncio.gather(
                 legs(run, step, self.judge, self.policy.triangle),
                 self._irreversible(run, step, floor),
+                self._read_words(run, step),
             )
             if run.revoked:  # a parallel call was held while this one was being judged
                 self.runs.mark(run, step, "denied")
                 raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
+            excuse = closing_excuse(run, triangle) if self.thought_holds else None
             reason = (
                 floor
                 or irreversible
+                or (excuse_reason(run, excuse) if excuse is not None else None)
                 or (alarm_reason(triangle) if triangle_hold else None)
             )
+            if excuse is not None and not (floor or irreversible):
+                # The stop is the words', shown on the thought; their excuse confirms the leg.
+                step.stopped_by = excuse
+                said, leg = run.case.events[excuse], triangle.rationalization
+                leg.confirmed, leg.score = True, max(leg.score, said.p)
+                leg.facts.append(
+                    f"excuse in the agent's words, {said.p:.2f}: “{said.quote}”"
+                )
             self.runs.score(run, step, triangle, reason)
             self._shadow_later(run, step, floor)
             # The Observateur run and the floor-alone ablation show what happens without it.
@@ -321,6 +335,10 @@ class Guard(Middleware):
         except BaseException:
             step.running = False  # refused: no result will come
             raise
+
+    async def _read_words(self, run: Run, step: Step) -> None:
+        if self.thought_holds:
+            await catch_up(run, step, self.judge, self.policy.triangle)
 
     def _shadow_later(self, run: Run, step: Step, floor: str | None) -> None:
         """What the case would decide for this call, beside today's decision and after it:
