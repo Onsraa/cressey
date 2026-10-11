@@ -10,13 +10,13 @@ Reference incidents: PocketOS (April 2026), a coding agent deleted a production 
 ## NIST CSF 2.0 functions covered
 | Function | Categories | How Cressey addresses it |
 |---|---|---|
-| **Detect** | DE.CM (continuous monitoring), DE.AE (adverse event analysis) | Every tool call and agent message is judged; the safety floor and the triangle flag the call; trap keys raise an alert on read |
+| **Detect** | DE.CM (continuous monitoring), DE.AE (adverse event analysis) | Every tool call and agent message is judged; the safety floor and the triangle flag the call; |
 | **Respond** | RS.AN (analysis), RS.CO (communication), RS.MI (mitigation) | Hold for a human, refuse, or alert; a hold traces the misused secret to where the agent read it and writes a sourced fix guide per owner; after 3 rejected calls the agent is told to stop and report |
 | **Protect** | PR.AA (identity and access control) | Mandate per agent: destructive actions outside it are held; the production key turns read-only from the hold on |
 
 ## OWASP and MITRE mappings
-- **OWASP Top 10 for Agentic Applications:** ASI01 goal hijacking, ASI02 tool misuse, ASI03 identity and privilege abuse, ASI10.
-- **MITRE ATLAS v5.6.0** (IDs checked in `backend/data/reference/ATLAS.yaml`): AML.T0053 AI Agent Tool Invocation; AML.T0101 Data Destruction via AI Agent Tool Invocation; AML.T0055 Unsecured Credentials; AML.T0083 Credentials from AI Agent Configuration; AML.T0051 LLM Prompt Injection; AML.T0080 AI Agent Context Poisoning; AML.T0110 AI Agent Tool Poisoning; AML.T0086 Exfiltration via AI Agent Tool Invocation.
+- **OWASP Top 10 for Agentic Applications:** ASI01 goal hijacking, ASI02 tool misuse, ASI03 identity and privilege abuse.
+- **MITRE ATLAS v5.6.0**: AML.T0053 AI Agent Tool Invocation; AML.T0101 Data Destruction via AI Agent Tool Invocation; AML.T0055 Unsecured Credentials; AML.T0083 Credentials from AI Agent Configuration; AML.T0051 LLM Prompt Injection; AML.T0080 AI Agent Context Poisoning; AML.T0110 AI Agent Tool Poisoning; AML.T0086 Exfiltration via AI Agent Tool Invocation.
 - **MITRE ATT&CK:** T1485 Data Destruction; T1552.001 Credentials In Files; T1078 Valid Accounts.
 
 ## Metrics achieved
