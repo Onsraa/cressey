@@ -10,6 +10,7 @@ from starlette.routing import Route
 
 from cressey.core.api import router as core_router
 from cressey.core.eventlog import EventLog
+from cressey.core.hook import router as hook_router
 from cressey.core.incidents import Incidents
 from cressey.core.judge import JevJudge, Judge
 from cressey.core.preflight import assess_for
@@ -41,6 +42,7 @@ def create_app(
 
     given = judge
     policy = load_policy(DATA / "policy.yaml")
+    policy.decoys |= s.decoys
     judge = judge or JevJudge.from_settings(s)
     upstream = demo_tools(demo)
     # The task assessed before the run, against the tools as the agent sees them.
@@ -60,6 +62,7 @@ def create_app(
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s
     app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check
     app.state.policy = policy  # its responses change live
+    app.state.guard = guard  # the Claude Code hook runs its decision
     app.state.assess_task = assess_task  # each new run's task
     api = APIRouter(prefix="/api")
 
@@ -80,6 +83,7 @@ def create_app(
         raise HTTPException(404)
 
     app.include_router(api)
+    app.include_router(hook_router)  # the agents' second way in, beside MCP_PATH
     # The URL agents put in their MCP config. Registered before the SPA fallback.
     app.router.routes.append(Route(MCP_PATH, endpoint=mcp))
     _mount_web(app, s)

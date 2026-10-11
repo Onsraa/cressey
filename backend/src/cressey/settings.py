@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     aws_session_token: SecretStr | None = Field(
         None, validation_alias="AWS_SESSION_TOKEN"
     )
+    # Trap keys planted outside the demo workspace, name: value as JSON, added to
+    # policy.yaml's. A real token an agent can find goes here, never in the policy file.
+    decoys: dict[str, str] = Field(
+        default_factory=dict, validation_alias="CRESSEY_DECOYS"
+    )
     # Two confirmed legs hold a call. Off measures the safety floor alone (the ablation).
     triangle_holds: bool = Field(True, validation_alias="CRESSEY_TRIANGLE_HOLDS")
     # At fleet scale nobody waits on each hold: `refuse` refuses it at once, with the way out.

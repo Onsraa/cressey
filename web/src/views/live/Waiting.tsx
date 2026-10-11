@@ -51,6 +51,10 @@ export function Waiting({ title }: { title: string }) {
 					Authorization: Bearer &lt;run key&gt;
 				</code>
 			</span>
+			<span className="max-w-[280px] text-[12.5px] text-mute-2 leading-[1.45]">
+				Or wire the Claude Code hook (shell, files and reasoning) — see
+				Settings.
+			</span>
 		</div>
 	);
 }

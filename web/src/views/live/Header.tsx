@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useLive } from "@/api/live";
 import type { Mandate, Run } from "@/api/types";
-import { KIND, TONE, type Tone, time, VISIBILITY } from "@/lib/labels";
+import { KIND, TONE, type Tone, time, VIA, VISIBILITY } from "@/lib/labels";
 
 const list = (xs: string[]) => (xs.length ? xs.join(", ") : "none");
 
@@ -53,6 +53,7 @@ export function Header({ run }: { run: Run }) {
 	const { focusMode } = useLive();
 	const ended = Boolean(run.ended_at);
 	const key = keyLook(run);
+	const via = run.via ? VIA[run.via] : null;
 	const startedTip = ended
 		? `Started at ${time(run.started_at)}\nFinished at ${time(run.ended_at)}: final report received`
 		: `Started at ${time(run.started_at)}\nThe run ends when the agent sends its final report.`;
@@ -71,6 +72,12 @@ export function Header({ run }: { run: Run }) {
 							>
 								{KIND[run.kind]}
 							</span>
+							{via && (
+								<span data-tip={via.tip} className="chip cursor-help">
+									<via.Icon size={12} />
+									{via.label}
+								</span>
+							)}
 							<span
 								className={`chip gap-1.5 ${ended ? "border-grey-bd bg-grey" : "border-ok-bd bg-ok"}`}
 							>

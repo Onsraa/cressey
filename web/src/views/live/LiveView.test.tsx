@@ -116,6 +116,7 @@ const live = (runs: Run[], focus: real.Focus = {}): real.Live => ({
 		mode: "guard",
 		model_mode: "live",
 		mcp_path: "/mcp",
+		hook_path: "/hook/claude",
 		log: { hash: "h", count: 1, intact: true },
 	},
 	runs,

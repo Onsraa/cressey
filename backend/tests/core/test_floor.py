@@ -1,6 +1,6 @@
 import pytest
 
-from cressey.core.floor import check, sql_risk
+from cressey.core.floor import check, shell_risk, sql_risk
 from cressey.core.models import Mandate, ToolRule
 
 SQL = ToolRule(kind="sql", arg="query")
@@ -165,3 +165,32 @@ def test_a_frozen_path_reads_but_its_write_is_held(path):
 
 def test_a_path_outside_the_frozen_ones_is_written_freely():
     assert check(WRITE, {"path": "src/app.py"}, FROZEN) == ("write", None)
+
+
+@pytest.mark.parametrize(
+    ("command", "risk"),
+    [
+        ("ls -la", "read"),
+        ("cat .env.staging | grep TOKEN", "read"),
+        ("git status && git diff", "read"),
+        ("echo hi > notes.txt", "write"),
+        (". ./.env.staging && curl -s https://api.test -d '{}'", "write"),
+        ("rm -rf node_modules", "destructive"),
+        ("psql -c 'DELETE FROM users'", "destructive"),
+        ("git push --force origin main", "destructive"),
+    ],
+)
+def test_shell_commands_are_classified(command, risk):
+    assert shell_risk(command) == risk
+
+
+def test_a_destructive_shell_command_is_held_whatever_the_mandate():
+    shell = ToolRule(kind="shell", arg="command")
+    assert check(shell, {"command": "rm -rf build"}, NONE) == (
+        "destructive",
+        "destructive shell command",
+    )
+    assert check(shell, {"command": "curl -s https://api.test"}, NONE) == (
+        "write",
+        None,
+    )

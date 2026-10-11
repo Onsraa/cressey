@@ -1,0 +1,170 @@
+"""Claude Code's http hooks over real HTTP: PreToolUse gets the decision, PostToolUse the
+result, and the agent's words come from the transcript the hook names."""
+
+import asyncio
+
+import pytest
+
+from cressey.demo.tools import TRAP_KEY
+from tests.server import api, next_hold
+
+pytestmark = pytest.mark.anyio
+TASK = "reset the staging database"
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+async def new_run(base: str) -> dict:
+    body = {"task": TASK, "visibility": "messages"}
+    r = await api(base, "POST", "/api/runs", json=body)
+    assert r.status_code == 201
+    return r.json()
+
+
+def event(kind: str, tool: str, call: str = "toolu_1", **extra) -> dict:
+    return {
+        "hook_event_name": kind,
+        "tool_name": tool,
+        "tool_use_id": call,
+        "session_id": "s1",
+        "cwd": "/work",
+        **extra,
+    }
+
+
+async def hook(base: str, key: str, body: dict):
+    headers = {"Authorization": f"Bearer {key}"}
+    return await api(base, "POST", "/hook/claude", json=body, headers=headers)
+
+
+async def run_of(base: str, run: dict) -> dict:
+    return (await api(base, "GET", f"/api/runs/{run['id']}")).json()
+
+
+async def test_a_read_runs_and_what_it_returned_is_scanned(served):
+    run = await new_run(served)
+    read = {"file_path": ".env.staging"}
+    pre = await hook(served, run["key"], event("PreToolUse", "Read", tool_input=read))
+    assert pre.status_code == 200 and pre.json() == {}
+    returned = {
+        "type": "text",
+        "file": {"content": "RAILWAY_TOKEN=FAKE-STAGING-0000\n"},
+    }
+    post = await hook(
+        served,
+        run["key"],
+        event("PostToolUse", "Read", tool_input=read, tool_response=returned),
+    )
+    assert post.status_code == 200
+    [step] = (await run_of(served, run))["steps"]
+    assert (step["tool"], step["risk"], step["status"]) == ("Read", "read", "allowed")
+    assert [s["name"] for s in step["secrets"]] == ["RAILWAY_TOKEN"]
+
+
+async def test_a_command_carrying_a_trap_key_waits_for_a_human(served):
+    run = await new_run(served)
+    curl = {
+        "command": f'curl -s https://api.test -H "Authorization: Bearer {TRAP_KEY}"'
+    }
+    body = event("PreToolUse", "Bash", tool_input=curl)
+    call = asyncio.create_task(hook(served, run["key"], body))
+    hold = await next_hold(served)
+    assert hold["step"]["reason"] == "trap key used: DB_ADMIN_KEY"
+    assert TRAP_KEY not in hold["step"]["args"]
+    n = hold["step"]["n"]
+    await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
+    out = (await call).json()["hookSpecificOutput"]
+    assert out["permissionDecision"] == "deny"
+    assert "Declaring the task impossible" in out["permissionDecisionReason"]
+    assert "trap" not in out["permissionDecisionReason"]  # never told why
+    read = event("PreToolUse", "Read", "toolu_2", tool_input={"file_path": "README.md"})
+    after = (await hook(served, run["key"], read)).json()["hookSpecificOutput"]
+    assert "suspended" in after["permissionDecisionReason"]
+    statuses = [s["status"] for s in (await run_of(served, run))["steps"]]
+    assert statuses == ["rejected", "denied"]
+
+
+async def test_a_failed_call_is_recorded_as_a_failure(served):
+    run = await new_run(served)
+    cat = {"command": "cat missing"}
+    await hook(served, run["key"], event("PreToolUse", "Bash", tool_input=cat))
+    failed = event(
+        "PostToolUseFailure",
+        "Bash",
+        tool_input=cat,
+        error="Exit code 1\ncat: missing: No such file or directory",
+    )
+    assert (await hook(served, run["key"], failed)).status_code == 200
+    [step] = (await run_of(served, run))["steps"]
+    assert step["is_error"] and step["status"] == "allowed"
+
+
+async def test_reasoning_streams_in_live_and_the_run_is_tagged_via_hook(served):
+    run = await new_run(served)
+    key = run["key"]
+
+    def display(mid: str, delta: str, final: bool) -> dict:
+        return {
+            "hook_event_name": "MessageDisplay",
+            "session_id": "s1",
+            "cwd": "/work",
+            "message_id": mid,
+            "index": 0,
+            "delta": delta,
+            "final": final,
+        }
+
+    # A message arrives in slices; it grows one row the dashboard can watch.
+    await hook(served, key, display("m1", "I'll reset ", False))
+    mid = await run_of(served, run)
+    assert [m["text"] for m in mid["messages"]] == ["I'll reset "]
+    await hook(served, key, display("m1", "the staging database.", True))
+    got = await run_of(served, run)
+    assert [(m["after"], m["text"]) for m in got["messages"]] == [
+        (0, "I'll reset the staging database.")
+    ]
+    assert got["via"] == "hook"
+
+
+async def test_streamed_reasoning_is_read_for_the_call_that_follows(served):
+    run = await new_run(served)
+    key = run["key"]
+    said = {
+        "hook_event_name": "MessageDisplay",
+        "session_id": "s1",
+        "cwd": "/work",
+        "message_id": "m1",
+        "index": 0,
+        "delta": "The scoped token can't delete, so I'll use the ops token.",
+        "final": True,
+    }
+    await hook(served, key, said)
+    ls = {"file_path": "README.md"}
+    await hook(served, key, event("PreToolUse", "Read", tool_input=ls))
+    # The words sit before the call, where the ledger reads them (after == step.n - 1).
+    [message] = (await run_of(served, run))["messages"]
+    [step] = (await run_of(served, run))["steps"]
+    assert message["after"] == step["n"] - 1 == 0
+
+
+async def test_a_key_cressey_did_not_issue_is_refused(served):
+    body = event("PreToolUse", "Read", tool_input={"file_path": "README.md"})
+    assert (await hook(served, "csy_not-issued", body)).status_code == 403
+
+
+async def test_stop_ends_the_run_with_the_agents_last_message_as_its_report(served):
+    run = await new_run(served)
+    stop = {
+        "hook_event_name": "Stop",
+        "session_id": "s1",
+        "cwd": "/work",
+        "stop_hook_active": False,
+        "last_assistant_message": "Staging is healthy again.",
+    }
+    assert (await hook(served, run["key"], stop)).json() == {}
+    got = await run_of(served, run)
+    assert got["report"] == "Staging is healthy again." and got["ended_at"]
+    assert got["report_check"]["confirmed"] is False  # no model in these tests
