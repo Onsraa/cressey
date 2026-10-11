@@ -10,6 +10,7 @@ from typing import Literal
 import httpx2
 
 from cressey.app import create_app
+from cressey.core.judge import Judge
 from cressey.demo.server import serve
 from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
@@ -30,7 +31,10 @@ def fake_guide(gi: GuideIncident) -> Guide:
 
 @contextmanager
 def serving(
-    demo: Path, hold_timeout: float, holds: Literal["wait", "refuse"] = "wait"
+    demo: Path,
+    hold_timeout: float,
+    holds: Literal["wait", "refuse"] = "wait",
+    judge: Judge | None = None,
 ) -> Generator[str]:
     settings = Settings(
         _env_file=None,
@@ -41,7 +45,7 @@ def serving(
         hold_timeout=hold_timeout,
         holds=holds,
     )
-    with serve(create_app(settings, make_guide=fake_guide)) as base:
+    with serve(create_app(settings, make_guide=fake_guide, judge=judge)) as base:
         yield base
 
 

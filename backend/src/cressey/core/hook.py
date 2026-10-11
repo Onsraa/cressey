@@ -10,6 +10,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastmcp.exceptions import ToolError
 from pydantic import JsonValue
 
+from cressey.core.case import read_prompt_soon
 from cressey.core.models import Step
 from cressey.core.proxy import Guard
 from cressey.core.runs import Runs
@@ -44,7 +45,8 @@ async def claude_hook(
     - MessageDisplay streams a slice of the agent's reasoning; it grows one message live, so
       the dashboard shows it as it is produced and the next call's judgment reads it. The
       decision model flags the message once it is final.
-    - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key.
+    - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key. The
+      case reads it in the background: what it approves, what it answers.
     - PreToolUse gets Cressey's decision: nothing when the call may run, a deny with the way
       out when it may not.
     - PostToolUse / PostToolUseFailure record what the call returned and read the step.
@@ -69,7 +71,9 @@ async def claude_hook(
         runs.disconnect(run)
         return {}
     if kind == "UserPromptSubmit":
-        runs.prompt(run, event.get("prompt") or "")
+        prompt = runs.prompt(run, event.get("prompt") or "")
+        state = request.app.state
+        read_prompt_soon(run, prompt.text, state.judge, state.thresholds)
         return {}
     if kind == "MessageDisplay":
         done = runs.stream(

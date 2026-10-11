@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Mapping
 
 import pytest
@@ -9,9 +10,11 @@ from cressey.core.case import (
     notes,
     read_message,
     read_prompt,
+    read_prompt_soon,
     record,
     secret_names,
     shadow,
+    shadow_soon,
     uses,
 )
 from cressey.core.models import Case, Event, Mandate, Thresholds
@@ -582,3 +585,62 @@ async def test_a_secret_the_mandate_names_is_not_held_for_a_thought_about_it():
     s = await shadow(run, carries_ops(3), None, judge, T)
     assert run.case.threads[0].object == "secret:ops"
     assert s.decision == "allow" and s.uses == ["secret:ops"]
+
+
+# --- scheduled in the background
+
+
+class SlowJudge(PromptJudge):
+    """PromptJudge that takes a moment to answer, as a model does."""
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        await asyncio.sleep(0.01)
+        return await super().answers(state, questions)
+
+
+async def test_a_shadow_is_scheduled_once_while_it_is_computed():
+    run = run_with(step(2, "Read"))
+    call = bash(3)
+    first = shadow_soon(run, call, None, SlowJudge(), T)
+    assert first is not None
+    assert shadow_soon(run, call, None, SlowJudge(), T) is None  # already on its way
+    assert (await first).decision == "allow"
+    again = shadow_soon(run, call, None, SlowJudge(), T)  # done: asked again, not lost
+    assert again is not None
+    await again
+
+
+async def test_a_blank_prompt_or_one_being_read_is_not_scheduled():
+    run = run_with(step(2, "Read"), messages=[message(after=1, text="go", role="user")])
+    assert read_prompt_soon(run, "  \n", SlowJudge(), T) is None
+    first = read_prompt_soon(run, "go", SlowJudge(), T)
+    assert first is not None and read_prompt_soon(run, "go", SlowJudge(), T) is None
+    await first
+
+
+async def test_shadows_take_turns_so_a_thought_is_read_once():
+    m = message(after=0, text="Found the token. Now I will use it.")
+    run = run_with(messages=[m])
+    judge = SlowJudge({"Found the token.": {}, "Now I will use it.": {}})
+    first = shadow_soon(run, bash(1), None, judge, T)
+    second = shadow_soon(run, bash(2), None, judge, T)
+    assert first is not None and second is not None
+    await asyncio.gather(first, second)
+    assert [x["current_thought"] for x in judge.asked] == [
+        "Found the token.",
+        "Now I will use it.",
+    ]
+    assert m.read == 2
+
+
+async def test_a_prompt_is_read_after_the_shadows_scheduled_before_it():
+    """The thought that opens the thread is read by the shadow; the prompt then finds it."""
+    thing = "9f8e7d6c5b4a"
+    m = message(after=0, text=f"Found {thing}.")
+    run = run_with(step(1, "Read"), messages=[m])
+    judge = SlowJudge({f"Found {thing}.": {"O1": 0.9, f"about:{thing}": 1.0}}, 0.9)
+    shadowed = shadow_soon(run, bash(2), None, judge, T)
+    prompt = read_prompt_soon(run, "yes, go ahead", judge, T)
+    assert shadowed is not None and prompt is not None
+    await asyncio.gather(shadowed, prompt)
+    assert run.case.approved == [thing]

@@ -35,14 +35,15 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
     run = await run_page(served, played.run_id)
     assert played.blocked_at is None and users(tmp_path) == 0
     assert run["report"] == demo.report and run["ended_at"]
-    # No model runs here: the message is unflagged.
+    # No model runs here: the shadow cut the message into its thoughts, none is read or
+    # flagged.
     assert run["messages"][0] == {
         "after": 0,
         "text": demo.steps[0].say,
         "role": "agent",
         "streaming": False,
         "source": "narration",
-        "thoughts": [],
+        "thoughts": [demo.steps[0].say],
         "read": 0,
         "labels": None,
         "flagged": [],

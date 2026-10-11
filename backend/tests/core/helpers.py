@@ -1,3 +1,8 @@
+import asyncio
+from collections.abc import Mapping
+
+from typesafe_sdk import Noul
+
 from cressey.core.models import Mandate, Message, Run, Step
 
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -38,3 +43,37 @@ def message(
         source=source,
         thoughts=thoughts or [],
     )
+
+
+class ServedJudge:
+    """The decision model of a served app. The triangle's questions get zeros. A thought
+    gets its row in `thoughts` (question -> answer, as ScriptedJudge reads them; None for no
+    answer) and a user's
+    message `approves` for each question asking whether it approves; both after `delay`
+    seconds. `asked` holds the states of the case's questions, recorded before the wait."""
+
+    def __init__(self) -> None:
+        self.thoughts: dict[str, dict | None] = {}
+        self.approves = 0.0
+        self.delay = 0.0
+        self.asked: list[dict] = []
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "current_thought" not in state and "user_message" not in state:
+            return dict.fromkeys(questions, 0.0)
+        self.asked.append(state)
+        await asyncio.sleep(self.delay)
+        if "user_message" in state:
+            return {
+                q: self.approves if q.startswith("approves:") else 0.0
+                for q in questions
+            }
+        row = self.thoughts.get(state["current_thought"], {})
+        if row is None:  # a thought scripted as unanswered
+            return None
+        return {
+            name: row.get(
+                name, 0.0 if isinstance(q, Noul) else dict.fromkeys(q.criteria, 0.0)
+            )
+            for name, q in questions.items()
+        }

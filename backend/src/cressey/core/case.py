@@ -7,7 +7,9 @@ from three sources: the agent's thoughts (`read_message`), what the code saw (`c
 and what the user's prompts say (`read_prompt`); `shadow` puts them together for one call.
 """
 
+import asyncio
 import re
+import weakref
 from collections.abc import Mapping
 
 from pydantic import JsonValue
@@ -362,3 +364,58 @@ async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
                 )
             )
     record(case, events, run.mandate, secret_names(run))
+
+
+# One at a time per run, in the order scheduled: each reads thoughts into the case and the
+# next reads that case, and two reading at once would read the same thought twice.
+_TURNS: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
+# Shadows being computed and prompts being read, each told apart by its key.
+_SHADOWING: dict[tuple[str, int], asyncio.Task[Shadow]] = {}
+_PROMPTS: dict[tuple[str, int], asyncio.Task[None]] = {}
+
+
+def _turn(run: Run) -> asyncio.Lock:
+    lock = _TURNS.get(run.id)
+    if lock is None:
+        lock = _TURNS[run.id] = asyncio.Lock()
+    return lock
+
+
+async def _shadowed(
+    run: Run, call: Step, floor: str | None, judge: Judge, t: Thresholds
+) -> Shadow:
+    async with _turn(run):
+        return await shadow(run, call, floor, judge, t)
+
+
+async def _prompted(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
+    async with _turn(run):
+        await read_prompt(run, text, judge, t)
+
+
+def shadow_soon(
+    run: Run, call: Step, floor: str | None, judge: Judge, t: Thresholds
+) -> asyncio.Task[Shadow] | None:
+    """Compute the shadow of `call` in the background, so the call never waits for it. None
+    when it is already being computed: whoever scheduled it stores its result."""
+    key = (run.id, call.n)
+    if key in _SHADOWING:
+        return None
+    task = asyncio.get_running_loop().create_task(_shadowed(run, call, floor, judge, t))
+    _SHADOWING[key] = task
+    task.add_done_callback(lambda _: _SHADOWING.pop(key, None))
+    return task
+
+
+def read_prompt_soon(
+    run: Run, text: str, judge: Judge, t: Thresholds
+) -> asyncio.Task[None] | None:
+    """Read the user's prompt (already redacted) in the background, once the shadows
+    scheduled before it are done. None for a blank prompt, and for one being read."""
+    key = (run.id, len(run.messages))  # the prompt is the last message
+    if not text.strip() or key in _PROMPTS:
+        return None
+    task = asyncio.get_running_loop().create_task(_prompted(run, text, judge, t))
+    _PROMPTS[key] = task
+    task.add_done_callback(lambda _: _PROMPTS.pop(key, None))
+    return task

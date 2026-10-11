@@ -10,6 +10,7 @@ from cressey.core.models import (
     Message,
     Run,
     RunIn,
+    Shadow,
     Step,
     TextIn,
     Thresholds,
@@ -138,3 +139,21 @@ def test_the_log_keeps_who_said_it_not_the_flags():
         ["after", "role", "run", "streaming", "text"]
     ] * 3
     assert [d["role"] for d in logged] == ["agent", "agent", "user"]
+
+
+def test_a_shadow_is_stored_on_its_step_and_logged():
+    runs = Runs(EventLog())
+    run = runs.get(runs.create(RunIn(task="fais passer les tests")).id)
+    assert run is not None
+    step = runs.add_step(run, "Bash", {}, "{}", "write", None)
+    shadow = Shadow(decision="hold", why=["a link"], uses=["svc:9"], words_read=False)
+    runs.set_shadow(run, step, shadow)
+    assert step.shadow == shadow
+    [event] = [e for e in runs.log.events if e.kind == "shadow"]
+    assert event.data == {
+        "run": run.id,
+        "n": 1,
+        "decision": "hold",
+        "uses": ["svc:9"],
+        "words_read": False,
+    }

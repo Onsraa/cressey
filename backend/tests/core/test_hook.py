@@ -417,3 +417,59 @@ async def test_a_message_cut_short_is_never_flagged(judged):
     assert judge.read == []
     cut = (await run_of(base, run))["messages"][0]
     assert (cut["streaming"], cut["labels"]) == (False, None)
+
+
+async def read_staging(base: str, key: str) -> None:
+    """A run that read a token the mandate does not name, and made a second call, which is
+    what records that read in its case."""
+    read = {"file_path": ".env.staging"}
+    returned = {
+        "type": "text",
+        "file": {"content": "RAILWAY_TOKEN=FAKE-STAGING-0000\n"},
+    }
+    await hook(base, key, event("PreToolUse", "Read", tool_input=read))
+    await hook(
+        base,
+        key,
+        event("PostToolUse", "Read", tool_input=read, tool_response=returned),
+    )
+    again = {"file_path": "README.md"}
+    await hook(base, key, event("PreToolUse", "Read", "toolu_2", tool_input=again))
+
+
+async def test_a_prompt_schedules_a_read_without_blocking(served_scored):
+    base, judge = served_scored
+    judge.delay = 3600  # the model reading the prompt never answers
+    run = await new_run(base, "messages")
+    await read_staging(base, run["key"])
+    typed = "yes, use RAILWAY_TOKEN=FAKE-STAGING-0000 for the reset"
+    r = await hook(base, run["key"], session_event("UserPromptSubmit", prompt=typed))
+    assert r.status_code == 200 and r.json() == {}  # answered with the read in flight
+    for _ in range(250):
+        if judge.asked:
+            break
+        await asyncio.sleep(0.02)
+    [state] = judge.asked
+    assert "FAKE-STAGING-0000" not in state["user_message"]  # the redacted prompt
+    assert "[secret:" in state["user_message"]
+
+
+async def test_a_prompt_that_approves_extends_the_mandate_for_that_object(
+    served_scored,
+):
+    base, judge = served_scored
+    judge.approves = 0.9
+    run = await new_run(base, "messages")
+    await read_staging(base, run["key"])
+    await hook(
+        base,
+        run["key"],
+        session_event("UserPromptSubmit", prompt="yes, use the staging token"),
+    )
+    for _ in range(250):
+        approved = (await run_of(base, run))["case"]["approved"]
+        if approved:
+            break
+        await asyncio.sleep(0.02)
+    [secret] = (await run_of(base, run))["steps"][0]["secrets"]
+    assert approved == [f"secret:{secret['fingerprint']}"]

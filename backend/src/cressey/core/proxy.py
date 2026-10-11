@@ -21,10 +21,11 @@ from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
 from cressey.core.broker import scoped
+from cressey.core.case import shadow_soon
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
-from cressey.core.models import Policy, Response, Run, Step
+from cressey.core.models import Policy, Response, Run, Shadow, Step
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import fingerprint, redact, scan
 from cressey.core.triangle import (
@@ -186,6 +187,7 @@ class Guard(Middleware):
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
             reason = floor or (alarm_reason(triangle) if triangle_hold else None)
             self.runs.score(run, step, triangle, reason)
+            self._shadow_later(run, step, floor)
             # The Observateur run and the floor-alone ablation show what happens without it.
             if self.triangle_holds and run.kind != "control":
                 self.runs.act_on_pressure(run, step, triangle)
@@ -219,6 +221,24 @@ class Guard(Middleware):
         except BaseException:
             step.running = False  # refused: no result will come
             raise
+
+    def _shadow_later(self, run: Run, step: Step, floor: str | None) -> None:
+        """What the case would decide for this call, beside today's decision and after it:
+        in the background, never awaited, so the call's latency and hold are unchanged."""
+        task = shadow_soon(run, step, floor, self.judge, self.policy.triangle)
+        if task is not None:
+            task.add_done_callback(lambda t: self._shadowed(run, step, t))
+
+    def _shadowed(self, run: Run, step: Step, task: asyncio.Task[Shadow]) -> None:
+        if task.cancelled():  # the server is stopping
+            return
+        failure = task.exception()
+        if failure is not None:  # a background task has no caller to raise to
+            log.error(
+                "shadow of step %d of run %s failed", step.n, run.id, exc_info=failure
+            )
+            return
+        self.runs.set_shadow(run, step, task.result())
 
     async def after(
         self, run: Run, step: Step, is_error: bool, text: str, label: bool = True

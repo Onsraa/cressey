@@ -20,6 +20,7 @@ from cressey.core.models import (
     Run,
     RunCreated,
     RunIn,
+    Shadow,
     Step,
 )
 from cressey.core.secret_scan import Secret, redact
@@ -123,6 +124,15 @@ class Runs:
         legs_confirmed: list[JsonValue] = list(confirmed(legs))
         self._log(run, step, "legs", confirmed=legs_confirmed, reason=reason)
 
+    def set_shadow(self, run: Run, step: Step, s: Shadow) -> None:
+        """What the case would have done with this call: stored and logged beside the
+        decision taken, which it never changes."""
+        step.shadow = s
+        uses: list[JsonValue] = list(s.uses)
+        self._log(
+            run, step, "shadow", decision=s.decision, uses=uses, words_read=s.words_read
+        )
+
     def act_on_pressure(self, run: Run, step: Step, legs: Legs) -> None:
         """Without a human, once each: pressure sends the way out with this call's result;
         pressure and opportunity drop the key to read-only for destructive calls."""
@@ -174,11 +184,11 @@ class Runs:
             return message
         return None
 
-    def prompt(self, run: Run, text: str) -> None:
+    def prompt(self, run: Run, text: str) -> Message:
         """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
-        mid-turn. It closes a message cut short by Esc, which Claude Code doesn't report. It
-        unlocks a suspended key, the user being back, but not while a call is still held:
-        that one is decided on the dashboard."""
+        mid-turn, and returned. It closes a message cut short by Esc, which Claude Code
+        doesn't report. It unlocks a suspended key, the user being back, but not while a call
+        is still held: that one is decided on the dashboard."""
         for key in [k for k in self._streaming if k[0] == run.id]:
             self._streaming.pop(key)[0].streaming = False
         message = Message(
@@ -193,6 +203,7 @@ class Runs:
         if run.revoked and not any(s.status == "held" for s in run.steps):
             run.revoked, run.unlocked_after = False, len(run.steps)
             self.log.append("unlocked", {"run": run.id, "after": run.unlocked_after})
+        return message
 
     def connect(self, run: Run) -> None:
         """A Claude Code session started (or resumed): it waits for a prompt."""
