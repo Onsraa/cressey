@@ -241,8 +241,9 @@ function TextRow({
 	);
 }
 
-// A message's flags: the P and R chips, lit when its words are flagged for that leg. The
-// backend's floors decide; a message that was never read says so.
+// A message's flags in the calls' P, O, R columns: the P and R chips, lit when its words are
+// flagged for that leg, and an empty slot where O goes. The backend's floors decide; a
+// message that was never read says so.
 function Flags({ row }: { row: Extract<Row, { kind: "msg" }> }) {
 	const says = SPOKEN.map(
 		(g) =>
@@ -254,11 +255,16 @@ function Flags({ row }: { row: Extract<Row, { kind: "msg" }> }) {
 			aria-label={says.join(", ")}
 			className="flex gap-[3px] pt-px"
 		>
-			{SPOKEN.map((g, i) => (
-				<span key={g.k} data-tip={says[i]}>
-					<Letter g={g} on={row.flagged.includes(g.k)} size={20} />
-				</span>
-			))}
+			{LEGS.map((g) => {
+				const i = SPOKEN.indexOf(g);
+				return i < 0 ? (
+					<span key={g.k} className="size-5" />
+				) : (
+					<span key={g.k} data-tip={says[i]}>
+						<Letter g={g} on={row.flagged.includes(g.k)} size={20} />
+					</span>
+				);
+			})}
 		</span>
 	);
 }

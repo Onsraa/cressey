@@ -372,6 +372,31 @@ test("a message the words flag lights its chip; one never read, or read clean, d
 	expect(lit).not.toContain("--color-o");
 });
 
+test("a message's chips sit in the calls' columns: P, an empty O slot, R", () => {
+	state = live([
+		demo(
+			{},
+			{
+				messages: [
+					{
+						after: 0,
+						text: "Il me reste dix minutes avant la mise en prod.",
+						labels: { pressure: 0.91, rationalization: 0.04, manipulation: 0 },
+						flagged: ["pressure"],
+					},
+				],
+			},
+		),
+	]);
+	// A chip is its letter in a tooltip wrapper; the O slot is an empty cell-sized span.
+	const slot =
+		/<span data-tip="[^"]*"><span[^>]*>([PR])<\/span><\/span>|<span class="size-5"><\/span>/g;
+	const slots = [...row(html(), "m0").matchAll(slot)].map(
+		([, letter]) => letter ?? "",
+	);
+	expect(slots).toEqual(["P", "", "R"]);
+});
+
 test("a message in the step panel: its three labels as bars", () => {
 	const said = (labels: Record<string, number> | null = null) =>
 		live([
