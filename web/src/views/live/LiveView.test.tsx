@@ -20,6 +20,7 @@ const words = {
 	thoughts: [],
 	read: 0,
 	flagged: [],
+	scores: {},
 };
 const NOW = Date.parse("2026-10-10T20:00:00Z");
 const at = (s: number) => new Date(NOW + s * 1000).toISOString();

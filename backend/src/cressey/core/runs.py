@@ -154,7 +154,7 @@ class Runs:
         run.messages.append(message)
         # The log keeps what the agent said, not the flags a model adds later.
         said = message.model_dump(
-            exclude={"labels", "flagged", "source", "thoughts", "read"}
+            exclude={"labels", "flagged", "source", "thoughts", "read", "scores"}
         )
         self.log.append("message", {"run": run.id, **said})
         return message
@@ -178,7 +178,7 @@ class Runs:
         if final:
             del self._streaming[key]
             said = message.model_dump(
-                exclude={"labels", "flagged", "source", "thoughts", "read"}
+                exclude={"labels", "flagged", "source", "thoughts", "read", "scores"}
             )
             self.log.append("message", {"run": run.id, **said})
             return message
@@ -199,7 +199,7 @@ class Runs:
         run.turn = "working"
         # The log keeps what the user typed, not the flags a model adds later.
         said = message.model_dump(
-            exclude={"labels", "flagged", "source", "thoughts", "read"}
+            exclude={"labels", "flagged", "source", "thoughts", "read", "scores"}
         )
         self.log.append("message", {"run": run.id, **said})
         if run.revoked or run.refused:

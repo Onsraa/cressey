@@ -15,7 +15,12 @@ import type {
 // What the trace lists, in order. A message carries the indicators its thoughts raised.
 export type Row =
 	| { id: string; kind: "call"; step: Step }
-	| ({ id: string; kind: "msg"; indicators: Indicator[] } & Message)
+	| ({
+			id: string;
+			kind: "msg";
+			indicators: Indicator[];
+			legs?: Legs;
+	  } & Message)
 	| { id: string; kind: "report"; text: string };
 
 // A message said after k calls goes just before call #k+1; the report comes last, once
@@ -27,7 +32,13 @@ export function rows(run: Run): Row[] {
 	]);
 	const said = run.messages.map((m, i): [number, Row] => [
 		m.after + 0.5,
-		{ ...m, id: `m${i}`, kind: "msg", indicators: indicatorsOn(run, i) },
+		{
+			...m,
+			id: `m${i}`,
+			kind: "msg",
+			indicators: indicatorsOn(run, i),
+			legs: thoughtLegs(run, i),
+		},
 	]);
 	const all = [...calls, ...said]
 		.sort((a, b) => a[0] - b[0])
@@ -132,6 +143,53 @@ export function shownLegs(step: Step): Legs | undefined {
 		pressure: raise("pressure"),
 		opportunity: raise("opportunity"),
 		rationalization: raise("rationalization"),
+	};
+}
+
+// The questions each leg asks of a thought (core/thoughts.py QUESTIONS); the counters and
+// the plan belong to no leg.
+const ASKS: Record<LegName, string[]> = {
+	pressure: ["P1"],
+	opportunity: ["O1", "O2", "O3"],
+	rationalization: ["R", "C1"],
+};
+
+// A message's thoughts on the triangle: each leg is its strongest thought, and each thought's
+// score is a fact, strongest first. A justification or concealment whose conclusion goes
+// away from the crossing counts for nothing, as in the case (core/case.py, leg_values).
+// Undefined until a thought is read.
+export function thoughtLegs(run: Run, message: number): Legs | undefined {
+	const m = run.messages[message];
+	const read = Object.entries(m.scores);
+	if (!read.length) return undefined;
+	const away = (run.case?.events ?? []).filter(
+		(e) => e.message === message && e.direction === "away",
+	);
+	const leg = (k: LegName): Leg => {
+		const scored = read
+			.map(([t, p]) => ({
+				text: m.thoughts[Number(t)],
+				score: Math.max(
+					0,
+					...ASKS[k].map((q) =>
+						away.some((e) => e.thought === Number(t) && e.indicator === q)
+							? 0
+							: (p[q] ?? 0),
+					),
+				),
+			}))
+			.filter((x) => x.score > 0)
+			.sort((a, b) => b.score - a.score);
+		return {
+			score: scored[0]?.score ?? 0,
+			confirmed: false,
+			facts: scored.map((x) => `“${x.text}” ${fmt(x.score)}`),
+		};
+	};
+	return {
+		pressure: leg("pressure"),
+		opportunity: leg("opportunity"),
+		rationalization: leg("rationalization"),
 	};
 }
 

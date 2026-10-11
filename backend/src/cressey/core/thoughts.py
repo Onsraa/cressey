@@ -296,7 +296,8 @@ async def read_thought(
     run: Run, m: Message, i: int, judge: Judge, t: Thresholds
 ) -> list[Event] | None:
     """Thought i of message m read against the indicators: one Event per indicator that
-    reaches its threshold in t.thoughts. None when no model answers: the thought stays
+    reaches its threshold in t.thoughts, and every answer kept in m.scores for the
+    dashboard. None when no model answers: the thought stays
     unread, and is asked again. Only redacted text is read."""
     j = next(n for n, x in enumerate(run.messages) if x is m)
     text = m.thoughts[i]
@@ -335,6 +336,7 @@ async def read_thought(
     if read is None:
         return None
     p = {q: max(yes(a[q]) for _, a in read) for q in QUESTIONS}
+    m.scores[i] = p
     fired = [q for q in QUESTIONS if p[q] >= t.thoughts[q]]
     if not fired:
         return []

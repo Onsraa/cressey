@@ -384,6 +384,7 @@ function Text({
 }) {
 	const check = row.kind === "report" ? run.report_check : undefined;
 	const you = row.kind === "msg" && row.role === "user";
+	const legs = row.kind === "msg" ? row.legs : undefined;
 	return (
 		<>
 			<div className="flex flex-col gap-2">
@@ -407,6 +408,14 @@ function Text({
 				</span>
 				<p className="m-0 text-pretty text-[15px] leading-normal">{row.text}</p>
 			</div>
+			{legs && (
+				<div className="flex flex-col gap-0.5">
+					<span className="label mb-1">scores for this thought</span>
+					{LEGS.map((g) => (
+						<LegRow key={g.k} g={g} leg={legs[g.k]} />
+					))}
+				</div>
+			)}
 			{check && (
 				<div className="flex flex-col gap-[5px] border-line border-t py-2">
 					<span className="label">the report against the log</span>

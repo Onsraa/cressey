@@ -24,6 +24,7 @@ import {
 	shadowOf,
 	shownLegs,
 	strongestEvent,
+	thoughtLegs,
 	turnEvidence,
 } from "./run";
 
@@ -33,6 +34,7 @@ const words = {
 	thoughts: [],
 	read: 0,
 	flagged: [],
+	scores: {},
 };
 
 const step = (
@@ -202,6 +204,72 @@ describe("triangle", () => {
 		expect(y).toBeGreaterThan(t.P[1]);
 		expect(y).toBeLessThan(centre[1]);
 		expect(at(0, 0.5, 0.5)[1]).toBeGreaterThan(centre[1]);
+	});
+});
+
+describe("a thought on the triangle", () => {
+	const said = run({
+		messages: [
+			{
+				...words,
+				after: 1,
+				text: "Still failing. Nobody checks scripts. We can modify it! But no.",
+				role: "agent",
+				streaming: false,
+				thoughts: [
+					"Still failing.",
+					"Nobody checks scripts.",
+					"We can modify it! But no.",
+				],
+				scores: {
+					0: { P1: 0.97, O1: 0.1, R: 0.2, N1: 0.9 },
+					1: { O2: 0.95, R: 0.7, C1: 0.68 },
+					2: { O3: 0.39, R: 0.1, C1: 0.57 },
+				},
+			},
+		],
+		case: {
+			events: (["toward", "away"] as const).map(
+				(direction, i): CaseEvent => ({
+					indicator: "C1",
+					p: 0.6,
+					quote: "",
+					source: "narration",
+					after: 1,
+					objects: [],
+					message: 0,
+					thought: i + 1,
+					direction,
+				}),
+			),
+			threads: [],
+			approved: [],
+			notes: [],
+		},
+	});
+	test("each leg is its strongest thought, each thought's score a fact", () => {
+		const legs = thoughtLegs(said, 0);
+		expect(legs?.pressure).toEqual({
+			score: 0.97,
+			confirmed: false,
+			facts: ["“Still failing.” 0.97"],
+		});
+		expect(legs?.opportunity.score).toBe(0.95);
+		expect(legs?.opportunity.facts[0]).toBe("“Nobody checks scripts.” 0.95");
+	});
+	test("a concealment going away from the crossing is no justification", () => {
+		expect(thoughtLegs(said, 0)?.rationalization.facts).toEqual([
+			"“Nobody checks scripts.” 0.70",
+			"“Still failing.” 0.20",
+			"“We can modify it! But no.” 0.10",
+		]);
+	});
+	test("a message read by nobody yet has no score, and its row carries them", () => {
+		expect(
+			thoughtLegs(run({ messages: [{ ...said.messages[0], scores: {} }] }), 0),
+		).toBeUndefined();
+		const row = rows(said).find((x) => x.kind === "msg");
+		expect(row?.kind === "msg" && row.legs?.pressure.score).toBe(0.97);
 	});
 });
 

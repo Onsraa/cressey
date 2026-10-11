@@ -45,6 +45,7 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
         "source": "narration",
         "thoughts": [demo.steps[0].say],
         "read": 0,
+        "scores": {},
         "labels": None,
         "flagged": [],
     }

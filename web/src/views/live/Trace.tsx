@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { useLive } from "@/api/live";
-import type { Run, Step } from "@/api/types";
+import type { Legs as LegScores, Run, Step } from "@/api/types";
 import {
 	Check,
 	FileText,
@@ -199,7 +199,7 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 					</span>
 				)}
 			</span>
-			<Legs step={step} />
+			<Legs legs={shownLegs(step)} />
 		</>
 	);
 }
@@ -265,15 +265,14 @@ function TextRow({
 					</span>
 				)}
 			</span>
-			<span className="flex gap-[3px] pt-px" />
+			<Legs legs={row.kind === "msg" ? row.legs : undefined} />
 		</>
 	);
 }
 
-// A call's three scores as pixel cells: darker is higher, ringed in the leg's colour once
-// facts confirm it at this step.
-function Legs({ step }: { step: Step }) {
-	const legs = shownLegs(step);
+// A call's or a thought's three scores as pixel cells: darker is higher, ringed in the leg's
+// colour once facts confirm it at this step.
+function Legs({ legs }: { legs?: LegScores }) {
 	return (
 		<span
 			role="img"

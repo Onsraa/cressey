@@ -721,6 +721,15 @@ export interface components {
 			 * @default 0
 			 */
 			read: number;
+			/**
+			 * Scores
+			 * @default {}
+			 */
+			scores: {
+				[key: string]: {
+					[key: string]: number;
+				};
+			};
 			/** Labels */
 			labels?: {
 				[key: string]: number;

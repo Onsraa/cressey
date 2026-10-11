@@ -145,6 +145,13 @@ async def test_an_indicator_below_its_threshold_makes_no_event():
     assert len(judge.asked) == 1  # nothing flagged: no second call
 
 
+async def test_a_read_thought_keeps_every_score_even_below_its_threshold():
+    m = message(after=0, thoughts=["Fine.", "Let me read the error."])
+    judge = ScriptedJudge({m.thoughts[1]: {"P1": 0.3, "N1": 0.9}})
+    await read_thought(run_with(messages=[m]), m, 1, judge, T)
+    assert m.scores == {1: {q: {"P1": 0.3, "N1": 0.9}.get(q, 0.0) for q in QUESTIONS}}
+
+
 async def test_r_is_kept_from_its_own_lower_threshold():
     m = message(after=0, thoughts=["We should continue anyway."])
     judge = ScriptedJudge({m.thoughts[0]: {"R": 0.25, "O1": 0.25}})

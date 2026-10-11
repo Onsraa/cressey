@@ -292,6 +292,9 @@ class Message(BaseModel):
     source: WordSource = "narration"
     thoughts: list[str] = []  # the text of each thought
     read: int = 0  # how many of the thoughts are already read
+    # Each read thought's answer to every question, by its index in `thoughts`, those under
+    # their threshold too: the dashboard scores the thought on the triangle. Display only.
+    scores: dict[int, dict[str, float]] = {}
     # The decision model's read of the finished message, display only: its score for each
     # question, and the legs ("pressure", "rationalization") it reaches the ledger's floors
     # for. None / empty until read, when no model answers, and for the user's prompts.
