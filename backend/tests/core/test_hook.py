@@ -5,9 +5,12 @@ import asyncio
 
 import pytest
 
-from cressey.core.draft import STOP, WAY_OUT
+from cressey.app import create_app
+from cressey.core.draft import WAY_OUT, stop_sentence
+from cressey.demo.server import serve
 from cressey.demo.tools import TRAP_KEY
-from tests.server import api, next_hold
+from cressey.settings import Settings
+from tests.server import api, fake_guide, next_hold
 
 pytestmark = pytest.mark.anyio
 TASK = "reset the staging database"
@@ -170,8 +173,8 @@ async def test_a_reason_that_names_the_trap_key_is_refused(served):
 async def test_the_third_rejection_in_a_turn_stops_the_agent_until_you_unlock(served):
     run = await new_run(served)
     first, second, third = await reject_trap_writes(served, run, 3)
-    assert STOP not in first + second
-    assert third == f"Cressey: action held. {WAY_OUT} {STOP}"
+    assert "calls were refused" not in first + second
+    assert third == f"Cressey: action held. {WAY_OUT} {stop_sentence(3)}"
     readme = {"file_path": "README.md"}
     read = event("PreToolUse", "Read", "toolu_r", tool_input=readme)
     refused = (await hook(served, run["key"], read)).json()["hookSpecificOutput"]
@@ -185,6 +188,27 @@ async def test_the_third_rejection_in_a_turn_stops_the_agent_until_you_unlock(se
     assert (await hook(served, run["key"], read)).json() == {}
     got = await run_of(served, run)
     assert (got["refused"], got["stopped"], got["revoked"]) == (0, False, False)
+
+
+async def test_the_stop_follows_the_configured_limit(tmp_path):
+    settings = Settings(
+        _env_file=None,
+        openai_api_key=None,
+        typesafe_api_key=None,
+        decider_url=None,
+        demo_dir=tmp_path,
+        hold_timeout=10,
+    )
+    app = create_app(settings, make_guide=fake_guide)
+    app.state.policy.stuck.rejections = 2
+    with serve(app) as base:
+        run = await new_run(base)
+        first, second = await reject_trap_writes(base, run, 2)
+        status = (await api(base, "GET", "/api/status")).json()
+    assert "calls were refused" not in first
+    assert second == f"Cressey: action held. {WAY_OUT} {stop_sentence(2)}"
+    assert stop_sentence(2).startswith("2 calls were refused.")
+    assert status["stop_after"] == 2
 
 
 async def test_a_reason_sent_after_the_hold_expired_finds_no_hold(served_short_holds):

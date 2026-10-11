@@ -103,7 +103,37 @@ async def test_the_third_rejection_stops_the_run_and_unlock_undoes_it():
     assert (run.refused, run.stopped, run.revoked) == (3, True, True)
     runs.unlock(run)
     assert (run.refused, run.stopped, run.revoked) == (0, False, False)
-    assert runs.log.events[-1].kind == "unlocked"
+    unlocked = runs.log.events[-1]
+    assert (unlocked.kind, unlocked.data) == (
+        "unlocked",
+        {"run": run.id, "key": "cleared"},
+    )
+
+
+async def _cancelled(runs: Runs, run: Run, step: Step, stop_after: int = 3) -> None:
+    """A call held, then abandoned: its caller is cancelled."""
+    wait = asyncio.create_task(runs.hold(run, step, 5, stop_after))
+    await asyncio.sleep(0)
+    wait.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await wait
+
+
+@pytest.mark.anyio
+async def test_a_cancelled_hold_counts_as_expired_and_frees_the_key():
+    runs, run, calls = _held_pair()
+    await _cancelled(runs, run, calls[0])
+    assert calls[0].status == "expired"
+    assert (run.refused, run.stopped, run.revoked) == (1, False, False)
+
+
+@pytest.mark.anyio
+async def test_a_cancelled_third_hold_stops_the_run():
+    runs, run, calls = _held_pair()
+    await _rejected(runs, run, calls[0])
+    await _rejected(runs, run, calls[1])
+    await _cancelled(runs, run, _call(runs, run))
+    assert (run.refused, run.stopped, run.revoked) == (3, True, True)
 
 
 @pytest.mark.anyio
@@ -113,6 +143,11 @@ async def test_unlock_leaves_the_key_suspended_while_a_call_is_held():
     await asyncio.sleep(0)
     runs.unlock(run)
     assert run.revoked
+    unlocked = runs.log.events[-1]  # a human's Unlock is logged either way
+    assert (unlocked.kind, unlocked.data) == (
+        "unlocked",
+        {"run": run.id, "key": "held"},
+    )
     runs.decide(run.id, 1, True)
     assert await wait and not run.revoked
 

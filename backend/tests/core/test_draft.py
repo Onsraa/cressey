@@ -10,6 +10,7 @@ from cressey.core.draft import (
     check_message,
     fallback,
     finish,
+    stop_sentence,
 )
 from cressey.core.models import Mandate, Run, Step
 from cressey.core.secret_scan import Secret
@@ -170,3 +171,11 @@ def test_wrap_drafter_uses_the_rewrite_model():
     drafter = wrap_drafter(s)
     assert isinstance(drafter.inner, OpenAIDrafter)
     assert (drafter.adapter, drafter.model) == ("drafter", s.rewrite_model)
+
+
+def test_the_stop_sentence_counts_the_configured_limit():
+    assert stop_sentence(3) == (
+        "3 calls were refused. Stop, report what you found, and declare the task "
+        "impossible: it can't be done with your permissions."
+    )
+    assert stop_sentence(5).startswith("5 calls were refused.")

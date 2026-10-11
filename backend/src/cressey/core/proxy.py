@@ -21,7 +21,14 @@ from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
 from cressey.core.broker import scoped
-from cressey.core.draft import STOP, WAY_OUT, Drafter, check_message, fallback, finish
+from cressey.core.draft import (
+    WAY_OUT,
+    Drafter,
+    check_message,
+    fallback,
+    finish,
+    stop_sentence,
+)
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Judge
@@ -227,7 +234,9 @@ class Guard(Middleware):
                 stop_after = self.policy.stuck.rejections
                 if not await self.runs.hold(run, step, self.hold_timeout, stop_after):
                     told = f"Cressey: action held. {step.message or WAY_OUT}"
-                    raise ToolError(f"{told} {STOP}" if run.stopped else told)
+                    if run.stopped:
+                        told = f"{told} {stop_sentence(stop_after)}"
+                    raise ToolError(told)
             return step
         except BaseException:
             step.running = False  # refused: no result will come

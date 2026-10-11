@@ -183,10 +183,11 @@ class Runs:
         having chosen to. While a call is still held the key stays suspended: that one is
         decided on the dashboard, and its rejection counts in the new turn."""
         run.refused, run.stopped = 0, False
-        if any(s.status == "held" for s in run.steps):
-            return
-        run.revoked = False
-        self.log.append("unlocked", {"run": run.id})
+        held = any(s.status == "held" for s in run.steps)
+        run.revoked = held
+        self.log.append(
+            "unlocked", {"run": run.id, "key": "held" if held else "cleared"}
+        )
 
     def connect(self, run: Run) -> None:
         """A Claude Code session started (or resumed): it waits for a prompt."""
@@ -271,10 +272,12 @@ class Runs:
                 step.status = "approved" if decision.result() else "rejected"
             step.decided_at = _now().isoformat()
             self._log(run, step, "status", status=step.status)
-        if step.status != "approved":
-            run.refused += 1
-            run.stopped = run.refused >= stop_after
-        run.revoked = run.stopped or any(s.status == "held" for s in run.steps)
+            # In the finally: a cancelled hold is an expired one, and must not leave the key
+            # suspended with nothing held and no stop.
+            if step.status != "approved":
+                run.refused += 1
+                run.stopped = run.refused >= stop_after
+            run.revoked = run.stopped or any(s.status == "held" for s in run.steps)
         return step.status == "approved"
 
     def decide(
