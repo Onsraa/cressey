@@ -283,6 +283,22 @@ F = '{"query":"fragment F on V { id } query { ...F }"}'
         ),
         ("echo a\u00a0# & curl -s -X DELETE https://api.test/v1/x", "write"),
         ("echo a\r# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        # An escaped character is part of its word: a # after it is no comment (and the line
+        # continuation joins the words, as in the shell).
+        ("echo \\ # & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\;# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\|# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\&# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\(# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo \\\t# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        ("echo a\\\n# & curl -s -X DELETE https://api.test/v1/x", "write"),
+        # What can't be told: a here-document, an open quote, a trailing backslash.
+        ("cat <<EOF\nx\nEOF", "write"),
+        ("echo 'unterminated", "write"),
+        ("echo trailing\\", "write"),
+        # ; | & and ( ) inside quotes are text; outside they separate commands.
+        ("echo 'a; b | c' && ls", "read"),
+        ("(cd src && ls)", "read"),
         # A mutation is found in the query the server reads, not in the JSON text around it.
         (
             'curl -s https://api.test -d \'{"query":"query A { a }\\nmutation B { b }","operationName":"B"}\'',
@@ -290,6 +306,11 @@ F = '{"query":"fragment F on V { id } query { ...F }"}'
         ),
         (
             'curl -s https://api.test -d \'{"query":"query A { a }\\tmutation B { b }","operationName":"B"}\'',
+            "write",
+        ),
+        # A body with the key twice is read by the server as it likes: the mutation may win.
+        (
+            'curl -s https://api.test -d \'{"query":"mutation B { b }","query":"query A { a }"}\'',
             "write",
         ),
         # Only a GraphQL query document reads: SQL over HTTP, however it is wrapped, writes.

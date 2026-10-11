@@ -6,7 +6,6 @@ import fnmatch
 import json
 import posixpath
 import re
-import shlex
 from collections.abc import Mapping
 
 import sqlglot
@@ -30,19 +29,9 @@ DESTRUCTIVE_COMMAND = re.compile(
     r"|\bgit\s+push\b[^|;&]*(?:--force\b|\s-f\b)|\bgit\s+(?:reset\s+--hard|clean\s)",
     re.IGNORECASE,
 )
-SEGMENT = re.compile(r"\|\|?|&&|;|\n")
-# A single & backgrounds what precedes it: it separates commands like `;` does. Quoted spans,
-# escaped characters and comments are skipped, so a & in "?a=1&b=2" stays in its argument;
-# redirections (2>&1, &>) aren't it, and any `>` makes the command a write anyway. A # opens
-# a comment only at the start of a word, as in the shell: after a blank, a newline or ; & | ( ) < >
-# (not after a NBSP or \r, which are part of a word).
-BACKGROUND = re.compile(
-    r"""(\$'(?:\\.|[^'\\])*'|'[^']*'|"(?:\\.|[^"\\])*"|\\.|(?<![^ \t\n;&|()<>])#[^\n]*)"""
-    r"|(?<![<>&])&(?![>&])"
-)
-# $(...), `...`, <(...) and zsh's =(...) run a command wherever they sit, whatever the first
-# word.
-SUBSTITUTION = re.compile(r"\$\(|`|<\(|=\(")
+# $(...), `...`, <(...), >(...) and zsh's =(...) run a command wherever they sit, whatever
+# the first word.
+SUBSTITUTION = re.compile(r"\$\(|`|[<>=]\(")
 ASSIGNMENT = re.compile(r"[A-Za-z_]\w*=")
 # find's actions that run or delete something.
 FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
@@ -148,6 +137,13 @@ def _http_risk(words: list[str]) -> Risk:
     return "read" if all(map(_is_query, bodies)) else "write"
 
 
+def _unique(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    """json.loads's object hook for a body: a key given twice is read as the server likes."""
+    if len({key for key, _ in pairs}) != len(pairs):
+        raise ValueError("duplicate key")
+    return dict(pairs)
+
+
 def _is_document(text: str) -> bool:
     """Whether a string opens like a GraphQL query document: after blank and `#` comment
     lines, a `{`, `query` or `fragment`. SQL sent over HTTP ({"query": "UPDATE ..."}) doesn't."""
@@ -160,7 +156,7 @@ def _is_query(body: str) -> bool:
     """An inline GraphQL query, not a mutation: a JSON object whose top-level "query" is a
     query document (an Elasticsearch {"query": {...}} is not)."""
     try:
-        parsed = json.loads(body)
+        parsed = json.loads(body, object_pairs_hook=_unique)
     except ValueError:
         return False
     return (
@@ -183,22 +179,77 @@ def _reads(words: list[str]) -> bool:
     return True
 
 
+def _simple_commands(command: str) -> list[list[str]] | None:
+    """The words of each simple command of a shell command line, read as POSIX shells do:
+    blanks are space and tab; newline ; & | ( ) end a command; backslash, '...', "..." and
+    $'...' quote; backslash-newline joins; a # starts a comment only at the start of a word.
+    None when the line can't be told: a here-document, an open quote, a trailing backslash,
+    an escape in $'...'. (shlex won't do: it reads a#b, and a # after an escaped blank,
+    as comments.)"""
+    commands: list[list[str]] = [[]]
+    word: str | None = None  # the word being read; '' is a word too
+    i, n = 0, len(command)
+    while i < n:
+        c = command[i]
+        if c in " \t\n;&|()":
+            if word is not None:
+                commands[-1].append(word)
+                word = None
+            if c not in " \t":
+                commands.append([])
+            i += 1
+        elif c == "#" and word is None:
+            end = command.find("\n", i)
+            i = n if end < 0 else end
+        elif command.startswith("<<", i):
+            return None
+        elif c == "\\":
+            if i + 1 == n:
+                return None
+            if command[i + 1] != "\n":
+                word = (word or "") + command[i + 1]
+            i += 2
+        elif c == "'" or command.startswith("$'", i):
+            ansi = c == "$"
+            start = i + (2 if ansi else 1)
+            end = command.find("'", start)
+            if end < 0 or (ansi and "\\" in command[start:end]):
+                return None
+            word = (word or "") + command[start:end]
+            i = end + 1
+        elif c == '"':
+            word = word or ""
+            i += 1
+            while i < n and command[i] != '"':
+                ch = command[i]
+                if ch == "\\" and i + 1 < n and command[i + 1] in '"\\$`\n':
+                    i += 1
+                    ch = "" if command[i] == "\n" else command[i]
+                word += ch
+                i += 1
+            if i == n:
+                return None
+            i += 1
+        else:
+            word = (word or "") + c
+            i += 1
+    if word is not None:
+        commands[-1].append(word)
+    return [words for words in commands if words]
+
+
 def shell_risk(command: str) -> Risk:
     """Risk of a shell command, from the commands it runs (see READ_COMMANDS)."""
     if DESTRUCTIVE_COMMAND.search(command):
         return "destructive"
-    if ">" in command or SUBSTITUTION.search(command):
+    simple = _simple_commands(command)
+    if simple is None or ">" in command or SUBSTITUTION.search(command):
         return "write"
-    commands = BACKGROUND.sub(lambda m: m[1] or ";", command.replace("\\\n", " "))
-    for segment in SEGMENT.split(commands):
-        words = _command(segment.split())
-        if not words or words[0].startswith("#"):
+    for words in map(_command, simple):
+        if not words:
             continue
         if words[0] in ("curl", "wget"):
-            try:
-                risk = _http_risk(_command(shlex.split(segment)))
-            except ValueError:  # unbalanced quotes: can't tell what it sends
-                return "write"
+            risk = _http_risk(words)
             if risk != "read":
                 return risk
         elif not _reads(words):
