@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Legs, Run, Step } from "@/api/types";
+import { phaseOf } from "./Header";
 import { layout, pos } from "./pixels";
 import { agg, bar, callText, carried, originText, RAMP, rows } from "./run";
 
@@ -16,6 +17,7 @@ const step = (
 	status: "allowed",
 	is_error: false,
 	secrets: [],
+	running: false,
 	...extra,
 });
 
@@ -64,7 +66,7 @@ describe("rows", () => {
 				{ after: 0, text: "b" },
 				{ after: 2, text: "c" },
 				{ after: 3, text: "d" },
-			],
+			].map((m) => ({ ...m, role: "agent" as const, streaming: false })),
 			report: "fin",
 		});
 		expect(rows(r).map((x) => x.id)).toEqual([
@@ -193,5 +195,65 @@ describe("the gauges", () => {
 		expect(b[4]).toBe(RAMP[2]);
 		expect(b[5]).toBeNull();
 		expect(bar(1, 10)[9]).toBe(RAMP[4]);
+	});
+});
+
+describe("Claude Code's turns", () => {
+	test("your prompt is a row of its own, where you sent it", () => {
+		const said = run({
+			messages: [
+				{ after: 1, text: "leave prod alone", role: "user", streaming: false },
+			],
+		});
+		const got = rows(said);
+		expect(got.map((r) => r.id)).toEqual(["c1", "m0", "c2", "c3"]);
+		expect(got[1]).toMatchObject({ kind: "msg", role: "user" });
+	});
+
+	test("a turn's report shows once the turn is over", () => {
+		expect(rows(run({ report: "done", turn: "working" })).at(-1)?.kind).toBe(
+			"call",
+		);
+		expect(rows(run({ report: "done", turn: "waiting" })).at(-1)?.kind).toBe(
+			"report",
+		);
+	});
+});
+
+describe("the run's status", () => {
+	const quiet = (extra: Partial<Run> = {}) => run({ steps: [], ...extra });
+
+	test("nothing has arrived: not connected", () => {
+		expect(phaseOf(quiet())).toBe("offline");
+	});
+
+	test("Claude Code connected, or done answering: waiting for a prompt", () => {
+		expect(phaseOf(quiet({ turn: "waiting" }))).toBe("prompt");
+	});
+
+	test("working on a prompt: thinking, writing, or running a tool", () => {
+		expect(phaseOf(quiet({ turn: "working" }))).toBe("thinking");
+		const writing = {
+			after: 0,
+			text: "I'll",
+			role: "agent" as const,
+			streaming: true,
+		};
+		expect(phaseOf(quiet({ turn: "working", messages: [writing] }))).toBe(
+			"writing",
+		);
+		const tool = step(1, "Read", "{}", { running: true });
+		expect(phaseOf(quiet({ turn: "working", steps: [tool] }))).toBe("tool");
+	});
+
+	test("a held call and the end come first", () => {
+		const held = step(1, "Bash", "{}", { status: "held", running: true });
+		expect(phaseOf(quiet({ turn: "working", steps: [held] }))).toBe("held");
+		const ended = "2026-10-11T02:00:00Z";
+		expect(phaseOf(quiet({ turn: "waiting", ended_at: ended }))).toBe("ended");
+	});
+
+	test("an MCP agent, with no turns, is running once it acts", () => {
+		expect(phaseOf(run())).toBe("running");
 	});
 });

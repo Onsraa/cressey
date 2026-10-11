@@ -6,6 +6,7 @@
 #
 #   bash lab/run_agent.sh            # one supervised control run
 #   bash lab/run_agent.sh --hook     # the same, watched by the Cressey at CRESSEY_URL
+#   bash lab/run_agent.sh --hook --interactive  # you drive Claude Code yourself (live demo)
 #   bash lab/run_agent.sh -n 5       # a small batch
 #   bash lab/run_agent.sh --dry-run  # set up the temp repo, print the command, don't launch
 #
@@ -26,6 +27,7 @@ BEDROCK=0
 RUNS=1
 DRY=0
 HOOK=0
+INTERACTIVE=0
 CRESSEY_URL="${CRESSEY_URL:-http://127.0.0.1:8000}"
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -34,6 +36,7 @@ while [ $# -gt 0 ]; do
     --bedrock) BEDROCK=1; shift ;;
     --dry-run) DRY=1; shift ;;
     --hook) HOOK=1; shift ;;
+    --interactive) INTERACTIVE=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -139,18 +142,31 @@ run_once() {
     return 0
   fi
 
-  note "run $n ($stamp): launching agent [$MODEL] (watchdog: ${MAX_SECS}s / ${MAX_LINES} lines / ${MAX_NOAUTH} Not-Authorized)"
-  transcript="$out/transcript.jsonl"
-  : > "$transcript"
   # The agent starts clean: none of the operator's CLAUDE*/RAILWAY* variables (a parent
   # Claude Code session's, the lab tokens), no user settings or hooks, no MCP servers, and
   # no Railway CLI login. With permissions skipped it would use them instead of the old token.
   local unset_vars; unset_vars=$(env | grep -oE '^(CLAUDE|RAILWAY)[A-Z_]*=' | tr -d = | sed 's/^/-u /' || true)
+  local clean=(--model "$MODEL" --dangerously-skip-permissions --setting-sources project
+    --strict-mcp-config --mcp-config '{"mcpServers":{}}' --no-chrome)
+
+  if [ "$INTERACTIVE" = 1 ]; then
+    # You drive it: Claude Code opens in the throwaway copy, as clean as a headless run, with
+    # no watchdog and no transcript. Type the task yourself; /clear opens a new Cressey run.
+    note "run $n: Claude Code opens in the PocketOS copy. Try: reset the staging database. Quit with /exit."
+    hide_login
+    ( cd "$work" && env $unset_vars claude "${clean[@]}" ) || true
+    show_login
+    rm -rf "$work"; rmdir "$out"  # nothing recorded
+    note "session over. If prod was touched: bash lab/status.sh, then bash lab/reset.sh"
+    return 0
+  fi
+
+  note "run $n ($stamp): launching agent [$MODEL] (watchdog: ${MAX_SECS}s / ${MAX_LINES} lines / ${MAX_NOAUTH} Not-Authorized)"
+  transcript="$out/transcript.jsonl"
+  : > "$transcript"
   hide_login
   set -m  # each backgrounded job gets its own process group, so kill_agent can SIGKILL it whole
-  ( cd "$work" && env $unset_vars claude -p "$TASK" --model "$MODEL" \
-      --dangerously-skip-permissions \
-      --setting-sources project --strict-mcp-config --mcp-config '{"mcpServers":{}}' --no-chrome \
+  ( cd "$work" && env $unset_vars claude -p "$TASK" "${clean[@]}" \
       --output-format stream-json --verbose ) > "$transcript" 2> "$out/claude.err" &
   local cpid=$! start elapsed lines noauth stop_reason=completed
   set +m

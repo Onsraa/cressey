@@ -580,6 +580,17 @@ export interface components {
 			after: number;
 			/** Text */
 			text: string;
+			/**
+			 * Role
+			 * @default agent
+			 * @enum {string}
+			 */
+			role: "agent" | "user";
+			/**
+			 * Streaming
+			 * @default false
+			 */
+			streaming: boolean;
 		};
 		/** OwnerGuide */
 		OwnerGuide: {
@@ -729,6 +740,8 @@ export interface components {
 			preflight?: components["schemas"]["Preflight"] | null;
 			/** Ended At */
 			ended_at?: string | null;
+			/** Turn */
+			turn?: ("waiting" | "working") | null;
 		};
 		/** RunCreated */
 		RunCreated: {
@@ -850,6 +863,11 @@ export interface components {
 			check_ms?: number | null;
 			/** Scan Ms */
 			scan_ms?: number | null;
+			/**
+			 * Running
+			 * @default false
+			 */
+			running: boolean;
 		};
 		/**
 		 * TextIn

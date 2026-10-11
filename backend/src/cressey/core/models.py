@@ -157,12 +157,16 @@ class Step(BaseModel):
     labels: dict[str, float] | None = Field(None, exclude=True)
     quotes: dict[str, str] = Field(default_factory=dict, exclude=True)
     # Its call may still return a result: a parallel call doesn't label it before that.
-    running: bool = Field(False, exclude=True)
+    # Served: the dashboard shows a tool running.
+    running: bool = False
 
 
 class Message(BaseModel):
     after: int  # how many calls the agent had made when it said this
     text: str  # agent text, secrets redacted
+    # The user's prompt (Claude Code's UserPromptSubmit) is shown, never scored as the agent's.
+    role: Literal["agent", "user"] = "agent"
+    streaming: bool = False  # still arriving, slice by slice
 
 
 class Preflight(BaseModel):
@@ -194,6 +198,13 @@ class Run(BaseModel):
     report_check: Leg | None = None  # that report against the log (S9)
     preflight: Preflight | None = None  # set in the background, after the run starts
     ended_at: str | None = None
+    # Claude Code's turn, from its hooks: waiting for a prompt, or working on one. None until
+    # a session starts, and for an MCP agent.
+    turn: Literal["waiting", "working"] | None = None
+    # Never served: the steps before this one no longer keep the key suspended (the user's
+    # prompt unlocked it), and the Claude Code session this run follows.
+    unlocked_after: int = Field(default=0, exclude=True)
+    session: str | None = Field(default=None, exclude=True)
     # Secret value -> fingerprint, to redact it wherever it shows up later. Never served.
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
 

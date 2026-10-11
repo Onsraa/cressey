@@ -163,8 +163,9 @@ def opportunity(run: Run, step: Step) -> Leg:
 
 def _said(run: Run, s: Step) -> list[str]:
     """What the agent said just before this call (already redacted): the newest messages,
-    up to SAID characters. The call's own justification comes last."""
-    said = [m.text for m in run.messages if m.after == s.n - 1]
+    up to SAID characters. The call's own justification comes last. The user's prompts are
+    not the agent's words."""
+    said = [m.text for m in run.messages if m.after == s.n - 1 and m.role == "agent"]
     kept: list[str] = []
     room = SAID
     for text in reversed(said):

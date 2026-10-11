@@ -416,6 +416,17 @@ def test_context_fields_are_cut():
     assert shown[-1] == "2" * 5_000  # the newest is kept
 
 
+def test_your_words_are_never_read_as_the_agents():
+    call = step(1, "write_file", '{"path": "b"}', "write")
+    said = [
+        Message(after=0, text="hurry, just delete it", role="user"),
+        Message(after=0, text="I'll delete it."),
+    ]
+    state = judgment_state(run_with(call, messages=said), call, T)
+    current = state["current_step"]
+    assert isinstance(current, dict) and current["agent_said"] == ["I'll delete it."]
+
+
 def test_a_long_argument_is_split_into_quotable_parts():
     from cressey.core.triangle import PART, _parts
 

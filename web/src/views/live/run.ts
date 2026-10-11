@@ -1,12 +1,13 @@
-import type { LegName, Legs, Run, Secret, Step } from "@/api/types";
+import type { LegName, Legs, Message, Run, Secret, Step } from "@/api/types";
 
 // What the trace lists, in order.
 export type Row =
 	| { id: string; kind: "call"; step: Step }
-	| { id: string; kind: "msg"; text: string }
+	| { id: string; kind: "msg"; text: string; role: Message["role"] }
 	| { id: string; kind: "report"; text: string };
 
-// A message said after k calls goes just before call #k+1; the report comes last.
+// A message said after k calls goes just before call #k+1; the report comes last, once
+// Claude Code's turn is over (while it works, the report is the last turn's).
 export function rows(run: Run): Row[] {
 	const calls = run.steps.map((step): [number, Row] => [
 		step.n,
@@ -14,15 +15,19 @@ export function rows(run: Run): Row[] {
 	]);
 	const said = run.messages.map((m, i): [number, Row] => [
 		m.after + 0.5,
-		{ id: `m${i}`, kind: "msg", text: m.text },
+		{ id: `m${i}`, kind: "msg", text: m.text, role: m.role },
 	]);
 	const all = [...calls, ...said]
 		.sort((a, b) => a[0] - b[0])
 		.map(([, row]) => row);
-	return run.report
+	return run.report && run.turn !== "working"
 		? [...all, { id: "report", kind: "report", text: run.report }]
 		: all;
 }
+
+// A Claude Code run's report is its last turn's answer: the session goes on.
+export const reportLabel = (run?: Run) =>
+	run?.turn ? "Last answer" : "Final report";
 
 const MARK = /\[secret:([0-9a-f]+)\]/g;
 const MARK_ONLY = /^\[secret:[0-9a-f]+\]$/;

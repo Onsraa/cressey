@@ -68,3 +68,34 @@ async def test_a_rejection_keeps_the_key_suspended_after_another_hold_is_approve
     assert not await waits[0]
     assert runs.decide(run.id, 2, True)
     assert await waits[1] and run.revoked
+
+
+@pytest.mark.anyio
+async def test_a_prompt_unlocks_the_key_but_not_while_a_call_is_held():
+    runs, run, calls = _held_pair()
+    first = asyncio.create_task(runs.hold(run, calls[0], 5))
+    await asyncio.sleep(0)
+    runs.prompt(run, "wait, what are you doing?")  # typed while the call is held
+    assert run.revoked
+    runs.decide(run.id, 1, False)
+    assert not await first and run.revoked
+    runs.prompt(run, "ok, leave prod alone")
+    assert not run.revoked
+    # The rejection before the prompt no longer counts: approving a later hold leaves
+    # the key open.
+    later = runs.add_step(run, "run_sql", {"q": "x"}, "x", "destructive", "hors mandat")
+    second = asyncio.create_task(runs.hold(run, later, 5))
+    await asyncio.sleep(0)
+    runs.decide(run.id, later.n, True)
+    assert await second and not run.revoked
+
+
+def test_a_prompt_closes_a_message_left_streaming():
+    """Claude Code sends nothing on Esc: a message cut short stays open until the next
+    prompt, which closes it."""
+    runs = Runs(EventLog())
+    run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)
+    assert run is not None
+    runs.stream(run, "m1", "I'll delete the", False)
+    runs.prompt(run, "stop")
+    assert [m.streaming for m in run.messages] == [False, False]

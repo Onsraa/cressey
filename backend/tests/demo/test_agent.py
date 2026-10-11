@@ -35,7 +35,12 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
     run = await run_page(served, played.run_id)
     assert played.blocked_at is None and users(tmp_path) == 0
     assert run["report"] == demo.report and run["ended_at"]
-    assert run["messages"][0] == {"after": 0, "text": demo.steps[0].say}
+    assert run["messages"][0] == {
+        "after": 0,
+        "text": demo.steps[0].say,
+        "role": "agent",
+        "streaming": False,
+    }
 
 
 async def test_a_rejected_hold_makes_the_agent_declare_the_task_impossible(

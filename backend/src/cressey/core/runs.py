@@ -42,8 +42,16 @@ class Runs:
         self._waiting: dict[tuple[str, int], asyncio.Future[bool]] = {}
         # A message being streamed in: (run, message id) -> (its Message, the raw text).
         self._streaming: dict[tuple[str, str], tuple[Message, str]] = {}
+        # A later Claude Code session on a run's key: (that run, session id) -> its own run.
+        self._sessions: dict[tuple[str, str], str] = {}
 
     def create(self, spec: RunIn) -> RunCreated:
+        run = self._new(spec)
+        key = "csy_" + secrets.token_urlsafe(24)
+        self._keys[_digest(key)] = run.id
+        return RunCreated(id=run.id, key=key)
+
+    def _new(self, spec: RunIn) -> Run:
         run = Run(
             id=uuid.uuid4().hex[:12],
             task=spec.task,
@@ -52,11 +60,29 @@ class Runs:
             kind=spec.kind,
             started_at=_now().isoformat(),
         )
-        key = "csy_" + secrets.token_urlsafe(24)
         self._runs[run.id] = run
-        self._keys[_digest(key)] = run.id
         self.log.append("run", {"run": run.id, "task": run.task})
-        return RunCreated(id=run.id, key=key)
+        return run
+
+    def for_session(self, run: Run, session: str) -> Run:
+        """The run of one Claude Code session on this run's key. The key's own run takes the
+        first session; each later one (after /clear, or from a second window) gets a run of
+        its own, with the same task and mandate, so their traces never mix."""
+        if run.session in (None, session):
+            run.session = session
+            return run
+        pair = (run.id, session)
+        if pair not in self._sessions:
+            spec = RunIn(
+                task=run.task,
+                mandate=run.mandate,
+                visibility=run.visibility,
+                kind=run.kind,
+            )
+            new = self._new(spec)
+            new.session, new.preflight = session, run.preflight
+            self._sessions[pair] = new.id
+        return self._runs[self._sessions[pair]]
 
     def get(self, run_id: str) -> Run | None:
         return self._runs.get(run_id)
@@ -130,11 +156,43 @@ class Runs:
         if not raw and message not in run.messages:
             run.messages.append(message)
         raw += delta
-        message.text = redact(raw, run.known)
+        message.text, message.streaming = redact(raw, run.known), not final
         self._streaming[key] = (message, raw)
         if final:
             del self._streaming[key]
             self.log.append("message", {"run": run.id, **message.model_dump()})
+
+    def prompt(self, run: Run, text: str) -> None:
+        """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
+        mid-turn. It closes a message cut short by Esc, which Claude Code doesn't report. It
+        unlocks a suspended key, the user being back, but not while a call is still held:
+        that one is decided on the dashboard."""
+        for key in [k for k in self._streaming if k[0] == run.id]:
+            self._streaming.pop(key)[0].streaming = False
+        message = Message(
+            after=len(run.steps), text=redact(text, run.known), role="user"
+        )
+        run.messages.append(message)
+        run.turn = "working"
+        self.log.append("message", {"run": run.id, **message.model_dump()})
+        if run.revoked and not any(s.status == "held" for s in run.steps):
+            run.revoked, run.unlocked_after = False, len(run.steps)
+            self.log.append("unlocked", {"run": run.id, "after": run.unlocked_after})
+
+    def connect(self, run: Run) -> None:
+        """A Claude Code session started (or resumed): it waits for a prompt."""
+        run.turn, run.ended_at = "waiting", None
+        self.log.append("session", {"run": run.id, "state": "started"})
+
+    def answered(self, run: Run, report: str) -> None:
+        """A Claude Code turn is over (Stop): its last message is the report, until the next."""
+        self.report(run, report)
+        run.turn = "waiting"
+
+    def disconnect(self, run: Run) -> None:
+        """The Claude Code session ended (SessionEnd): the run ends with it."""
+        run.ended_at = _now().isoformat()
+        self.log.append("session", {"run": run.id, "state": "ended"})
 
     def route(self, run: Run, via: Literal["mcp", "hook"]) -> None:
         """How this run reached Cressey, for the Run view's badge. Set once, on its first call."""
@@ -143,7 +201,11 @@ class Runs:
             self.log.append("run", {"run": run.id, "via": via})
 
     def end(self, run: Run, report: str) -> None:
-        run.report, run.ended_at = redact(report, run.known), _now().isoformat()
+        self.report(run, report)
+        run.ended_at = _now().isoformat()
+
+    def report(self, run: Run, report: str) -> None:
+        run.report = redact(report, run.known)
         self.log.append("report", {"run": run.id, "report": run.report})
 
     def checked(self, run: Run, check: Leg) -> None:
@@ -200,7 +262,7 @@ class Runs:
             step.decided_at = _now().isoformat()
             self._log(run, step, "status", status=step.status)
         blocking = ("held", "rejected", "expired")
-        others = [s for s in run.steps if s is not step]
+        others = [s for s in run.steps[run.unlocked_after :] if s is not step]
         run.revoked = step.status != "approved" or any(
             s.status in blocking for s in others
         )
