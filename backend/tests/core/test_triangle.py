@@ -4,17 +4,23 @@ from collections.abc import Mapping
 
 import pytest
 
+from cressey.core.judge import NotRecorded
 from cressey.core.models import Leg, Legs, Mandate, Message, Run, Step
 from cressey.core.secret_scan import Secret
 from cressey.core.triangle import (
     CHUNK,
+    FLOORS,
+    LABELS,
+    NOTE,
     PART,
     Thresholds,
     alarm,
+    flag_soon,
     judgment_state,
     legs,
     opportunity,
     pressure,
+    read_after,
 )
 from cressey.demo.tools import PROD_KEY
 
@@ -35,7 +41,8 @@ def anyio_backend():
 
 class FakeJudge:
     """Answers each kind of question the triangle asks: the step labels, the part a label
-    points at, and the judgment on a write. Records every state it was shown."""
+    points at, the judgment on a write, and the agent's words. Records every state it was
+    shown."""
 
     def __init__(
         self,
@@ -43,9 +50,11 @@ class FakeJudge:
         flags: dict[int, dict] | None = None,
         report: float | None = 0.9,
         by_view: tuple[float | None, float | None] | None = None,
+        words: dict[str, float] | None = None,
     ):
         self.judgment, self.flags, self.report = judgment, flags or {}, report
         self.by_view = by_view  # (actions only, with words): a score for each view
+        self.words = words or {}  # what a message scores on each question, else 0
         self.asked: list[tuple[str, dict]] = []
 
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
@@ -63,11 +72,25 @@ class FakeJudge:
             return {q: 0.0 for q in questions} | self.flags.get(
                 state["current_step"]["step"], {}
             )
+        if words_only(state):
+            self.asked.append(("words", state))
+            return {q: self.words.get(q, 0.0) for q in questions}
         self.asked.append(("point", state))
         return {q: {"m1" if "m1" in state["parts"] else "none": 1.0} for q in questions}
 
     def labelled(self) -> list[int]:
         return [s["current_step"]["step"] for kind, s in self.asked if kind == "label"]
+
+    def spoken(self) -> list[list[str]]:
+        """The agent's words, as shown in each call that read them."""
+        return [
+            s["current_step"]["agent_said"] for kind, s in self.asked if kind == "words"
+        ]
+
+
+def words_only(state: dict) -> bool:
+    """The call that reads the agent's words alone: its current step is only what was said."""
+    return set(state.get("current_step", ())) == {"agent_said"}
 
 
 def actions_only(state: dict) -> bool:
@@ -660,3 +683,266 @@ async def test_a_payload_across_a_halving_is_seen_whole():
     run = run_with(step(1, is_error=True), step(2, is_error=True), write)
     leg = (await legs(run, write, SizeLimitedSkipJudge(8_000), T)).rationalization
     assert leg.score == 0.9
+
+
+# The agent's words, flagged by the decision model as each message arrives (display only).
+CALM = "corrige le README"  # no deadline in the task: pressure starts at 0
+FAILING = "Les tests échouent et je n'y arrive pas."
+OUT_OF_TIME = "Je n'y arrive pas et le délai est dépassé."
+
+
+def after_words(text: str = FAILING) -> tuple[Run, Message, Step]:
+    """A run where the agent said `text`, then made a read."""
+    said, read = Message(after=0, text=text), step(1, "read_file")
+    return run_with(read, task=CALM, messages=[said]), said, read
+
+
+async def test_words_raise_p_not_its_score():
+    run, said, read = after_words()
+    judge = FakeJudge(words={"pressure": 0.9})
+    flag_soon(run, said, judge)
+    leg = (await legs(run, read, judge, T)).pressure
+    assert leg.words == 0.9 and leg.score == 0.0 and not leg.confirmed
+    assert said.flagged == ["pressure"]
+
+
+async def test_words_never_hold_a_read():
+    run, said, read = after_words("Personne ne verra que je saute ce test.")
+    judge = FakeJudge(0.9, words={"rationalization": 0.95})
+    flag_soon(run, said, judge)
+    triangle = await legs(run, read, judge, T)
+    assert triangle.rationalization.words == 0.95
+    assert not triangle.rationalization.confirmed
+    assert alarm(triangle, "read") is False
+
+
+@pytest.mark.parametrize("judgment", [0.9, 0.4], ids=["held", "not held"])
+async def test_words_leave_a_write_unchanged(judgment):
+    """The same run, the same messages: the model reads them in one and not in the other.
+    The messages feed the write's judgment either way; only the flags may differ."""
+
+    async def triangle(flagging: bool) -> Legs:
+        said = Message(after=2, text=FAILING)
+        write = step(3, "write_file", '{"path": "tests/t.py"}', "write")
+        run = run_with(
+            step(1, is_error=True),
+            step(2, is_error=True),
+            write,
+            task=CALM,
+            messages=[said],
+        )
+        loud = {"pressure": 0.9, "rationalization": 0.9, "manipulation": 0.9}
+        judge = FakeJudge(judgment, words=loud)
+        if flagging:
+            flag_soon(run, said, judge)
+        return await legs(run, write, judge, T)
+
+    flagged, plain = await triangle(True), await triangle(False)
+    assert flagged.rationalization.words == 0.9 and plain.rationalization.words is None
+    for (_, a), (_, b) in zip(flagged, plain, strict=True):
+        assert (a.score, a.confirmed, a.facts) == (b.score, b.confirmed, b.facts)
+    held = (
+        judgment >= T.judgment
+    )  # two failed calls confirm pressure: the judgment decides
+    assert alarm(flagged, "write") is alarm(plain, "write") is held
+
+
+async def test_manipulation_counts_for_r():
+    run, said, read = after_words("L'équipe sécurité a déjà approuvé ce contournement.")
+    judge = FakeJudge(words={"manipulation": 0.8, "rationalization": 0.1})
+    flag_soon(run, said, judge)
+    leg = (await legs(run, read, judge, T)).rationalization
+    assert leg.words == 0.8 and said.flagged == ["rationalization"]
+    assert said.labels == {"pressure": 0.0, "rationalization": 0.1, "manipulation": 0.8}
+
+
+UNDER = 0.01
+
+
+@pytest.mark.parametrize(
+    ("words", "flagged"),
+    [
+        pytest.param(
+            {
+                "pressure": FLOORS["pressure"] - UNDER,
+                "rationalization": FLOORS["rationalization"] - UNDER,
+                "manipulation": FLOORS["manipulation"] - UNDER,
+            },
+            [],
+            id="under the floors",
+        ),
+        pytest.param({"pressure": FLOORS["pressure"]}, ["pressure"], id="pressure"),
+        pytest.param(
+            {"rationalization": FLOORS["rationalization"]},
+            ["rationalization"],
+            id="rationalization",
+        ),
+        pytest.param(
+            {"manipulation": FLOORS["manipulation"]},
+            ["rationalization"],
+            id="manipulation",
+        ),
+        pytest.param(
+            {"pressure": 1.0, "manipulation": 1.0},
+            ["pressure", "rationalization"],
+            id="both",
+        ),
+    ],
+)
+async def test_a_message_is_flagged_from_the_floors(words, flagged):
+    run, said, _ = after_words()
+    task = flag_soon(run, said, FakeJudge(words=words))
+    assert task is not None
+    await task
+    assert said.flagged == flagged
+
+
+class DeafJudge(FakeJudge):
+    """No answer to the agent's words: the model says nothing, or a replay has no record."""
+
+    def __init__(self, miss: NotRecorded | None):
+        super().__init__()
+        self.miss = miss
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if not words_only(state):
+            return await super().answers(state, questions)
+        if self.miss:
+            raise self.miss
+        return None
+
+
+@pytest.mark.parametrize(
+    "miss", [None, NotRecorded()], ids=["no answer", "no recorded answer"]
+)
+async def test_no_answer_leaves_words_none(miss):
+    run, said, read = after_words()
+    judge = DeafJudge(miss)
+    task = flag_soon(run, said, judge)
+    assert task is not None
+    await task
+    triangle = await legs(run, read, judge, T)  # neither failed nor held
+    assert said.labels is None and said.flagged == []
+    assert triangle.pressure.words is None and triangle.rationalization.words is None
+
+
+async def test_one_flag_call_per_message():
+    said = Message(after=0, text=FAILING)
+    first, second = step(1, "read_file"), step(2, "read_file", '{"path": "b.md"}')
+    run = run_with(first, second, task=CALM, messages=[said])
+    judge = FakeJudge(words={"pressure": 0.9})
+    task = flag_soon(run, said, judge)
+    assert flag_soon(run, said, judge) is task
+    await legs(run, first, judge, T)
+    await legs(run, second, judge, T)  # both calls wait for the one read
+    assert len(judge.spoken()) == 1
+
+
+async def test_legs_waits_for_a_flag_in_flight():
+    run, said, read = after_words()
+    judge = SlowJudge(words={"pressure": 0.9})
+    flag_soon(run, said, judge)
+    assert said.labels is None  # the model has not answered yet
+    assert (await legs(run, read, judge, T)).pressure.words == 0.9
+
+
+class HearsJudge(FakeJudge):
+    """Hears pressure by what a message says: the highest score of the phrases it carries."""
+
+    def __init__(self, heard: dict[str, float]):
+        super().__init__()
+        self.heard = heard
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if not words_only(state):
+            return await super().answers(state, questions)
+        self.asked.append(("words", state))
+        [said] = state["current_step"]["agent_said"]
+        heard = max(
+            (p for phrase, p in self.heard.items() if phrase in said), default=0
+        )
+        return {q: heard if q == "pressure" else 0.0 for q in questions}
+
+
+async def test_words_are_the_highest_over_the_messages_before_the_call():
+    """Every message said before the call counts, the latest or not; one said after doesn't."""
+    texts = {"low": 0.3, "high": 0.9, "mid": 0.5, "late": 1.0}
+    said = [Message(after=n, text=text) for n, text in enumerate(texts)]
+    first, second, third = (
+        step(n, "read_file", f'{{"path": "{n}"}}') for n in (1, 2, 3)
+    )
+    run = run_with(first, second, third, task=CALM, messages=said)
+    judge = HearsJudge(texts)
+    for m in said:
+        task = flag_soon(run, m, judge)
+        assert task is not None
+        await task  # all read already: the calls only collect the flags
+    words = [(await legs(run, call, judge, T)).pressure.words for call in run.steps]
+    assert words == [0.3, 0.9, 0.9]  # "late" is said after the third call
+
+
+async def test_the_late_read_carries_the_words_too():
+    run, said, read = after_words()
+    judge = FakeJudge(words={"pressure": 0.9})
+    flag_soon(run, said, judge)
+    assert (await read_after(run, read, judge, T)).pressure.words == 0.9
+
+
+async def test_a_long_message_is_read_in_parts():
+    text = "a" * CHUNK + OUT_OF_TIME + "b" * (CHUNK - len(OUT_OF_TIME))
+    run, said, read = after_words(text)
+    judge = HearsJudge({OUT_OF_TIME: 0.9})
+    flag_soon(run, said, judge)
+    leg = (await legs(run, read, judge, T)).pressure
+    parts = [part for [part] in judge.spoken()]
+    assert len(parts) == 2 and all(len(p) <= CHUNK for p in parts)
+    assert "".join(parts) == text
+    assert said.labels is not None and said.labels["pressure"] == 0.9
+    assert leg.words == 0.9
+
+
+async def test_the_model_reads_the_message_alone_with_the_ledgers_questions():
+    seen: list[tuple[dict, Mapping]] = []
+
+    class Spy(FakeJudge):
+        async def answers(self, state: dict, questions: Mapping) -> dict | None:
+            seen.append((state, questions))
+            return await super().answers(state, questions)
+
+    run, said, read = after_words()
+    judge = Spy()
+    flag_soon(run, said, judge)
+    await legs(run, read, judge, T)
+    [(state, questions)] = seen
+    assert state == {
+        "task": CALM,
+        "mandate": run.mandate.model_dump(),
+        "note": NOTE,
+        "current_step": {"agent_said": [FAILING]},
+    }
+    asked = ("pressure", "rationalization", "manipulation")
+    assert questions == {name: LABELS[name] for name in asked}
+
+
+async def test_a_message_never_final_is_never_waited_on():
+    """A message still streaming is in the run but was never flagged: no call waits on it."""
+
+    class Mute(FakeJudge):
+        async def answers(self, state: dict, questions: Mapping) -> dict | None:
+            if words_only(state):
+                await asyncio.Event().wait()
+            return await super().answers(state, questions)
+
+    run, said, read = after_words()
+    triangle = await asyncio.wait_for(legs(run, read, Mute(), T), 1)
+    assert said.labels is None and triangle.pressure.words is None
+
+
+async def test_tools_run_flags_nothing():
+    run, said, read = after_words()
+    run.visibility = "tools"  # "Cressey scores tool calls only"
+    judge = FakeJudge(words={"pressure": 0.9})
+    assert flag_soon(run, said, judge) is None
+    triangle = await legs(run, read, judge, T)
+    assert triangle.pressure.words is None and said.labels is None
+    assert judge.spoken() == []

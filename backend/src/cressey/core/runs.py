@@ -113,16 +113,21 @@ class Runs:
         step.status = status
         self._log(run, step, "status", status=status)
 
-    def say(self, run: Run, text: str) -> None:
+    def say(self, run: Run, text: str) -> Message:
         message = Message(after=len(run.steps), text=redact(text, run.known))
         run.messages.append(message)
-        self.log.append("message", {"run": run.id, **message.model_dump()})
+        # The log keeps what the agent said, not the flags a model adds later.
+        said = message.model_dump(include={"after", "text"})
+        self.log.append("message", {"run": run.id, **said})
+        return message
 
-    def stream(self, run: Run, message_id: str, delta: str, final: bool) -> None:
+    def stream(
+        self, run: Run, message_id: str, delta: str, final: bool
+    ) -> Message | None:
         """A streamed slice of the agent's words (Claude Code's MessageDisplay hook). Deltas
         for one message grow one Message in place, placed after the calls made before it, so
         the dashboard shows the reasoning as it is produced and the next call's judgment
-        reads it. Logged once, when the message is final."""
+        reads it. Logged once, when the message is final, and returned then."""
         key = (run.id, message_id)
         message, raw = self._streaming.get(
             key, (Message(after=len(run.steps), text=""), "")
@@ -134,7 +139,10 @@ class Runs:
         self._streaming[key] = (message, raw)
         if final:
             del self._streaming[key]
-            self.log.append("message", {"run": run.id, **message.model_dump()})
+            said = message.model_dump(include={"after", "text"})
+            self.log.append("message", {"run": run.id, **said})
+            return message
+        return None
 
     def route(self, run: Run, via: Literal["mcp", "hook"]) -> None:
         """How this run reached Cressey, for the Run view's badge. Set once, on its first call."""
