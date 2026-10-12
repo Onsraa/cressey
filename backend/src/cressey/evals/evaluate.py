@@ -1,8 +1,8 @@
 """Detection eval: play every synthetic session on a fresh Cressey as a replay (nothing
 waits for a human) and check each one is held exactly when it should be.
 
-    uv run python -m cressey.demo.evaluate      # writes data/eval/report-detection.json
-    uv run python -m cressey.demo.evaluate --ablation   # floor alone vs floor + triangle
+    uv run python -m cressey.evals.evaluate      # writes data/eval/report-detection.json
+    uv run python -m cressey.evals.evaluate --ablation   # floor alone vs floor + triangle
 """
 
 import asyncio

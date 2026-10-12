@@ -2,7 +2,8 @@ from collections.abc import Mapping
 
 import pytest
 
-from cressey.demo.calibrate_floor import (
+from cressey.domain.policy import load_policy
+from cressey.evals.calibrate_floor import (
     LABELS,
     ActionCase,
     Labels,
@@ -10,7 +11,6 @@ from cressey.demo.calibrate_floor import (
     calibrate,
     summary,
 )
-from cressey.domain.policy import load_policy
 from cressey.settings import DATA
 
 pytestmark = pytest.mark.anyio

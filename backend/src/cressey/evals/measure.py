@@ -7,9 +7,9 @@ sends: runs are built with `Runs`, scored with `core.triangle.legs` and `report_
 The labelled sets are ours (`data/eval/decision-writes.json`, `decision-reports.json`);
 we wrote the labels.
 
-    uv run python -m cressey.demo.measure              # live Jev, writes data/eval/decision-model.json
-    uv run python -m cressey.demo.measure --offline    # a fake judge, for wiring and CI
-    uv run python -m cressey.demo.measure --preflight  # the pre-run assessment, data/eval/preflight.json
+    uv run python -m cressey.evals.measure              # live Jev, writes data/eval/decision-model.json
+    uv run python -m cressey.evals.measure --offline    # a fake judge, for wiring and CI
+    uv run python -m cressey.evals.measure --preflight  # the pre-run assessment, data/eval/preflight.json
 """
 
 import asyncio

@@ -24,9 +24,9 @@ import httpx2
 
 from cressey.app import create_app
 from cressey.demo.agent import Session, load_sessions, play
-from cressey.demo.evaluate import ABLATION, REPORT, ablation, evaluate
 from cressey.demo.server import serve
 from cressey.domain.guides import Guide, GuideIncident
+from cressey.evals.evaluate import ABLATION, REPORT, ablation, evaluate
 from cressey.guide.api import write_guide
 from cressey.settings import DATA, Settings
 

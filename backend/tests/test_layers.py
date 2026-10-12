@@ -25,8 +25,13 @@ ALLOWED: dict[str, set[str]] = {
     "export_openapi": {"app", "settings"},
     "__init__": set(),
 }
-EVERYTHING = set(ALLOWED) | {"app", "demo", "testing"}
-ALLOWED |= {"app": EVERYTHING - {"testing"}, "demo": EVERYTHING, "testing": EVERYTHING}
+EVERYTHING = set(ALLOWED) | {"app", "demo", "evals", "testing"}
+ALLOWED |= {
+    "app": EVERYTHING - {"evals", "testing"},
+    "demo": EVERYTHING,
+    "evals": EVERYTHING,
+    "testing": EVERYTHING,
+}
 
 
 def _part(module: str) -> str:

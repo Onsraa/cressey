@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cressey.store.eventlog import Event, EventLog, _hash, verify
+from cressey.store.eventlog import Event, EventLog, event_hash, verify
 
 
 def _log(n: int, path: Path | None = None) -> EventLog:
@@ -45,7 +45,7 @@ def test_deleted_event_is_caught():
 def test_rehashed_forgery_is_caught(index, update, bad):
     events = list(_log(8).events)
     forged = events[index].model_copy(update=update)
-    forged.hash = _hash(forged)
+    forged.hash = event_hash(forged)
     events[index] = forged
     assert verify(events) == bad
 

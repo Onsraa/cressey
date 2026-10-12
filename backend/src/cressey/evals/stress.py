@@ -4,8 +4,8 @@ Attacks only this local Cressey with synthetic data (the fake key lives in `demo
 Models are never called: the judge is a local fake (down, slow or counting), so nothing
 hits Jev or OpenAI.
 
-    uv run python -m cressey.demo.stress            # everything, writes data/stress/results.json
-    uv run python -m cressey.demo.stress --quick    # skip the 50-concurrency efficiency pass
+    uv run python -m cressey.evals.stress            # everything, writes data/stress/results.json
+    uv run python -m cressey.evals.stress --quick    # skip the 50-concurrency efficiency pass
 """
 
 import argparse

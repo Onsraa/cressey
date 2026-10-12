@@ -74,7 +74,7 @@ tools:
   # does (Jev read it at 0.90). Every other tool, so every MCP tool, gets its kind from Jev.
 
 # The safety floor's questions to Jev, beside the code rules, set on a labelled set
-# (python -m cressey.demo.calibrate_floor). Jev only adds holds: none lifts a hold code made.
+# (python -m cressey.evals.calibrate_floor). Jev only adds holds: none lifts a hold code made.
 floor:
   # A tool missing from `tools` gets its kind from its name, asked once: names come from the
   # installed tools, not from the agent. It is a read only from this probability, since a

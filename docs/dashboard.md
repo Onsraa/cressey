@@ -100,7 +100,7 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Runs and steps | `GET /api/runs`, `GET /api/runs/{id}` | exists |
 | Holds and decisions | `GET /api/holds`, `POST /api/runs/{id}/steps/{n}/approve` and `/reject` | exists |
 | Guides and « Why? » | `GET /api/guides/{id}`, `POST /api/guides/{id}/why`. The backend creates the guides when an incident fires; the dashboard never calls `POST /api/guides` | exists |
-| Secret redaction | the secrets `core/secret_scan.py` finds in what the agent read, replaced in steps, holds and traces before they are served | exists: served `args` and the report carry `[secret:<fingerprint>]`; each step's `secrets` gives name, kind, fingerprint and line |
+| Secret redaction | the secrets `scan/secrets.py` finds in what the agent read, replaced in steps, holds and traces before they are served | exists: served `args` and the report carry `[secret:<fingerprint>]`; each step's `secrets` gives name, kind, fingerprint and line |
 | Hold countdown and decision time | a deadline and a decision time on `Hold` | exists: `held_until` and `decided_at` on the step |
 | Gauges and leg chart | each step's leg scores, confirmation and facts | exists: `legs` on each step (`pressure`, `opportunity`, `rationalization`, each with `score`, `confirmed`, `facts`) |
 | Acting on pressure | where the way out was sent and where the key went read-only | exists: `way_out_step` and `read_only_step` on the run. A call the read-only key refuses is `denied`, with the reason « read-only key: pressure and opportunity confirmed » |

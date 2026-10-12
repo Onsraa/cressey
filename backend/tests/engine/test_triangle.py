@@ -404,11 +404,11 @@ def test_your_words_are_never_read_as_the_agents():
 
 
 def test_a_long_argument_is_split_into_quotable_parts():
-    from cressey.engine.ledger import _parts
+    from cressey.engine.ledger import quotable_parts
     from cressey.engine.reading import PART
 
     args = "z" * 5_000
-    parts = _parts(run_with(step(1)), step(1), "", args)
+    parts = quotable_parts(run_with(step(1)), step(1), "", args)
     pieces = {k: v for k, v in parts.items() if k.startswith("a")}
     assert list(pieces) == ["a1", "a2", "a3", "a4", "a5"]
     assert all(len(v) <= PART for v in pieces.values())
@@ -535,7 +535,7 @@ async def test_the_leg_is_judged_on_the_words_view_alone():
 
 
 async def test_views_scores_the_actions_alone_and_with_words():
-    from cressey.demo.measure import views
+    from cressey.evals.measure import views
 
     judge = FakeJudge(by_view=(0.3, 0.7))
     run = run_with(step(1), WRITE.model_copy())
@@ -550,7 +550,7 @@ async def test_the_actions_only_state_carries_no_agent_text():
         step(3, "write_file", '{"path": "tests/t.py"}', "write"),
         messages=[Message(after=1, text=said), Message(after=2, text=said)],
     )
-    from cressey.demo.measure import views
+    from cressey.evals.measure import views
 
     judge = FakeJudge(0.9, flags={2: {"rationalization": 0.9}})
     await views(run, run.steps[-1], Ledger(judge), T)

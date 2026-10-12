@@ -67,7 +67,7 @@ POINT = {
 }
 
 
-def _parts(run: Run, s: Step, result: str, args: str) -> dict[str, str]:
+def quotable_parts(run: Run, s: Step, result: str, args: str) -> dict[str, str]:
     """The step cut into numbered parts a Choice can point at (it takes up to 255), each at
     most PART characters: the agent's sentences, the arguments `args`, the result's lines."""
     said = [
@@ -142,7 +142,7 @@ async def label_step(run: Run, i: int, judge: Judge) -> None:
     (best_args, best_result), _ = max(
         windows, key=lambda w: max(yes(w[1][c]) for c in flagged)
     )
-    parts = _parts(run, s, best_result, best_args)
+    parts = quotable_parts(run, s, best_result, best_args)
     options = {k: k for k in parts} | {"none": "none"}
     try:
         picked = await judge.answers(

@@ -25,7 +25,7 @@ class Event(BaseModel):
     hash: str  # sha256 of the canonical JSON of every other field
 
 
-def _hash(event: Event) -> str:
+def event_hash(event: Event) -> str:
     canonical = json.dumps(
         event.model_dump(exclude={"hash"}),
         sort_keys=True,
@@ -67,7 +67,7 @@ class EventLog:
             prev=self.head()[0],
             hash="",
         )
-        event.hash = _hash(event)
+        event.hash = event_hash(event)
         self.events.append(event)
         if self.path:
             with self.path.open("a", encoding="utf-8") as f:
@@ -97,7 +97,7 @@ def verify(
     anchored_hash, count = anchor or ("", 0)
     prev = ""
     for i, event in enumerate(events):
-        if event.seq != i or event.prev != prev or event.hash != _hash(event):
+        if event.seq != i or event.prev != prev or event.hash != event_hash(event):
             return i
         if i == count - 1 and event.hash != anchored_hash:
             return i

@@ -4,7 +4,7 @@ gets measured thresholds rather than guesses. The sets are ours (`data/eval/floo
 Only what Cressey would ask is measured: a tool the policy lists gets no label, and an action
 that code already classes or holds isn't asked.
 
-    uv run python -m cressey.demo.calibrate_floor   # live Jev, writes data/eval/floor-calibration.json
+    uv run python -m cressey.evals.calibrate_floor   # live Jev, writes data/eval/floor-calibration.json
 """
 
 import asyncio
