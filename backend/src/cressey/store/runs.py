@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import (
     Hold,
     Leg,
@@ -31,11 +32,19 @@ from cressey.scan.secrets import redact
 from cressey.store.eventlog import EventLog
 
 # The step field each later event of a step sets, as the log records it.
-FROM_LOG = {"status": "status", "legs": "reason", "result": "is_error"}
+FROM_LOG = {
+    "status": ("status",),
+    "legs": ("reason", "reasons"),
+    "result": ("is_error",),
+}
 
 
 def _digest(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _logged(reasons: list[Reason]) -> list[JsonValue]:
+    return [r.model_dump(mode="json", exclude_defaults=True) for r in reasons]
 
 
 def _now() -> datetime:
@@ -95,9 +104,10 @@ class Runs:
                 continue
             fields = recorded.setdefault((run_id, n), {"n": n})
             if event.kind == "call":
-                fields |= {k: event.data[k] for k in ("tool", "args", "risk", "reason")}
-            elif field := FROM_LOG.get(event.kind):
-                fields[field] = event.data[field]
+                kept = ("tool", "args", "risk", "reason", "reasons")
+                fields |= {k: event.data[k] for k in kept if k in event.data}
+            elif kind := FROM_LOG.get(event.kind):
+                fields |= {k: event.data[k] for k in kind if k in event.data}
         for (run_id, _), fields in recorded.items():
             run = self._runs[run_id]
             step = Step.model_validate(fields)
@@ -167,29 +177,44 @@ class Runs:
         raw_args: dict[str, JsonValue],
         shown: str,
         risk: Risk,
-        reason: str | None,
+        reasons: list[Reason],
     ) -> Step:
-        """`shown`: the arguments as JSON, secrets redacted. The proxy redacts them off the
+        """`shown`: the arguments as JSON, secrets redacted. The engine redacts them off the
         event loop: a large argument takes a while."""
         step = Step(
             n=len(run.steps) + 1,
             tool=tool,
             args=shown,
             risk=risk,
-            reason=reason,
             raw_args=raw_args,
             running=True,
         )
+        step.because(reasons)
         run.steps.append(step)
         self.log_step(
-            run, step, "call", tool=tool, args=shown, risk=risk, reason=reason
+            run,
+            step,
+            "call",
+            tool=tool,
+            args=shown,
+            risk=risk,
+            reason=step.reason,
+            reasons=_logged(reasons),
         )
         return step
 
-    def score(self, run: Run, step: Step, legs: Legs, reason: str | None) -> None:
-        step.legs, step.reason = legs, reason
+    def score(self, run: Run, step: Step, legs: Legs, reasons: list[Reason]) -> None:
+        step.legs = legs
+        step.because(reasons)
         legs_confirmed: list[JsonValue] = list(confirmed(legs))
-        self.log_step(run, step, "legs", confirmed=legs_confirmed, reason=reason)
+        self.log_step(
+            run,
+            step,
+            "legs",
+            confirmed=legs_confirmed,
+            reason=step.reason,
+            reasons=_logged(reasons),
+        )
 
     def set_shadow(self, run: Run, step: Step, s: Shadow) -> None:
         """What the case would have done with this call: stored and logged beside the

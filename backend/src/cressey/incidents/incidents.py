@@ -4,7 +4,7 @@ a fix guide for each leg's owner, written in the background as soon as the call 
 import asyncio
 import logging
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -19,6 +19,7 @@ from cressey.domain.incidents import (
 )
 from cressey.domain.owners import LEGS, OWNERS, LegName
 from cressey.domain.policy import Fleet
+from cressey.domain.reasons import Reason, Target, target
 from cressey.domain.runs import Mandate, Preflight, Run, Step
 from cressey.engine.agent_text import TASK_WAY_OUT
 from cressey.incidents.fixes import fixes_for
@@ -136,13 +137,16 @@ class Incidents:
     def open(
         self, run: Run, step: Step, severity: Literal["critique", "haute"]
     ) -> Incident:
-        assert step.legs is not None and step.reason is not None  # set by Guard first
+        assert (
+            step.legs is not None and step.reason is not None
+        )  # set by the engine first
         incident = Incident(
             id=uuid.uuid4().hex[:12],
             run_id=run.id,
             step=step.n,
             severity=severity,
             reason=step.reason,
+            reasons=step.reasons,
             created_at=self.clock().isoformat(),
             decision=step.status,
             sources=sources(run, step),
@@ -190,15 +194,23 @@ class Incidents:
         )
 
     def _count(self, run: Run, step: Step) -> None:
-        self.fleet_watch.count(f"{step.tool} | {step.reason}", run.id, self.clock())
-
-    def has(self, run_id: str, reason: str) -> bool:
-        """Has this run an incident with this reason?"""
-        return any(
-            i.run_id == run_id and i.reason == reason for i in self._incidents.values()
+        self.fleet_watch.count(
+            target(step.tool, step.reasons),
+            f"{step.tool} | {step.reason}",
+            [r.check for r in step.reasons],
+            run.id,
+            self.clock(),
         )
 
-    def signalled(self, target: str) -> bool:
+    def has(self, run_id: str, reasons: Sequence[Reason]) -> bool:
+        """Has this run an incident for these checks on these targets?"""
+        keys = [r.key for r in reasons]
+        return any(
+            i.run_id == run_id and [r.key for r in i.reasons] == keys
+            for i in self._incidents.values()
+        )
+
+    def signalled(self, target: Target) -> bool:
         """Has a fleet signal gone up for this target (the tool and the floor's reason)?"""
         return self.fleet_watch.signalled(target)
 

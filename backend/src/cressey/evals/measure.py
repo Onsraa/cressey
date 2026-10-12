@@ -209,7 +209,8 @@ def build_run(runs: Runs, case: WriteCase, judge_final: bool) -> Run:
             runs.say(run, st.say)
         risk, reason = check(runs_policy.tools.get(st.tool), st.args, run.mandate)
         shown = redact(json.dumps(st.args, ensure_ascii=False), dict(run.known))
-        step = runs.add_step(run, st.tool, st.args, shown, risk, reason)
+        reasons = [reason] if reason else []
+        step = runs.add_step(run, st.tool, st.args, shown, risk, reasons)
         if not (final and not judge_final):
             runs.record(run, step, st.is_error, st.result, scan(st.result))
     return run

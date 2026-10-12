@@ -17,6 +17,7 @@ from typesafe_sdk import Noul
 
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Thresholds
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import (
     Case,
     Event,
@@ -354,8 +355,8 @@ def closing_excuse(run: Run, legs: Legs) -> int | None:
     return excuses[-1] if other_leg else None
 
 
-def excuse_reason(run: Run, i: int) -> str:
-    return f"triangle: closed in the agent's words, “{run.case.events[i].quote}”"
+def excuse_reason(run: Run, i: int) -> Reason:
+    return Reason(check="thought", target=run.case.events[i].quote)
 
 
 async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:

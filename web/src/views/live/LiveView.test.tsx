@@ -48,6 +48,7 @@ const call = (
 	args,
 	risk: "read",
 	status: "allowed",
+	reasons: [],
 	is_error: false,
 	secrets: [],
 	running: false,
@@ -134,6 +135,14 @@ const incident: Incident = {
 	step: 4,
 	severity: "critique",
 	reason: "SQL destructeur hors mandat : users",
+	reasons: [
+		{
+			check: "destructive_sql",
+			target: "users",
+			score: null,
+			afterwards: false,
+		},
+	],
 	created_at: at(-40),
 	decision: "held",
 	sources: [],
@@ -303,6 +312,7 @@ test("on its Live page, alert mode and the run's cross-run signal are chips, not
 		fleet: [
 			{
 				target: "run_sql | SQL destructeur hors mandat : users",
+				checks: ["destructive_sql"],
 				runs: ["f0e1d2c3b4a5", run.id],
 				first_at: at(-300),
 				last_at: at(-10),

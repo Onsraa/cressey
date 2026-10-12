@@ -8,12 +8,14 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import Sequence
 from typing import Literal, Protocol
 
 from pydantic import JsonValue
 
 from cressey.domain.incidents import Incident
 from cressey.domain.policy import Policy, Response, ToolRule
+from cressey.domain.reasons import Reason, Target, joined, target
 from cressey.domain.runs import Legs, Run, Shadow, Step
 from cressey.engine.agent_text import (
     REFUSED,
@@ -40,8 +42,6 @@ from cressey.tasks import Tasks
 
 log = logging.getLogger(__name__)
 
-READ_ONLY = "read-only key: pressure and opportunity confirmed"
-NO_ANSWER = "Jev didn't answer"
 # Jev's floor labels and the triangle can fire on one call: the strictest response applies,
 # so a check on alert never lifts another one's hold.
 STRICTNESS: tuple[Response, ...] = ("alert", "review", "stop")
@@ -58,12 +58,12 @@ class IncidentDesk(Protocol):
         self, run: Run, step: Step, severity: Literal["critique", "haute"]
     ) -> Incident: ...
 
-    def has(self, run_id: str, reason: str) -> bool:
-        """Has this run an incident with this reason?"""
+    def has(self, run_id: str, reasons: Sequence[Reason]) -> bool:
+        """Has this run an incident for these checks on these targets?"""
         ...
 
-    def signalled(self, target: str) -> bool:
-        """Has a fleet signal gone up for this target (the tool and the floor's reason)?"""
+    def signalled(self, target: Target) -> bool:
+        """Has a fleet signal gone up for this target?"""
         ...
 
 
@@ -110,7 +110,7 @@ class Engine:
     def _response(
         self,
         tool: str,
-        reason: str | None,
+        reasons: list[Reason],
         trapped: bool,
         floor: bool,
         labelled: list[Response],
@@ -120,7 +120,7 @@ class Engine:
         """What the policy does with a call a check fired on, or None when none did:
         `labelled` holds the responses of Jev's floor labels that fired, and `triangle` says
         whether the triangle did."""
-        if reason is None:
+        if not reasons:
             return None
         r = self.policy.responses
         if trapped:
@@ -130,7 +130,7 @@ class Engine:
         else:
             fired = [*labelled, *([r.triangle] if triangle else [])]
             response = max(fired, key=STRICTNESS.index)
-        if r.fleet == "stop" and self.incidents.signalled(f"{tool} | {reason}"):
+        if r.fleet == "stop" and self.incidents.signalled(target(tool, reasons)):
             response = "stop"  # many runs after one target: no human queue for them all
         if response == "review" and self.holds == "refuse":
             response = "stop"  # CRESSEY_HOLDS=refuse: nobody waits for a human
@@ -155,14 +155,14 @@ class Engine:
         return rule
 
     async def _labelled(
-        self, run: Run, step: Step, rule: ToolRule | None, floor: str | None
-    ) -> list[tuple[str, Response]]:
+        self, run: Run, step: Step, rule: ToolRule | None, floor: list[Reason]
+    ) -> list[tuple[Reason, Response]]:
         """Why Jev holds a write that code let through, each reason with its response: it
         can't be undone beyond the mandate, or it changes production (unless that check is
         off). They only add holds; a call code holds or classes otherwise isn't asked, nor
         one too long to read before it runs. With no answer, a write code can't vouch for
         waits for a human: only a file edit, whose path code checked, goes on."""
-        if floor is not None or step.risk != "write" or not read_before(step):
+        if floor or step.risk != "write" or not read_before(step):
             return []
         try:
             labels = await floor_labels(run, step, self.judge, self.policy.triangle)
@@ -170,15 +170,14 @@ class Engine:
             return []
         f, r = self.policy.floor, self.policy.responses
         if labels is None:
-            return [] if edits_a_file(rule) else [(NO_ANSWER, r.irreversible)]
-        fired: list[tuple[str, Response]] = []
+            no_answer = Reason(check="no_answer")
+            return [] if edits_a_file(rule) else [(no_answer, r.irreversible)]
+        fired: list[tuple[Reason, Response]] = []
         if (p := yes(labels["irreversible"])) >= f.irreversible:
-            fired.append(
-                (f"Jev: irreversible beyond the mandate, {p:.2f}", r.irreversible)
-            )
+            fired.append((Reason(check="irreversible", score=p), r.irreversible))
         production = r.production
         if production != "off" and (p := yes(labels["production"])) >= f.production:
-            fired.append((f"Jev: changes production, {p:.2f}", production))
+            fired.append((Reason(check="production", score=p), production))
         return fired
 
     async def before(self, run: Run, name: str, args: dict[str, JsonValue]) -> Step:
@@ -189,9 +188,9 @@ class Engine:
         risk, guarded = check(rule, args, run.mandate)
         trapped = trap(args, self.policy.decoys)
         aimed = at_cressey(rule, args, self.origins)
-        floor = "; ".join(r for r in (trapped, aimed, guarded) if r) or None
+        floor = [r for r in (trapped, aimed, guarded) if r is not None]
         # A trap key softens only a read the floor lets through: a guarded one is still held.
-        only_reads = bool(trapped) and risk == "read" and not (guarded or aimed)
+        only_reads = trapped is not None and risk == "read" and not (guarded or aimed)
         # Off the event loop, like the result scan: a large argument takes a while to redact.
         # A copy of the secrets known so far, which other calls may add to meanwhile, and the
         # trap keys: one the agent got outside Cressey must not show in clear either.
@@ -217,12 +216,12 @@ class Engine:
                 raise Refused(SUSPENDED)
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
             excuse = closing_excuse(run, triangle) if self.thought_holds else None
-            labels = "; ".join(why for why, _ in labelled) or None
-            reason = (
+            labels = [why for why, _ in labelled]
+            reasons = (
                 floor
                 or labels
-                or (excuse_reason(run, excuse) if excuse is not None else None)
-                or (alarm_reason(triangle) if triangle_hold else None)
+                or ([excuse_reason(run, excuse)] if excuse is not None else [])
+                or ([alarm_reason(triangle)] if triangle_hold else [])
             )
             if excuse is not None and not (floor or labels):
                 # The stop is the words', shown on the thought; their excuse confirms the leg.
@@ -232,22 +231,22 @@ class Engine:
                 leg.facts.append(
                     f"excuse in the agent's words, {said.p:.2f}: “{said.quote}”"
                 )
-            self.runs.score(run, step, triangle, reason)
-            self._shadow_later(run, step, floor)
+            self.runs.score(run, step, triangle, reasons)
+            self._shadow_later(run, step, joined(floor))
             # The Observateur run and the floor-alone ablation show what happens without it.
             if self.triangle_holds and run.kind != "control":
                 act_on_pressure(self.runs, run, step, triangle)
             # A trap key used again only to read opens no second incident: one per key.
             if (
-                reason
+                reasons
                 and run.kind != "replay"
-                and not (only_reads and self.incidents.has(run.id, reason))
+                and not (only_reads and self.incidents.has(run.id, reasons))
             ):
                 self.incidents.open(run, step, "critique" if floor else "haute")
             step.check_ms = _ms_since(start)  # the time to stop, when the call is held
             # A call that would be held still goes to a human: only the others are refused.
-            if not reason and run.read_only_step and risk == "destructive":
-                step.reason = READ_ONLY
+            if not reasons and run.read_only_step and risk == "destructive":
+                step.because([Reason(check="read_only")])
                 self.runs.mark(run, step, "denied")
                 raise Refused(REFUSED)
             # The agent learns it was held, never why: a reason teaches it what to route around
@@ -255,7 +254,7 @@ class Engine:
             held_error = Refused(held())
             response = self._response(
                 name,
-                reason,
+                reasons,
                 bool(trapped),
                 bool(floor),
                 [r for _, r in labelled],
@@ -264,7 +263,7 @@ class Engine:
             )
             if response == "alert":
                 self.runs.mark(run, step, "alerted")  # through, with its incident open
-            elif reason and run.kind != "live":
+            elif reasons and run.kind != "live":
                 self.runs.mark(run, step, "would_hold")
                 if run.kind == "replay":
                     raise held_error
@@ -272,7 +271,7 @@ class Engine:
                 run.revoked = True  # the rest of the run is denied
                 self.runs.mark(run, step, "denied")
                 raise Refused(REFUSED)
-            elif reason:
+            elif reasons:
                 self._draft(run, step)
                 stop_after = self.policy.stuck.rejections
                 if not await self.runs.hold(run, step, self.hold_timeout, stop_after):
@@ -356,9 +355,13 @@ class Engine:
             log.exception("late read of step %d of run %s failed", step.n, run.id)
             return
         alarmed = self.triangle_holds and alarm(late, step.risk)
-        reason = f"{alarm_reason(late)} (read afterwards)" if alarmed else None
+        reasons = (
+            [alarm_reason(late).model_copy(update={"afterwards": True})]
+            if alarmed
+            else []
+        )
         # Alarm or not, the step shows what the late read found, an unanswered model too.
-        self.runs.score(run, step, late, reason)
+        self.runs.score(run, step, late, reasons)
         if not alarmed:
             return
         self.runs.mark(run, step, "alerted")

@@ -47,6 +47,7 @@ const step = (
 	args,
 	risk: "read",
 	status: "allowed",
+	reasons: [],
 	is_error: false,
 	secrets: [],
 	running: false,

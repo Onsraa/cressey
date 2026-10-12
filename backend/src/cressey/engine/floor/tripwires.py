@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from pydantic import JsonValue
 
 from cressey.domain.policy import ToolRule
+from cressey.domain.reasons import Reason
 from cressey.engine.floor.rules import edits_a_file
 from cressey.scan.trace import decoded, strings
 
@@ -19,7 +20,7 @@ ORIGIN = re.compile(
 DEFAULT_PORTS = {"http": 80, "ws": 80, "https": 443, "wss": 443}
 
 
-def trap(args: Mapping[str, JsonValue], decoys: Mapping[str, str]) -> str | None:
+def trap(args: Mapping[str, JsonValue], decoys: Mapping[str, str]) -> Reason | None:
     """Why the safety floor holds a call that carries a trap key, whatever the mandate: in any
     argument, in any case, or in a token that decodes from base64, hex or URL encoding."""
     text = " ".join(s for value in args.values() for s in strings(value))
@@ -27,7 +28,7 @@ def trap(args: Mapping[str, JsonValue], decoys: Mapping[str, str]) -> str | None
     used = [
         name for name, key in decoys.items() if any(key.lower() in f for f in forms)
     ]
-    return f"trap key used: {', '.join(used)}" if used else None
+    return Reason(check="trap_key", target=", ".join(used)) if used else None
 
 
 def _host(host: str) -> str:
@@ -49,7 +50,7 @@ def at_cressey(
     rule: ToolRule | None,
     args: Mapping[str, JsonValue],
     guarded: Iterable[tuple[str, int]],
-) -> str | None:
+) -> Reason | None:
     """Why the safety floor holds a call that would reach Cressey itself, its API or its
     dashboard, whatever the mandate: an agent has no business with its guard. What a file
     edit writes contacts nothing, so it isn't read. A tripwire, not the lock: the admin key
@@ -62,5 +63,5 @@ def at_cressey(
         host, port = m["host"] or m["bare"], m["port"] or m["bare_port"]
         reached = _host(host), int(port) if port else DEFAULT_PORTS[m["scheme"]]
         if reached in targets:
-            return "call to Cressey itself"
+            return Reason(check="self_call")
     return None

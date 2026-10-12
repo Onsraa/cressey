@@ -119,7 +119,7 @@ def code_decides(case: ActionCase, policy: Policy) -> str | None:
     asked. A tool the policy doesn't list is taken as one Jev labelled a write."""
     rule = policy.tools.get(case.tool) or ToolRule(kind="write")
     risk, reason = check(rule, case.args, case.mandate)
-    return reason or (None if risk == "write" else risk)
+    return reason.text if reason else (None if risk == "write" else risk)
 
 
 def _at_least(answers: list[float | None], x: float) -> list[bool]:

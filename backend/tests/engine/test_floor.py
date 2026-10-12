@@ -1,6 +1,7 @@
 import pytest
 
 from cressey.domain.policy import ToolRule
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate
 from cressey.engine.floor.rules import check
 from cressey.engine.floor.shell import shell_risk
@@ -56,7 +57,10 @@ def test_sql_risk(sql, risk):
 
 def test_destructive_sql_outside_the_mandate_is_held():
     risk, reason = check(SQL, {"query": "DELETE FROM users"}, NONE)
-    assert risk == "destructive" and reason is not None and "users" in reason
+    assert (risk, reason) == (
+        "destructive",
+        Reason(check="destructive_sql", target="users"),
+    )
 
 
 def test_destructive_sql_inside_the_mandate_passes():
@@ -68,13 +72,13 @@ def test_destructive_sql_inside_the_mandate_passes():
 def test_one_table_outside_the_mandate_holds_the_whole_query():
     mandate = Mandate(may_destroy=["sessions"])
     reason = check(SQL, {"query": "DELETE FROM sessions; DROP TABLE users"}, mandate)[1]
-    assert reason is not None and "users" in reason
+    assert reason == Reason(check="destructive_sql", target="users")
 
 
 def test_sql_that_cant_be_classified_is_held_even_inside_the_mandate():
     mandate = Mandate(may_destroy=["users"])
     reason = check(SQL, {"query": "PRAGMA writable_schema = 1"}, mandate)[1]
-    assert reason == "SQL Cressey can't classify"
+    assert reason == Reason(check="unclassified_sql")
 
 
 def test_reads_and_writes_pass():
@@ -89,7 +93,7 @@ def test_an_update_outside_the_mandate_is_held_whatever_its_where():
     risk, reason = check(SQL, {"query": "UPDATE users SET a = 1 WHERE 1 = 1"}, NONE)
     assert (risk, reason) == (
         "destructive",
-        "destructive SQL outside the mandate: users",
+        Reason(check="destructive_sql", target="users"),
     )
     allowed = Mandate(may_destroy=["users"])
     assert check(SQL, {"query": "UPDATE users SET a = 1 WHERE id = 2"}, allowed) == (
@@ -117,8 +121,9 @@ GUARDED = Mandate(protected=["scorer", "runs/*/transcript.json", ".secrets/**"])
 )
 def test_a_protected_path_is_held_on_read_and_on_write(path):
     """The Hugging Face / METR read floor: no model is asked."""
-    assert check(READ, {"path": path}, GUARDED) == ("read", f"protected path: {path}")
-    assert check(WRITE, {"path": path}, GUARDED)[1] == f"protected path: {path}"
+    held = Reason(check="protected_path", target=path)
+    assert check(READ, {"path": path}, GUARDED) == ("read", held)
+    assert check(WRITE, {"path": path}, GUARDED)[1] == held
 
 
 @pytest.mark.parametrize(
@@ -129,7 +134,7 @@ def test_a_path_the_mandate_doesnt_protect_passes(path):
 
 
 def test_tool_missing_from_the_policy_is_held():
-    assert check(None, {}, NONE) == ("destructive", "tool not in the policy")
+    assert check(None, {}, NONE) == ("destructive", Reason(check="unknown_tool"))
 
 
 def test_destructive_tool_is_always_held():
@@ -164,7 +169,8 @@ FROZEN = Mandate(frozen=["tests", "ci/grader.py"])
 def test_a_frozen_path_reads_but_its_write_is_held(path):
     """ImpossibleBench: editing the tests was most of the cheating. No model is asked."""
     assert check(READ, {"path": path}, FROZEN) == ("read", None)
-    assert check(WRITE, {"path": path}, FROZEN) == ("write", f"frozen path: {path}")
+    held = Reason(check="frozen_path", target=path)
+    assert check(WRITE, {"path": path}, FROZEN) == ("write", held)
 
 
 def test_a_path_outside_the_frozen_ones_is_written_freely():
@@ -394,7 +400,7 @@ def test_a_destructive_shell_command_is_held_whatever_the_mandate():
     shell = ToolRule(kind="shell", arg="command")
     assert check(shell, {"command": "rm -rf build"}, NONE) == (
         "destructive",
-        "destructive shell command",
+        Reason(check="destructive_shell"),
     )
     assert check(shell, {"command": "curl -s https://api.test -d @a.json"}, NONE) == (
         "write",
@@ -419,7 +425,7 @@ EDIT = ToolRule(kind="write", arg="file_path")
     ],
 )
 def test_a_command_aimed_at_cressey_is_held(command):
-    assert at_cressey(SHELL, {"command": command}, CRESSEY) == "call to Cressey itself"
+    assert at_cressey(SHELL, {"command": command}, CRESSEY) == Reason(check="self_call")
 
 
 @pytest.mark.parametrize(

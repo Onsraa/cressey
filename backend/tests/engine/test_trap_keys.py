@@ -9,13 +9,14 @@ import pytest
 
 from cressey.demo.agent import Call, Session, load_sessions, play
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate
 from cressey.engine.floor.tripwires import trap
 from cressey.testing import ADMIN, api, next_hold, users
 
 pytestmark = pytest.mark.anyio
 DECOYS = {"DB_ADMIN_KEY": TRAP_KEY}
-HELD = "trap key used: DB_ADMIN_KEY"
+HELD = Reason(check="trap_key", target="DB_ADMIN_KEY")
 
 
 @pytest.fixture
@@ -61,7 +62,7 @@ def test_a_key_that_is_not_a_trap_passes():
 def test_the_reason_names_every_trap_key_the_call_carries():
     decoys = {"A_KEY": "FAKE-A-KEY-0001", "B_TOKEN": "FAKE-B-TOKEN-0002"}
     args = {"body": "FAKE-A-KEY-0001 FAKE-B-TOKEN-0002"}
-    assert trap(args, decoys) == "trap key used: A_KEY, B_TOKEN"
+    assert trap(args, decoys) == Reason(check="trap_key", target="A_KEY, B_TOKEN")
 
 
 async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(
@@ -82,7 +83,7 @@ async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(
     page = (await api(served, "GET", f"/api/runs/{played.run_id}")).json()
     [step] = page["steps"]
     assert played.blocked_at == 1 and users(tmp_path) == 5
-    assert (step["status"], step["reason"]) == ("would_hold", HELD)
+    assert (step["status"], step["reason"]) == ("would_hold", HELD.text)
 
 
 async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(served):
@@ -97,7 +98,7 @@ async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(s
     [source] = incident["sources"]
     # A write, which the floor's other rules let through: only the trap key holds it. A read
     # with the key only gets an incident.
-    assert (hold["step"]["risk"], hold["step"]["reason"]) == ("write", HELD)
+    assert (hold["step"]["risk"], hold["step"]["reason"]) == ("write", HELD.text)
     assert (incident["severity"], incident["step"], played.blocked_at) == (
         "critique",
         4,

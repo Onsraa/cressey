@@ -526,6 +526,25 @@ export interface components {
 		FleetSignal: {
 			/** Target */
 			target: string;
+			/** Checks */
+			checks: (
+				| "unknown_tool"
+				| "destructive_tool"
+				| "destructive_shell"
+				| "unclassified_sql"
+				| "destructive_sql"
+				| "egress"
+				| "protected_path"
+				| "frozen_path"
+				| "trap_key"
+				| "self_call"
+				| "irreversible"
+				| "production"
+				| "no_answer"
+				| "triangle"
+				| "thought"
+				| "read_only"
+			)[];
 			/** Runs */
 			runs: string[];
 			/** First At */
@@ -611,6 +630,11 @@ export interface components {
 			severity: "critique" | "haute";
 			/** Reason */
 			reason: string;
+			/**
+			 * Reasons
+			 * @default []
+			 */
+			reasons: components["schemas"]["Reason"][];
 			/** Created At */
 			created_at: string;
 			/** Decision */
@@ -756,6 +780,39 @@ export interface components {
 			};
 			/** Facts */
 			facts: string[];
+		};
+		/** Reason */
+		Reason: {
+			/**
+			 * Check
+			 * @enum {string}
+			 */
+			check:
+				| "unknown_tool"
+				| "destructive_tool"
+				| "destructive_shell"
+				| "unclassified_sql"
+				| "destructive_sql"
+				| "egress"
+				| "protected_path"
+				| "frozen_path"
+				| "trap_key"
+				| "self_call"
+				| "irreversible"
+				| "production"
+				| "no_answer"
+				| "triangle"
+				| "thought"
+				| "read_only";
+			/** Target */
+			target?: string | null;
+			/** Score */
+			score?: number | null;
+			/**
+			 * Afterwards
+			 * @default false
+			 */
+			afterwards: boolean;
 		};
 		/**
 		 * RejectIn
@@ -1040,6 +1097,11 @@ export interface components {
 				| "would_hold";
 			/** Reason */
 			reason?: string | null;
+			/**
+			 * Reasons
+			 * @default []
+			 */
+			reasons: components["schemas"]["Reason"][];
 			/**
 			 * Is Error
 			 * @default false

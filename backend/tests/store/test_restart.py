@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cressey.app import create_app
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import RunIn
 from cressey.settings import Settings
 from cressey.store.eventlog import EventLog
@@ -16,6 +17,7 @@ from cressey.testing import ADMIN_AUTH
 
 pytestmark = pytest.mark.anyio
 TASK = "Fix the failing test"
+RM = [Reason(check="destructive_shell")]
 
 
 @pytest.fixture
@@ -34,9 +36,9 @@ async def test_a_restart_keeps_the_key_the_steps_and_expires_an_open_hold(tmp_pa
     created = runs.create(RunIn(task=TASK))
     run = runs.get(created.id)
     assert run is not None
-    read = runs.add_step(run, "Read", {}, '{"file_path": "a"}', "read", None)
+    read = runs.add_step(run, "Read", {}, '{"file_path": "a"}', "read", [])
     runs.mark(run, read, "alerted")
-    rm = runs.add_step(run, "Bash", {}, '{"command": "rm -r x"}', "destructive", "rm")
+    rm = runs.add_step(run, "Bash", {}, '{"command": "rm -r x"}', "destructive", RM)
     holding = asyncio.create_task(runs.hold(run, rm, timeout=60, stop_after=3))
     await asyncio.sleep(0)  # the hold is logged; Cressey stops before anyone decides
 
@@ -55,7 +57,7 @@ async def test_a_restart_keeps_the_key_the_steps_and_expires_an_open_hold(tmp_pa
         "status": "expired",
         "after": "restart",
     }
-    assert restarted.add_step(again, "Read", {}, "{}", "read", None).n == 3
+    assert restarted.add_step(again, "Read", {}, "{}", "read", []).n == 3
     assert restarted.log.intact
 
 

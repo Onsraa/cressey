@@ -8,6 +8,7 @@ from pydantic import JsonValue
 from typesafe_sdk import Noul
 
 from cressey.domain.policy import Thresholds
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import Leg, Legs, Risk, Run, Step, confirmed
 from cressey.engine.ledger import Ledger, evidence
 from cressey.engine.reading import (
@@ -222,10 +223,9 @@ def read_only(legs: Legs) -> bool:
     return legs.pressure.confirmed and legs.opportunity.confirmed
 
 
-def alarm_reason(legs: Legs) -> str:
+def alarm_reason(legs: Legs) -> Reason:
     names = confirmed(legs)
-    joined = ", ".join(names[:-1]) + " and " + names[-1]
-    return f"triangle: {joined} confirmed"
+    return Reason(check="triangle", target=", ".join(names[:-1]) + " and " + names[-1])
 
 
 def _counted(steps: list[int], one: str, many: str) -> str:

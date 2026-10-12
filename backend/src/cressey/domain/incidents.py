@@ -6,13 +6,15 @@ from typing import Literal
 from pydantic import BaseModel
 
 from cressey.domain.owners import LegName, OwnerRole
+from cressey.domain.reasons import Check, Reason
 from cressey.domain.runs import Legs, Preflight
 
 How = Literal["exact", "lowercase", "base64", "hex", "url"]
 
 
 class FleetSignal(BaseModel):
-    target: str  # the tool and the floor's reason: « run_sql | SQL destructeur hors mandat : users »
+    target: str  # the tool and the floor's reason: « run_sql | destructive SQL outside the mandate: users »
+    checks: list[Check]  # the checks that fired on it
     runs: list[str]  # the runs held for it within the window, oldest first
     first_at: str
     last_at: str
@@ -74,6 +76,7 @@ class Incident(BaseModel):
     step: int
     severity: Literal["critique", "haute"]  # safety floor, or two confirmed legs
     reason: str
+    reasons: list[Reason] = []  # the checks that fired, `reason` their text
     created_at: str
     decision: str  # the held call's status when served
     sources: list[Source]

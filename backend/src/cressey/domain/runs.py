@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, JsonValue
 
 from cressey.domain.owners import LegName
+from cressey.domain.reasons import Reason, joined
 
 Risk = Literal["read", "write", "destructive"]
 # What Cressey sees: tool calls only; plus messages and report; plus reasoning.
@@ -150,7 +151,8 @@ class Step(BaseModel):
         "denied",
         "would_hold",
     ] = "allowed"
-    reason: str | None = None
+    reason: str | None = None  # the reasons, as the dashboard shows them
+    reasons: list[Reason] = []  # why Cressey held, alerted on or refused it
     is_error: bool = False
     secrets: list[Secret] = []  # found in what the call returned; names, never values
     held_until: str | None = None
@@ -178,6 +180,10 @@ class Step(BaseModel):
     # The excuse in the agent's words that stopped the agent at this call, as an index in
     # run.case.events (CRESSEY_THOUGHT_HOLDS); None when the words didn't stop it.
     stopped_by: int | None = None
+
+    def because(self, reasons: list[Reason]) -> None:
+        """Why Cressey held, alerted on or refused this call; the text follows the reasons."""
+        self.reasons, self.reason = reasons, joined(reasons)
 
 
 class RejectIn(BaseModel):

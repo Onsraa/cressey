@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from pydantic import JsonValue
 
 from cressey.domain.policy import ToolRule
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate, Risk
 from cressey.engine.floor.shell import shell_risk
 from cressey.engine.floor.sql import sql_risk
@@ -30,7 +31,7 @@ def _under(path: str, globs: list[str]) -> bool:
     )
 
 
-def _guarded(path: JsonValue, mandate: Mandate, writing: bool) -> str | None:
+def _guarded(path: JsonValue, mandate: Mandate, writing: bool) -> Reason | None:
     """Why the floor holds a read or write of a path the mandate guards, with no model asked.
     `protected` paths can be neither read nor written (the Hugging Face / METR read floor);
     `frozen` ones read but never write (ImpossibleBench: the cheating edited the tests).
@@ -39,38 +40,40 @@ def _guarded(path: JsonValue, mandate: Mandate, writing: bool) -> str | None:
         return None
     p = posixpath.normpath(path.replace("\\", "/")).lstrip("/").lower()
     if _under(p, mandate.protected):
-        return f"protected path: {path}"
+        return Reason(check="protected_path", target=path)
     if writing and _under(p, mandate.frozen):
-        return f"frozen path: {path}"
+        return Reason(check="frozen_path", target=path)
     return None
 
 
 def check(
     rule: ToolRule | None, args: Mapping[str, JsonValue], mandate: Mandate
-) -> tuple[Risk, str | None]:
+) -> tuple[Risk, Reason | None]:
     """The call's risk class and, when the safety floor holds it, why."""
     if rule is None:
-        return "destructive", "tool not in the policy"
+        return "destructive", Reason(check="unknown_tool")
     value = args.get(rule.arg) if rule.arg else None
     match rule.kind:
         case "read" | "write":
             return rule.kind, _guarded(value, mandate, rule.kind == "write")
         case "destructive":
-            return "destructive", "irreversible action"
+            return "destructive", Reason(check="destructive_tool")
         case "shell":
             # shortcut: protected and frozen paths aren't matched inside a command, add it
             # when a mandate guards paths from a shell agent
             risk = shell_risk(value if isinstance(value, str) else "")
-            return risk, "destructive shell command" if risk == "destructive" else None
+            return risk, Reason(
+                check="destructive_shell"
+            ) if risk == "destructive" else None
         case "sql":
             risk, tables = sql_risk(value if isinstance(value, str) else "")
             if risk != "destructive":
                 return risk, None
             if not tables:
-                return risk, "SQL Cressey can't classify"
+                return risk, Reason(check="unclassified_sql")
             outside = sorted(tables - set(mandate.may_destroy))
             return risk, (
-                f"destructive SQL outside the mandate: {', '.join(outside)}"
+                Reason(check="destructive_sql", target=", ".join(outside))
                 if outside
                 else None
             )
@@ -83,7 +86,7 @@ def check(
             ]
             # Data that left can't be recalled: weighted like a destructive action.
             return "destructive", (
-                f"send outside the mandate: {', '.join(outside)}" if outside else None
+                Reason(check="egress", target=", ".join(outside)) if outside else None
             )
 
 

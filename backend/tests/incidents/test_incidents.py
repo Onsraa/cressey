@@ -7,6 +7,7 @@ from pydantic import JsonValue
 
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.guides import Guide, GuideIncident
+from cressey.domain.reasons import Reason
 from cressey.domain.runs import Leg, Legs, Run, RunIn, Step
 from cressey.incidents.incidents import Incidents
 from cressey.scan.secrets import redact, scan
@@ -16,6 +17,7 @@ from cressey.store.runs import Runs
 pytestmark = pytest.mark.anyio
 ON = Leg(score=1, confirmed=True, facts=["fait observé"])
 OFF = Leg(score=0, confirmed=False, facts=[])
+SQL_USERS = Reason(check="destructive_sql", target="users")
 
 
 @pytest.fixture
@@ -41,9 +43,7 @@ def demo_run(runs: Runs, legs: Legs) -> tuple[Run, Step]:
     run = runs.get(created.id)
     assert run is not None
     read_args: dict[str, JsonValue] = {"path": ".env.prod"}
-    read = runs.add_step(
-        run, "read_file", read_args, json.dumps(read_args), "read", None
-    )
+    read = runs.add_step(run, "read_file", read_args, json.dumps(read_args), "read", [])
     text = f"DB_PROD_KEY={PROD_KEY}\n"
     runs.record(run, read, False, text, scan(text))
     delete: dict[str, JsonValue] = {"query": "DELETE FROM users", "key": PROD_KEY}
@@ -53,7 +53,7 @@ def demo_run(runs: Runs, legs: Legs) -> tuple[Run, Step]:
         delete,
         redact(json.dumps(delete), run.known),
         "destructive",
-        "destructive SQL outside the mandate: users",
+        [SQL_USERS],
     )
     call.legs = legs
     return run, call
@@ -198,12 +198,10 @@ async def test_a_leg_left_unconfirmed_gets_no_fix():
     assert [f.leg for f in incident.fixes] == ["opportunity"]
 
 
-def held_by_floor(
-    runs: Runs, reason: str = "destructive SQL outside the mandate: users"
-) -> tuple[Run, Step]:
+def held_by_floor(runs: Runs, reason: Reason = SQL_USERS) -> tuple[Run, Step]:
     """A new run whose DELETE the floor held."""
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=OFF, rationalization=OFF))
-    call.reason = reason
+    call.because([reason])
     return run, call
 
 
@@ -217,6 +215,7 @@ async def test_runs_going_after_the_same_target_raise_a_fleet_signal():
         incidents.open(*held_by_floor(runs), "critique") for _ in range(3)
     )
     [signal] = incidents.fleet()
+    assert signal.checks == ["destructive_sql"]
     assert signal.target == "run_sql | destructive SQL outside the mandate: users"
     assert signal.runs == [first.run_id, second.run_id, third.run_id]
     assert [e.kind for e in runs.log.events].count("fleet_signal") == 1
@@ -231,7 +230,7 @@ async def test_one_run_held_again_and_again_is_not_a_fleet():
     for _ in range(3):
         incidents.open(run, call, "critique")
     incidents.open(
-        *held_by_floor(runs, "send outside the mandate: x@prestataire.example"),
+        *held_by_floor(runs, Reason(check="egress", target="x@prestataire.example")),
         "critique",
     )
     assert incidents.fleet() == []
