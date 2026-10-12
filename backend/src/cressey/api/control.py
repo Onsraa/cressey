@@ -1,49 +1,27 @@
-"""Runs and holds: register a run (Cressey issues its key), follow its steps, decide
-holds."""
+"""The human control plane: register a run (Cressey issues its key), follow its steps,
+decide holds, read incidents and evaluations, change the responses. Behind the admin key."""
 
-import asyncio
 import json
-import secrets
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 
 from cressey.adapters.claude_code import HOOK_PATH
 from cressey.adapters.mcp import MCP_PATH
+from cressey.api.auth import IncidentsDep, RunsDep
 from cressey.domain.incidents import FleetSignal, Incident, Replay
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Responses
-from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn, TextIn
+from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn
 from cressey.domain.status import EvalFile, LogHead, Status
 from cressey.engine.agent_text import check_message, finish
-from cressey.engine.report import report_check
-from cressey.incidents.incidents import AssessTask, Incidents
+from cressey.incidents.incidents import AssessTask
 from cressey.settings import DATA
 from cressey.store.runs import Runs
 
 # The human control plane: app.py puts all of it behind require_admin.
 router = APIRouter()
-# What the agent itself calls, with its run key.
-agent_router = APIRouter()
-
-
-def get_runs(request: Request) -> Runs:
-    return request.app.state.runs
-
-
-RunsDep = Annotated[Runs, Depends(get_runs)]
-
-
-def get_incidents(request: Request) -> Incidents:
-    return request.app.state.incidents
-
-
-IncidentsDep = Annotated[Incidents, Depends(get_incidents)]
-
-
-# The assessments in flight: the event loop keeps only weak references to its tasks.
-_assessing: set[asyncio.Task[None]] = set()
 
 
 async def _assess(run: Run, assess_task: AssessTask) -> None:
@@ -57,10 +35,8 @@ async def create_run(spec: RunIn, request: Request, runs: RunsDep) -> RunCreated
     run = runs.get(created.id)
     assert run is not None
     if run.kind != "replay":  # « Rejouer ×5 » plays in throwaway instances
-        assessing = _assess(run, request.app.state.assess_task)
-        task = asyncio.get_running_loop().create_task(assessing)
-        _assessing.add(task)
-        task.add_done_callback(_assessing.discard)
+        state = request.app.state
+        state.assessing.spawn(_assess(run, state.assess_task))
     return created
 
 
@@ -75,56 +51,6 @@ async def get_run(run_id: str, runs: RunsDep) -> Run:
     if run is None:
         raise HTTPException(404)
     return run
-
-
-def _own_run(runs: Runs, run_id: str, authorization: str) -> Run:
-    """The run, when the request carries that run's own key."""
-    run = runs.by_key(authorization.removeprefix("Bearer ").strip())
-    if run is None or run.id != run_id:
-        raise HTTPException(403)
-    return run
-
-
-AuthorizationHeader = Annotated[str, Header()]
-
-
-def require_admin(request: Request, authorization: AuthorizationHeader = "") -> None:
-    """The admin key, never a run key: an agent that reaches Cressey can't decide its own
-    holds, unlock itself or switch a check to alert."""
-    given = authorization.removeprefix("Bearer ").strip().encode()
-    if not secrets.compare_digest(given, request.app.state.admin_token.encode()):
-        raise HTTPException(
-            401,
-            "admin token required (CRESSEY_ADMIN_TOKEN)",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-
-@agent_router.post("/runs/{run_id}/messages", status_code=204)
-async def message(
-    run_id: str,
-    body: TextIn,
-    runs: RunsDep,
-    authorization: AuthorizationHeader = "",
-) -> None:
-    """What the agent says along the way. Only the run's own key may send it."""
-    runs.say(_own_run(runs, run_id, authorization), body.text)
-
-
-@agent_router.post("/runs/{run_id}/report", status_code=204)
-async def report(
-    run_id: str,
-    body: TextIn,
-    request: Request,
-    runs: RunsDep,
-    authorization: AuthorizationHeader = "",
-) -> None:
-    """The agent's final report. It ends the run, and the decision model checks it against
-    the log (S9). Only the run's own key may send it."""
-    run = _own_run(runs, run_id, authorization)
-    runs.end(run, body.text)
-    state = request.app.state
-    runs.checked(run, await report_check(run, state.ledger, state.thresholds))
 
 
 @router.get("/status")

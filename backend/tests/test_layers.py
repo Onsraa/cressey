@@ -20,7 +20,7 @@ ALLOWED: dict[str, set[str]] = {
     "adapters": BASE | {"scan", "store", "llm", "judge", "engine"},
     "incidents": BASE | {"scan", "store", "engine"},
     "replay": {"domain", "settings", "store", "incidents", "demo"},
-    "core": BASE | {"scan", "store", "llm", "judge", "engine", "adapters", "incidents"},
+    "api": BASE | {"scan", "store", "engine", "adapters", "incidents"},
     "guide": {"domain", "llm", "settings"},
     "export_openapi": {"app", "settings"},
     "__init__": set(),
@@ -30,7 +30,7 @@ ALLOWED |= {"app": EVERYTHING - {"testing"}, "demo": EVERYTHING, "testing": EVER
 
 
 def _part(module: str) -> str:
-    """cressey.core.api -> core; cressey.app -> app; cressey -> __init__."""
+    """cressey.api.control -> api; cressey.app -> app; cressey -> __init__."""
     parts = module.split(".")
     return parts[1] if len(parts) > 1 else "__init__"
 

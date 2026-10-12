@@ -11,8 +11,9 @@ from starlette.routing import Route
 
 from cressey.adapters.claude_code import router as hook_router
 from cressey.adapters.mcp import MCP_PATH, build_mcp
-from cressey.core.api import agent_router, require_admin
-from cressey.core.api import router as core_router
+from cressey.api.agent import router as agent_router
+from cressey.api.auth import require_admin
+from cressey.api.control import router as control_router
 from cressey.demo.agent import load_sessions
 from cressey.demo.tools import demo_tools
 from cressey.domain.guides import Guide, GuideIncident
@@ -30,6 +31,7 @@ from cressey.replay.fixes import FixReplay
 from cressey.settings import DATA, Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
+from cressey.tasks import Tasks
 
 
 def create_app(
@@ -86,6 +88,7 @@ def create_app(
     app.state.engine = engine  # the Claude Code hook runs its decision
     app.state.ledger = engine.ledger  # the report check reads its labels
     app.state.assess_task = assess_task  # each new run's task
+    app.state.assessing = Tasks()  # those assessments, in the background
     app.state.replay = FixReplay(
         incidents, runs, fresh, load_sessions
     )  # « Rejouer ×5 »
@@ -102,7 +105,7 @@ def create_app(
 
     admin = [Depends(require_admin)]
     api.include_router(guide_router, dependencies=admin)
-    api.include_router(core_router, dependencies=admin)
+    api.include_router(control_router, dependencies=admin)
     api.include_router(agent_router)
 
     # Must stay the last /api route: keeps API typos from falling through to the SPA.
