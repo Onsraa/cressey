@@ -5,10 +5,10 @@ from collections.abc import Callable
 import pytest
 from pydantic import JsonValue
 
-from cressey.core.incidents import Incidents
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.runs import Leg, Legs, Run, RunIn, Step
+from cressey.incidents.incidents import Incidents
 from cressey.scan.secrets import redact, scan
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs

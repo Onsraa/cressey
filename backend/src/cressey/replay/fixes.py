@@ -2,6 +2,7 @@
 played again on a fresh Cressey with the approved fixes applied. A regression test of the
 policy and the fixes on scripted sessions: it says nothing of how a real agent behaves."""
 
+import asyncio
 import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -13,6 +14,8 @@ from fastapi import FastAPI
 from cressey.demo.agent import Session, play
 from cressey.demo.server import serve
 from cressey.domain.incidents import Fix, Replay, ReplayResult
+from cressey.incidents.incidents import Incidents
+from cressey.store.runs import Runs
 
 # A fresh Cressey whose demo state lives in that folder.
 MakeApp = Callable[[Path], FastAPI]
@@ -80,3 +83,31 @@ async def replay(
         results=results,
         passed=any(r.expect == "held" for r in results) and all(r.ok for r in results),
     )
+
+
+class FixReplay:
+    """« Rejouer ×5 » for an incident: its fixes, on its run's task. Every replayed session runs
+    its own server, off the caller's loop, so the API keeps serving meanwhile."""
+
+    def __init__(
+        self,
+        incidents: Incidents,
+        runs: Runs,
+        make_app: MakeApp,
+        sessions: Callable[[], list[Session]],
+    ) -> None:
+        self.incidents, self.runs = incidents, runs
+        self.make_app, self.sessions = make_app, sessions
+
+    async def __call__(self, incident_id: str) -> Replay | None:
+        incident = self.incidents.get(incident_id)
+        if incident is None:
+            return None
+        run = self.runs.get(incident.run_id)
+        assert run is not None  # an incident is opened on a run Cressey keeps
+        fixes, task, sessions = incident.fixes, run.task, self.sessions()
+        result = await asyncio.to_thread(
+            lambda: asyncio.run(replay(self.make_app, fixes, task, sessions))
+        )
+        self.incidents.replayed(incident_id, result)
+        return result

@@ -6,23 +6,8 @@ import ast
 from pathlib import Path
 
 SRC = Path(__file__).parents[1] / "src" / "cressey"
-EVERYTHING = {
-    "domain",
-    "settings",
-    "tasks",
-    "scan",
-    "store",
-    "llm",
-    "judge",
-    "engine",
-    "adapters",
-    "core",
-    "guide",
-    "app",
-    "demo",
-    "testing",
-}
 # What each part may import from cressey, besides itself.
+BASE = {"domain", "settings", "tasks"}
 ALLOWED: dict[str, set[str]] = {
     "domain": set(),
     "settings": set(),
@@ -31,35 +16,17 @@ ALLOWED: dict[str, set[str]] = {
     "store": {"domain", "scan"},
     "llm": {"domain", "settings"},
     "judge": {"domain", "llm", "settings"},
-    "engine": {"domain", "settings", "tasks", "scan", "store", "llm", "judge"},
-    "adapters": {
-        "domain",
-        "settings",
-        "tasks",
-        "scan",
-        "store",
-        "llm",
-        "judge",
-        "engine",
-    },
-    "core": {
-        "domain",
-        "settings",
-        "tasks",
-        "scan",
-        "store",
-        "llm",
-        "judge",
-        "engine",
-        "adapters",
-    },
+    "engine": BASE | {"scan", "store", "llm", "judge"},
+    "adapters": BASE | {"scan", "store", "llm", "judge", "engine"},
+    "incidents": BASE | {"scan", "store", "engine"},
+    "replay": {"domain", "settings", "store", "incidents", "demo"},
+    "core": BASE | {"scan", "store", "llm", "judge", "engine", "adapters", "incidents"},
     "guide": {"domain", "llm", "settings"},
-    "app": EVERYTHING - {"testing"},
     "export_openapi": {"app", "settings"},
     "__init__": set(),
-    "demo": EVERYTHING,
-    "testing": EVERYTHING,
 }
+EVERYTHING = set(ALLOWED) | {"app", "demo", "testing"}
+ALLOWED |= {"app": EVERYTHING - {"testing"}, "demo": EVERYTHING, "testing": EVERYTHING}
 
 
 def _part(module: str) -> str:

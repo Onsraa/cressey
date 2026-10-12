@@ -5,8 +5,8 @@ from fastapi import FastAPI
 
 from cressey.app import create_app
 from cressey.demo.agent import load_sessions, play
-from cressey.demo.replay import family, replay
 from cressey.domain.incidents import Fix
+from cressey.replay.fixes import family, replay
 from cressey.settings import Settings
 from cressey.testing import ADMIN, api, fake_guide
 

@@ -11,7 +11,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from cressey.adapters.claude_code import HOOK_PATH
 from cressey.adapters.mcp import MCP_PATH
-from cressey.core.incidents import AssessTask, Incidents
 from cressey.domain.incidents import FleetSignal, Incident, Replay
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Responses
@@ -19,6 +18,7 @@ from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn, TextIn
 from cressey.domain.status import EvalFile, LogHead, Status
 from cressey.engine.agent_text import check_message, finish
 from cressey.engine.report import report_check
+from cressey.incidents.incidents import AssessTask, Incidents
 from cressey.settings import DATA
 from cressey.store.runs import Runs
 
@@ -182,9 +182,9 @@ async def approve_fix(incident_id: str, leg: LegName, incidents: IncidentsDep) -
 
 
 @router.post("/incidents/{incident_id}/replay")
-async def replay_incident(incident_id: str, incidents: IncidentsDep) -> Replay:
+async def replay_incident(incident_id: str, request: Request) -> Replay:
     """« Rejouer ×5 » with the approved fixes: each session on a fresh Cressey."""
-    replay = await incidents.replay(incident_id)
+    replay = await request.app.state.replay(incident_id)
     if replay is None:
         raise HTTPException(404)
     return replay

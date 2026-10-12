@@ -13,9 +13,7 @@ from cressey.adapters.claude_code import router as hook_router
 from cressey.adapters.mcp import MCP_PATH, build_mcp
 from cressey.core.api import agent_router, require_admin
 from cressey.core.api import router as core_router
-from cressey.core.incidents import Incidents
 from cressey.demo.agent import load_sessions
-from cressey.demo.replay import replay
 from cressey.demo.tools import demo_tools
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.policy import load_policy
@@ -26,7 +24,9 @@ from cressey.engine.preflight import assess_for
 from cressey.guide.api import router as guide_router
 from cressey.guide.api import write_guide
 from cressey.guide.corpus import load_corpus
+from cressey.incidents.incidents import Incidents
 from cressey.judge import JevJudge, Judge
+from cressey.replay.fixes import FixReplay
 from cressey.settings import DATA, Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
@@ -61,13 +61,7 @@ def create_app(
     upstream = demo_tools(demo)
     # The task assessed before the run, against the tools as the agent sees them.
     assess_task = partial(assess_for, upstream, judge)
-    incidents = Incidents(
-        runs,
-        make_guide,
-        lambda fixes, task: replay(fresh, fixes, task, load_sessions()),
-        policy.fleet,
-        assess_task,
-    )
+    incidents = Incidents(runs, make_guide, policy.fleet, assess_task)
     # On Bedrock the guide models sign with the AWS credentials: .env or boto3's own chain.
     guides = s.models == "bedrock" or s.openai_api_key is not None
     models_ready = guides and s.typesafe_api_key is not None
@@ -92,6 +86,9 @@ def create_app(
     app.state.engine = engine  # the Claude Code hook runs its decision
     app.state.ledger = engine.ledger  # the report check reads its labels
     app.state.assess_task = assess_task  # each new run's task
+    app.state.replay = FixReplay(
+        incidents, runs, fresh, load_sessions
+    )  # « Rejouer ×5 »
     # Unset, a random key per start: nobody outside knows it, the replays read it here.
     app.state.admin_token = (
         s.admin_token.get_secret_value() if s.admin_token else secrets.token_urlsafe(24)

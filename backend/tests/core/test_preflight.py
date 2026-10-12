@@ -8,11 +8,11 @@ from collections.abc import Mapping
 import pytest
 
 from cressey.app import create_app
-from cressey.core.incidents import Incidents
 from cressey.demo.server import serve
 from cressey.domain.runs import Legs, Mandate, Preflight
 from cressey.engine.agent_text import TASK_WAY_OUT
 from cressey.engine.preflight import QUESTIONS, assess
+from cressey.incidents.incidents import Incidents
 from cressey.settings import Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs

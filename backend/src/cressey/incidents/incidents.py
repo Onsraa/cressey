@@ -4,9 +4,9 @@ a fix guide for each leg's owner, written in the background as soon as the call 
 import asyncio
 import logging
 import uuid
-from collections.abc import Awaitable, Callable, Coroutine
-from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
+from typing import Literal
 
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.incidents import (
@@ -21,15 +21,16 @@ from cressey.domain.owners import LEGS, OWNERS, LegName
 from cressey.domain.policy import Fleet
 from cressey.domain.runs import Mandate, Preflight, Run, Step
 from cressey.engine.agent_text import TASK_WAY_OUT
+from cressey.incidents.fixes import fixes_for
+from cressey.incidents.fleet import FleetWatch
 from cressey.scan.secrets import redact
 from cressey.scan.trace import strings, trace
 from cressey.store.runs import Runs
+from cressey.tasks import Tasks
 
 log = logging.getLogger(__name__)
 ORDER = {"critique": 0, "haute": 1}
-# Plays the incident's variants again with these fixes, for this task: « Replay ×5 ».
-Replayer = Callable[[list[Fix], str], Coroutine[Any, Any, Replay]]
-# The task and its mandate assessed for the triangle's risk factors (core/preflight.py).
+# The task and its mandate assessed for the triangle's risk factors (engine/preflight.py).
 AssessTask = Callable[[str, Mandate], Awaitable[Preflight | None]]
 
 
@@ -117,57 +118,20 @@ def _guide_incidents(incident: Incident, run: Run, step: Step) -> list[GuideInci
     return out
 
 
-def _fixes(incident: Incident, run: Run) -> list[Fix]:
-    """What Cressey can change itself for each confirmed leg, once a human approves it.
-    Rationalization gets none: its owner's guide is the fix."""
-    fixes = []
-    if incident.legs.pressure.confirmed:
-        fixes.append(
-            Fix(
-                leg="pressure",
-                owner_role=OWNERS["pressure"],
-                text=f"Add to the task: “{TASK_WAY_OUT}”",
-                add_to_task=TASK_WAY_OUT,
-            )
-        )
-    reads = [s for s in run.steps[: incident.step - 1] if s.secrets]
-    if incident.legs.opportunity.confirmed and reads:
-        files = [str(s.raw_args["path"]) for s in reads if "path" in s.raw_args]
-        names = ", ".join(sorted({x.name or x.kind for s in reads for x in s.secrets}))
-        where = ", ".join(files) or ", ".join(f"step {s.n} ({s.tool})" for s in reads)
-        fixes.append(
-            Fix(
-                leg="opportunity",
-                owner_role=OWNERS["opportunity"],
-                text=f"Move {names} out of the agent's workspace ({where}) and give it "
-                "a key limited to its task.",
-                move_out=files,
-            )
-        )
-    return fixes
-
-
 class Incidents:
     def __init__(
         self,
         runs: Runs,
         make_guide: Callable[[GuideIncident], Guide],
-        replayer: Replayer | None = None,
         fleet: Fleet | None = None,
         assess_task: AssessTask | None = None,
     ) -> None:
-        self.runs, self.make_guide, self.replayer = runs, make_guide, replayer
+        self.runs, self.make_guide = runs, make_guide
         self.assess_task = assess_task
-        self.fleet_rule = fleet or Fleet()
+        self.fleet_watch = FleetWatch(fleet or Fleet(), runs.log)
         self.clock: Callable[[], datetime] = lambda: datetime.now(UTC)
-        self._targets: dict[
-            str, list[tuple[datetime, str]]
-        ] = {}  # target -> (when, run)
-        self._signals: dict[str, FleetSignal] = {}
         self._incidents: dict[str, Incident] = {}
-        self._tasks: set[asyncio.Task[None]] = (
-            set()
-        )  # the loop only keeps weak references
+        self._tasks: Tasks[None] = Tasks()  # the guides and the fixed task's assessment
 
     def open(
         self, run: Run, step: Step, severity: Literal["critique", "haute"]
@@ -189,7 +153,7 @@ class Incidents:
         incident.guides = [
             OwnerGuide(leg=g.leg, owner_role=g.owner_role) for g in planned
         ]
-        incident.fixes = _fixes(incident, run)
+        incident.fixes = fixes_for(incident, run)
         self._incidents[incident.id] = incident
         if severity == "critique":
             self._count(run, step)
@@ -198,18 +162,12 @@ class Incidents:
             {"run": run.id, "n": step.n, "incident": incident.id, "severity": severity},
         )
         for gi, owner in zip(planned, incident.guides, strict=True):
-            task = asyncio.get_running_loop().create_task(self._write(gi, owner))
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
+            self._tasks.spawn(self._write(gi, owner))
         way_out = next((f for f in incident.fixes if f.leg == "pressure"), None)
         # The fixed task assessed: the before and after, without a new run.
         if way_out and self.assess_task and run.kind != "replay":
             fixed = self.assess_task(f"{run.task} {TASK_WAY_OUT}", run.mandate)
-            task = asyncio.get_running_loop().create_task(
-                self._assessed(way_out, fixed)
-            )
-            self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
+            self._tasks.spawn(self._assessed(way_out, fixed))
         return incident
 
     async def _assessed(self, fix: Fix, fixed: Awaitable[Preflight | None]) -> None:
@@ -232,25 +190,7 @@ class Incidents:
         )
 
     def _count(self, run: Run, step: Step) -> None:
-        """Hugging Face / METR: each run alone looks like one hold; many runs held for the same
-        target outside their mandate, within a window, are the alarm (« peers doing it »)."""
-        now, rule = self.clock(), self.fleet_rule
-        target = f"{step.tool} | {step.reason}"
-        window = timedelta(minutes=rule.window_minutes)
-        seen = [(t, r) for t, r in self._targets.get(target, []) if now - t <= window]
-        seen.append((now, run.id))
-        self._targets[target] = seen
-        ids = list(dict.fromkeys(r for _, r in seen))
-        if len(ids) < rule.runs:
-            return
-        if target not in self._signals:
-            self.runs.log.append("fleet_signal", {"target": target, "runs": len(ids)})
-        self._signals[target] = FleetSignal(
-            target=target,
-            runs=ids,
-            first_at=seen[0][0].isoformat(),
-            last_at=now.isoformat(),
-        )
+        self.fleet_watch.count(f"{step.tool} | {step.reason}", run.id, self.clock())
 
     def has(self, run_id: str, reason: str) -> bool:
         """Has this run an incident with this reason?"""
@@ -260,11 +200,11 @@ class Incidents:
 
     def signalled(self, target: str) -> bool:
         """Has a fleet signal gone up for this target (the tool and the floor's reason)?"""
-        return target in self._signals
+        return self.fleet_watch.signalled(target)
 
     def fleet(self) -> list[FleetSignal]:
         """The signals across runs, the latest first."""
-        return sorted(self._signals.values(), key=lambda s: s.last_at, reverse=True)
+        return self.fleet_watch.signals()
 
     def approve(self, incident_id: str, leg: LegName) -> bool:
         """A human approves the fix proposed for this leg."""
@@ -280,20 +220,12 @@ class Incidents:
         self.runs.log.append("fix_approved", {"incident": incident_id, "leg": leg})
         return True
 
-    async def replay(self, incident_id: str) -> Replay | None:
-        incident = self._incidents.get(incident_id)
-        if incident is None:
-            return None
-        replayer, run = self.replayer, self.runs.get(incident.run_id)
-        assert replayer is not None and run is not None  # create_app sets the replayer
-        fixes, task = incident.fixes, run.task
-        # Every replayed session runs its own server: off this loop, so the API keeps serving.
-        result = await asyncio.to_thread(lambda: asyncio.run(replayer(fixes, task)))
-        incident.replay = result
+    def replayed(self, incident_id: str, result: Replay) -> None:
+        """The last « Rejouer ×5 » of this incident (replay/), kept on it and logged."""
+        self._incidents[incident_id].replay = result
         self.runs.log.append(
             "replay", {"incident": incident_id, "passed": result.passed}
         )
-        return result
 
     def get(self, incident_id: str) -> Incident | None:
         incident = self._incidents.get(incident_id)
