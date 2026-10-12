@@ -176,6 +176,7 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
 - **API client:** `web/src/api/client.ts` exposes `apiGet` and `apiPost`, which throw `ApiError(status, body)`.
 - **Types:** `bun run gen:api` regenerates them from `backend/openapi.json`. CI fails if they're stale.
 - **No rule in TypeScript:** the views draw what the API serves: each step's legs and reasons, the case's evidence for each leg, each message's thought legs. A check is found by its `check` (`reasons`), never by its sentence.
+- **Shared helpers** are in `web/src/lib/`, never copied between views: the labels and the copy feedback's timing (`labels.ts`), the number formats (`format.ts`), `isRecord`, and `inkColor`, the ink token from `index.css` for what a canvas draws (`utils.ts`).
 
 ## Run
 | Command | What it does |

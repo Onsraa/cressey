@@ -9,6 +9,7 @@ import type {
 	Shadow,
 	Step,
 } from "@/api/types";
+import { isRecord } from "@/lib/utils";
 
 // What the trace lists, in order. A message carries the indicators its thoughts raised.
 export type Row =
@@ -55,9 +56,6 @@ export const reportLabel = (run?: Run) =>
 
 const MARK = /\[secret:([0-9a-f]+)\]/g;
 const MARK_ONLY = /^\[secret:[0-9a-f]+\]$/;
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v);
 
 // step.args, when it parses to a JSON object.
 function parsed(args: string): Record<string, unknown> | undefined {

@@ -10,6 +10,7 @@ import {
 	MousePointerClick,
 	Pause,
 } from "@/components/icons";
+import { ms } from "@/lib/format";
 import { LEGS, SHADOW_TIP, shown, TONE, VIA } from "@/lib/labels";
 import { animIn, useOnChange } from "@/lib/motion";
 import { type Decision, useUnlock } from "./decide";
@@ -36,8 +37,6 @@ import {
 } from "./ui";
 
 export type InspectorTab = "hold" | "step";
-
-const ms = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
 
 export function Inspector({
 	run,
@@ -258,8 +257,10 @@ function Call({
 	const secrets = carried(step);
 	const shadow = shadowOf(step);
 	const timing = [
-		typeof step.check_ms === "number" ? `decision ${ms(step.check_ms)}` : "",
-		typeof step.scan_ms === "number" ? `secret scan ${ms(step.scan_ms)}` : "",
+		typeof step.check_ms === "number" ? `decision ${ms(step.check_ms)} ms` : "",
+		typeof step.scan_ms === "number"
+			? `secret scan ${ms(step.scan_ms)} ms`
+			: "",
 	]
 		.filter(Boolean)
 		.join(" · ");

@@ -1,8 +1,8 @@
 import type { EvalFile } from "@/api/types";
 import { ShieldCheck, TriangleAlert } from "@/components/icons";
+import { num, sample, signed } from "@/lib/format";
 import { TONE } from "@/lib/labels";
 import { BandChart } from "./charts";
-import { num, sample, signed } from "./format";
 import type { Attack, Decision, JudgedSet, Latency } from "./read";
 import { Aside, Panel, type Tile, Tiles } from "./ui";
 

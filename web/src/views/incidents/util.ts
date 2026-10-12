@@ -1,5 +1,6 @@
 import type { Incident, Run } from "@/api/types";
 import { LEGS } from "@/lib/labels";
+import { isRecord } from "@/lib/utils";
 
 // Each leg's letter, name and colour, by its key.
 export const LEG = Object.fromEntries(
@@ -21,9 +22,6 @@ function parse(json: string): unknown {
 		return undefined;
 	}
 }
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v);
 
 // The file a call read: its `path` argument.
 export function argPath(args: string) {

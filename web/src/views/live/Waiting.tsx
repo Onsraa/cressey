@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLive } from "@/api/live";
 import { ArrowRight, Copy } from "@/components/icons";
-
-const COPIED_MS = 1500;
+import { COPIED_MS } from "@/lib/labels";
 
 // The design's waiting card, over the empty triangle: the MCP URL to paste, and the way to
 // the other connection, the hook.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLive } from "@/api/live";
 import { ArrowRight, Bot, Copy, Shield, Terminal } from "@/components/icons";
+import { COPIED_MS } from "@/lib/labels";
 
 // The hook settings an agent drops into .claude/settings.json. The run key is sent on every
 // event; the dashboard only shows the shape, with <run key> left to fill.
@@ -53,8 +54,6 @@ const METHODS: { k: Method; label: string }[] = [
 	{ k: "mcp", label: "MCP server" },
 	{ k: "hook", label: "HTTP hook" },
 ];
-
-const COPIED_MS = 1500;
 
 export function ConnectPanel() {
 	const { status, go } = useLive();

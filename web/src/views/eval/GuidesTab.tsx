@@ -1,7 +1,7 @@
 import type { EvalFile } from "@/api/types";
 import { Info } from "@/components/icons";
+import { num, pct, sample, seconds } from "@/lib/format";
 import { HitChart } from "./charts";
-import { num, pct, sample, seconds } from "./format";
 import type { Guides } from "./read";
 import { Aside, Panel, type Tile, Tiles } from "./ui";
 
