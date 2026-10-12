@@ -430,6 +430,7 @@ async def test_claude_codes_own_tools_pass_and_a_tool_nobody_labelled_is_held(
         ("AskUserQuestion", ask),
         ("ToolSearch", {"query": "select:WebFetch"}),
         ("mcp__github__delete_repo", {"repo": "acme/api"}),
+        ("read_file", {"path": "README.md"}),  # the profile's: the gateway's tool
     ]
     for n, (tool, args) in enumerate(calls):
         body = event("PreToolUse", tool, f"toolu_{n}", tool_input=args)
@@ -439,6 +440,7 @@ async def test_claude_codes_own_tools_pass_and_a_tool_nobody_labelled_is_held(
         ("AskUserQuestion", None),
         ("ToolSearch", None),
         ("mcp__github__delete_repo", "tool not in the policy"),
+        ("read_file", "tool not in the policy"),
     ]
 
 

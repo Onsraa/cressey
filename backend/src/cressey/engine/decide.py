@@ -11,7 +11,7 @@ import time
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from cressey.domain.acts import Act, Asker
+from cressey.domain.acts import Act, Asker, Surface
 from cressey.domain.incidents import Incident
 from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.reasons import Reason, Target, joined, target
@@ -108,7 +108,8 @@ class Engine:
         self._ending: Tasks[None] = (
             Tasks()
         )  # ended runs, waiting for their reads to end
-        self._kinds: dict[str, ToolRule] = {}  # Jev's labels, per tool name
+        # Jev's labels, per surface and tool name
+        self._kinds: dict[tuple[Surface, str], ToolRule] = {}
 
     def _response(
         self,
@@ -139,11 +140,12 @@ class Engine:
             response = "stop"  # CRESSEY_HOLDS=refuse: nobody waits for a human
         return response
 
-    async def _rule(self, name: str) -> ToolRule | None:
-        """The policy's rule for a tool, else the kind Jev labels from its name, asked once
-        per tool. None while Jev can't answer: the floor then holds the call as a tool not in
-        the policy."""
-        rule = self.policy.tools.get(name) or self._kinds.get(name)
+    async def _rule(self, surface: Surface, name: str) -> ToolRule | None:
+        """The policy's rule for a tool of the surface the call came through, else the kind
+        Jev labels from its name, asked once per surface and tool. None while Jev can't
+        answer: the floor then holds the call as a tool not in the policy."""
+        tool = surface, name
+        rule = self.policy.tools[surface].get(name) or self._kinds.get(tool)
         if rule is not None:
             return rule
         try:
@@ -153,8 +155,13 @@ class Engine:
         kind = None if answer is None else tool_kind(answer, self.policy.floor.read)
         if kind is None:
             return None
-        self._kinds[name] = rule = ToolRule(kind=kind)
-        log.info("%s: not in the policy, labelled %s by the decision model", name, kind)
+        self._kinds[tool] = rule = ToolRule(kind=kind)
+        log.info(
+            "%s via %s: not in the policy, labelled %s by the decision model",
+            name,
+            surface,
+            kind,
+        )
         return rule
 
     async def _labelled(
@@ -188,7 +195,7 @@ class Engine:
         Raises Refused when the act is refused, or held and not approved."""
         start = time.perf_counter()
         name, args = act.tool, act.args
-        rule = await self._rule(name)
+        rule = await self._rule(act.surface, name)
         risk, guarded = check(rule, args, run.mandate)
         trapped = trap(args, self.policy.decoys)
         aimed = at_cressey(rule, args, self.origins)

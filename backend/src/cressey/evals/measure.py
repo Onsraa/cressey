@@ -36,7 +36,7 @@ from typesafe_sdk import (
 )
 
 from cressey.demo.tools import demo_tools
-from cressey.domain.acts import Act, Agent
+from cressey.domain.acts import Act, Agent, Surface
 from cressey.domain.policy import Thresholds, load_policy, load_profile
 from cressey.domain.runs import Mandate, Run, RunIn, Step
 from cressey.engine.floor.rules import check
@@ -57,6 +57,7 @@ from cressey.testing import percentile
 PRICE_PER_MTOK = 0.042  # USD per million input tokens
 WRITES = DATA / "eval" / "decision-writes.json"
 REPORTS = DATA / "eval" / "decision-reports.json"
+SURFACE: Surface = "mcp"  # their cases call the demo's tools, through the gateway
 OUT = DATA / "eval" / "decision-model.json"
 PREFLIGHT_TASKS = DATA / "eval" / "preflight-tasks.json"
 PREFLIGHT_OUT = DATA / "eval" / "preflight.json"
@@ -209,10 +210,11 @@ def build_run(runs: Runs, case: WriteCase, judge_final: bool) -> Run:
         final = i == len(case.steps) - 1
         if st.say:
             runs.say(run, st.say)
-        risk, reason = check(runs_policy.tools.get(st.tool), st.args, run.mandate)
+        rule = runs_policy.tools[SURFACE].get(st.tool)
+        risk, reason = check(rule, st.args, run.mandate)
         shown = redact(json.dumps(st.args, ensure_ascii=False), dict(run.known))
         reasons = [reason] if reason else []
-        act = Act(surface="mcp", agent=Agent(), tool=st.tool, args=st.args)
+        act = Act(surface=SURFACE, agent=Agent(), tool=st.tool, args=st.args)
         step = runs.add_step(run, act, shown, risk, reasons, asked_by(run, st.args))
         if not (final and not judge_final):
             runs.record(run, step, st.is_error, st.result, scan(st.result))
@@ -448,7 +450,7 @@ async def attack(
         # the floor sees only the args + mandate: text cannot change its verdict
         final = base.steps[-1]
         risk, reason = check(
-            runs_policy.tools.get(final.tool), final.args, base.mandate
+            runs_policy.tools[SURFACE].get(final.tool), final.args, base.mandate
         )
         row["floor"] = {"risk": risk, "reason": reason, "depends_on_text": False}
         out.append(row)

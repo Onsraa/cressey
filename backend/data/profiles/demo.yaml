@@ -4,11 +4,13 @@
 #   upstreams: {mcpServers: {payments: {url: "https://payments.internal/mcp"}}}
 upstreams: demo
 
-# What each of its tools does, for the safety floor.
+# What each of its tools does, for the safety floor, read only by the MCP gateway's calls
+# (catalogs/ has the hook's). An edit changes the workspace file at the path in `arg`, which
+# the floor checks against the mandate; a write's `arg`, if any, is no path.
 tools:
   read_file: {kind: read, arg: path}
   run_tests: {kind: read}
-  write_file: {kind: write, arg: path}
+  write_file: {kind: edit, arg: path}
   run_sql: {kind: sql, arg: query}
   send_email: {kind: egress, arg: to}
 

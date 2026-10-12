@@ -60,7 +60,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | AWS credentials | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | none: boto3's own chain. They sign every Bedrock call. The event's temporary credentials go in `.env`, never in Git |
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
-| `profile` | `CRESSEY_PROFILE` | `data/profiles/demo.yaml`: the demo's own tools. A profile names the MCP servers Cressey fronts (`upstreams`, as MCP clients configure them: `{"mcpServers": {name: {"url": …}}}`; with several, each tool is named `<server>_<tool>`), what their tools do (`tools`), the key broker's credentials (`broker`) and its trap keys (`decoys`). A tool two files list refuses the start. « Rejouer ×5 » always plays on the demo's tools |
+| `profile` | `CRESSEY_PROFILE` | `data/profiles/demo.yaml`: the demo's own tools. A profile names the MCP servers Cressey fronts (`upstreams`, as MCP clients configure them: `{"mcpServers": {name: {"url": …}}}`; with several, each tool is named `<server>_<tool>`), what their tools do (`tools`), the key broker's credentials (`broker`) and its trap keys (`decoys`). A tool listed twice for one surface refuses the start. « Rejouer ×5 » always plays on the demo's tools |
 | `triangle_holds` | `CRESSEY_TRIANGLE_HOLDS` | `true`. `false` measures the safety floor alone (the ablation): no triangle hold and no acting on pressure; the legs are still computed |
 | `holds` | `CRESSEY_HOLDS` | `wait`: a held call waits for a human. `refuse`, for a fleet: it is refused at once with its reason and the way out (status `denied`); its incident opens and the key stays revoked until Unlock or the user's next prompt |
 
@@ -100,7 +100,7 @@ A run key never opens the control plane. With no `CRESSEY_ADMIN_TOKEN`, each sta
 Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/src/api/schema.d.ts`.
 
 ## Core loop, piece 1
-- **Check:** each call is classified with the catalogs (`backend/data/catalogs/` for Claude Code's own tools, the profile's `tools` for the MCP servers it fronts: `read`, `write`, `destructive`, `sql`, `egress`, `shell`) and checked against the run's mandate (`engine/floor/rules.py`).
+- **Check:** each call is classified by the surface it came through: a hook call with the catalogs (`backend/data/catalogs/`, each naming its surface: Claude Code's own tools), an MCP call with the profile's `tools`. One name can be two tools: a company's `CronDelete` is never Claude Code's. The kinds are `read`, `write`, `edit` (a workspace file at the path its `arg` names, which the floor checks against the protected and frozen paths), `destructive`, `sql`, `egress` and `shell`; a `write`'s `arg` is no path. The call is then checked against the run's mandate (`engine/floor/rules.py`). A tool no table lists gets its kind from Jev, asked once per surface and name.
 - **Held when:**
   - the tool is `destructive`, or is missing from the policy and Jev can't label it (below);
   - the SQL is destructive and touches a table outside `may_destroy`, or can't be classified. Destructive: a DELETE, DROP or TRUNCATE; any UPDATE, whatever its WHERE; a MERGE; an insert that replaces or updates on conflict (`REPLACE INTO`, `INSERT OR REPLACE`, `ON CONFLICT DO UPDATE`); a rename;

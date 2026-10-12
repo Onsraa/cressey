@@ -148,10 +148,10 @@ def _build_floor_cases() -> None:
 
 def section_floor_battery() -> dict:
     _build_floor_cases()
-    policy = _policy()
+    tools = _policy().tools["mcp"]  # the demo's tools, through the gateway
     rows = []
     for label, tool, args, mandate in FLOOR_CASES:
-        risk, reason = check(policy.tools.get(tool), args, Mandate(**mandate))
+        risk, reason = check(tools.get(tool), args, Mandate(**mandate))
         # The floor holds a call iff check() returns a reason; `risk` is only the class
         # (egress is always risk "destructive" but allowed when the recipient is in mandate).
         held = reason is not None

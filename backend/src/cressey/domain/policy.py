@@ -9,6 +9,7 @@ from typing import Literal, get_args
 import yaml
 from pydantic import BaseModel, Field, JsonValue
 
+from cressey.domain.acts import Surface
 from cressey.domain.runs import Indicator
 
 # What Cressey does with a call a check fired on: let it through with an incident, hold it
@@ -24,7 +25,9 @@ def _thought_floors() -> dict[str, float]:
 
 
 class ToolRule(BaseModel):
-    kind: Literal["read", "write", "destructive", "sql", "egress", "shell"]
+    # An edit changes the workspace file at the path its `arg` holds; a write's `arg`, if
+    # any, is no path.
+    kind: Literal["read", "write", "edit", "destructive", "sql", "egress", "shell"]
     arg: str | None = (
         None  # the argument holding the SQL, the recipients, the path or the command
     )
@@ -96,7 +99,7 @@ class Floor(BaseModel):
 
 
 class Policy(BaseModel):
-    tools: dict[str, ToolRule]
+    tools: dict[Surface, dict[str, ToolRule]]  # by surface: one name can be two tools
     floor: Floor = Field(default_factory=Floor)
     responses: Responses = Field(default_factory=Responses)
     triangle: Thresholds = Field(default_factory=Thresholds)
@@ -109,6 +112,7 @@ class Policy(BaseModel):
 class Catalog(BaseModel):
     """What one surface's own tools do (catalogs/), such as Claude Code's through the hook."""
 
+    surface: Surface
     tools: dict[str, ToolRule]
 
 
@@ -127,14 +131,16 @@ def load_profile(path: Path) -> Profile:
 
 
 def load_policy(data: Path, profile: Profile) -> Policy:
-    """The engine's settings in `data`, its surfaces' catalogs and the profile's tools: a tool
-    listed twice would be classified by whichever file came last, so it is refused."""
-    tools = dict(profile.tools)
+    """The engine's settings in `data`, and each surface's tools: its catalogs', and the
+    profile's for the MCP gateway. A tool listed twice for one surface would be classified by
+    whichever file came last, so it is refused; one name on two surfaces is two tools."""
+    tools: dict[Surface, dict[str, ToolRule]] = {s: {} for s in get_args(Surface)}
+    tools["mcp"] |= profile.tools
     for catalog in sorted((data / "catalogs").glob("*.yaml")):
-        listed = Catalog.model_validate(yaml.safe_load(catalog.read_text())).tools
-        if twice := tools.keys() & listed.keys():
+        listed = Catalog.model_validate(yaml.safe_load(catalog.read_text()))
+        if twice := tools[listed.surface].keys() & listed.tools.keys():
             raise ValueError(f"{catalog.name} lists {sorted(twice)} again")
-        tools |= listed
+        tools[listed.surface] |= listed.tools
     settings = yaml.safe_load((data / "policy.yaml").read_text())
     return Policy.model_validate(
         {**settings, "tools": tools, "broker": profile.broker, "decoys": profile.decoys}

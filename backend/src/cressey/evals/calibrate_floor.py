@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, JsonValue
 
+from cressey.domain.acts import Surface
 from cressey.domain.policy import Policy, ToolRule, load_policy, load_profile
 from cressey.domain.runs import Mandate, Run, Step
 from cressey.engine.floor.labels import ask_tool_kind, floor_labels
@@ -23,6 +24,9 @@ from cressey.settings import DATA, DEMO_PROFILE, Settings
 
 LABELS = DATA / "eval" / "floor-labels.json"
 OUT = DATA / "eval" / "floor-calibration.json"
+# The labelled calls are Claude Code's, as its hook sees them (an MCP tool there is named
+# mcp__<server>__<tool>): the hook's catalogs classify them, not the demo's profile.
+SURFACE: Surface = "hook"
 REPEATS = 2  # a threshold counts a case only if it holds for every answer
 CANDIDATES = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.95, 0.97, 0.99]
 
@@ -117,7 +121,7 @@ def action_step(case: ActionCase) -> tuple[Run, Step]:
 def code_decides(case: ActionCase, policy: Policy) -> str | None:
     """What code makes of an action it doesn't let through as a write; None when Jev is
     asked. A tool the policy doesn't list is taken as one Jev labelled a write."""
-    rule = policy.tools.get(case.tool) or ToolRule(kind="write")
+    rule = policy.tools[SURFACE].get(case.tool) or ToolRule(kind="write")
     risk, reason = check(rule, case.args, case.mandate)
     return reason.text if reason else (None if risk == "write" else risk)
 
@@ -166,7 +170,7 @@ def _production(rows: list[ActionRow]) -> list[tuple[bool | None, list[float | N
 async def calibrate(
     judge: Judge, model: str, policy: Policy, labels: Labels
 ) -> Calibration:
-    tools = [c for c in labels.tools if c.tool not in policy.tools]
+    tools = [c for c in labels.tools if c.tool not in policy.tools[SURFACE]]
     decided = {i: code_decides(c, policy) for i, c in enumerate(labels.actions)}
     asked = [c for i, c in enumerate(labels.actions) if decided[i] is None]
 
@@ -205,7 +209,9 @@ async def calibrate(
         model=model,
         date=datetime.now(UTC).date().isoformat(),
         repeats=REPEATS,
-        listed_in_policy=[c.tool for c in labels.tools if c.tool in policy.tools],
+        listed_in_policy=[
+            c.tool for c in labels.tools if c.tool in policy.tools[SURFACE]
+        ],
         code_decides=[
             CodeDecides(tool=c.tool, args=c.args, code=code)
             for i, c in enumerate(labels.actions)

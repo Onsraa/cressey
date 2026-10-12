@@ -54,8 +54,12 @@ def check(
         return "destructive", Reason(check="unknown_tool")
     value = args.get(rule.arg) if rule.arg else None
     match rule.kind:
-        case "read" | "write":
-            return rule.kind, _guarded(value, mandate, rule.kind == "write")
+        case "read":
+            return "read", _guarded(value, mandate, writing=False)
+        case "edit":  # a write to the workspace file at that path
+            return "write", _guarded(value, mandate, writing=True)
+        case "write":  # what its argument names is no path
+            return "write", None
         case "destructive":
             return "destructive", Reason(check="destructive_tool")
         case "shell":
@@ -91,6 +95,6 @@ def check(
 
 
 def edits_a_file(rule: ToolRule | None) -> bool:
-    """A write to a file at a path this floor checks against the mandate (protected, frozen):
+    """An edit of a file at a path this floor checks against the mandate (protected, frozen):
     what it does is known before it runs, and it contacts nothing."""
-    return rule is not None and rule.kind == "write" and rule.arg is not None
+    return rule is not None and rule.kind == "edit" and rule.arg is not None

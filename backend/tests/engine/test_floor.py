@@ -103,7 +103,7 @@ def test_an_update_outside_the_mandate_is_held_whatever_its_where():
 
 
 READ = ToolRule(kind="read", arg="path")
-WRITE = ToolRule(kind="write", arg="path")
+EDIT = ToolRule(kind="edit", arg="path")
 GUARDED = Mandate(protected=["scorer", "runs/*/transcript.json", ".secrets/**"])
 
 
@@ -119,11 +119,11 @@ GUARDED = Mandate(protected=["scorer", "runs/*/transcript.json", ".secrets/**"])
         ".secrets/db/key",
     ],
 )
-def test_a_protected_path_is_held_on_read_and_on_write(path):
+def test_a_protected_path_is_held_on_read_and_on_edit(path):
     """The Hugging Face / METR read floor: no model is asked."""
     held = Reason(check="protected_path", target=path)
     assert check(READ, {"path": path}, GUARDED) == ("read", held)
-    assert check(WRITE, {"path": path}, GUARDED)[1] == held
+    assert check(EDIT, {"path": path}, GUARDED)[1] == held
 
 
 @pytest.mark.parametrize(
@@ -166,15 +166,23 @@ FROZEN = Mandate(frozen=["tests", "ci/grader.py"])
 @pytest.mark.parametrize(
     "path", ["tests/test_app.py", "./tests/../tests/conftest.py", "CI/Grader.py"]
 )
-def test_a_frozen_path_reads_but_its_write_is_held(path):
+def test_a_frozen_path_reads_but_its_edit_is_held(path):
     """ImpossibleBench: editing the tests was most of the cheating. No model is asked."""
     assert check(READ, {"path": path}, FROZEN) == ("read", None)
     held = Reason(check="frozen_path", target=path)
-    assert check(WRITE, {"path": path}, FROZEN) == ("write", held)
+    assert check(EDIT, {"path": path}, FROZEN) == ("write", held)
 
 
 def test_a_path_outside_the_frozen_ones_is_written_freely():
-    assert check(WRITE, {"path": "src/app.py"}, FROZEN) == ("write", None)
+    assert check(EDIT, {"path": "src/app.py"}, FROZEN) == ("write", None)
+
+
+def test_only_an_edits_argument_is_a_path():
+    """A write's argument isn't checked against the protected and frozen paths: a user
+    named after one is no file."""
+    create_user = ToolRule(kind="write", arg="name")
+    assert check(create_user, {"name": "scorer"}, GUARDED) == ("write", None)
+    assert check(create_user, {"name": "tests"}, FROZEN) == ("write", None)
 
 
 # GraphQL bodies: a query, a mutation, and an introspection query (mutationType is no mutation).
@@ -411,7 +419,6 @@ def test_a_destructive_shell_command_is_held_whatever_the_mandate():
 # Cressey's API and dashboard, as the app derives them from its settings.
 CRESSEY = {origin("http://localhost:8000"), origin("http://localhost:5173")}
 SHELL = ToolRule(kind="shell", arg="command")
-EDIT = ToolRule(kind="write", arg="file_path")
 
 
 @pytest.mark.parametrize(
@@ -452,10 +459,17 @@ def test_a_url_without_a_port_reaches_its_schemes():
 
 def test_a_file_edit_naming_cressey_contacts_nothing():
     readme = {
-        "file_path": "README.md",
+        "path": "README.md",
         "content": "Open http://localhost:8000/api/runs",
     }
     assert at_cressey(EDIT, readme, CRESSEY) is None
+
+
+def test_a_write_naming_cressey_is_held_whatever_argument_it_names():
+    """Only an edit contacts nothing: a payment that names its IBAN can still call back."""
+    pay = {"iban": "FR76 3000 1007 9412", "notify": "http://localhost:8000/api/runs"}
+    payment = ToolRule(kind="write", arg="iban")
+    assert at_cressey(payment, pay, CRESSEY) == Reason(check="self_call")
 
 
 def test_a_fetch_or_an_unlisted_tool_is_read_whole():

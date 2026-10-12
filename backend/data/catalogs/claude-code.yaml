@@ -1,6 +1,8 @@
 # What Claude Code's own tools do, for the safety floor: the hook's catalog
-# (adapters/claude_code.py). A tool no catalog and no profile lists gets its kind from Jev,
-# by its name (`floor` in policy.yaml); while Jev can't answer, it counts as destructive.
+# (adapters/claude_code.py). Only the hook's calls read it: a tool of the MCP gateway with the
+# same name is the profile's. A tool the hook's catalogs don't list gets its kind from Jev, by
+# its name (`floor` in policy.yaml); while Jev can't answer, it counts as destructive.
+surface: hook
 tools:
   # A shell command made only of read-only commands reads, and so does a curl or wget that
   # only reads (no file written, no body but a GraphQL query's; a redirection to /dev/null
@@ -14,9 +16,11 @@ tools:
   WebFetch: {kind: read}
   WebSearch: {kind: read}
   TodoWrite: {kind: read}
-  Write: {kind: write, arg: file_path}
-  Edit: {kind: write, arg: file_path}
-  NotebookEdit: {kind: write, arg: notebook_path}
+  # They edit the file at that path, which the floor checks against the mandate (protected,
+  # frozen).
+  Write: {kind: edit, arg: file_path}
+  Edit: {kind: edit, arg: file_path}
+  NotebookEdit: {kind: edit, arg: notebook_path}
   Task: {kind: write}
   # Claude Code's other tools (code.claude.com/docs/en/tools-reference). They read, or only
   # touch the session itself (its plan, task list, questions to the user, tool loading):
