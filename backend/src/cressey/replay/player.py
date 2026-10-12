@@ -10,17 +10,18 @@ and the lab all play through here.
 
 import argparse
 import asyncio
+import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from types import TracebackType
-from typing import Literal, Self
+from typing import Literal, Self, get_args
 
 import httpx2
 import mcp_types
 import yaml
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from pydantic import BaseModel, JsonValue, TypeAdapter
+from pydantic import BaseModel, JsonValue
 
 from cressey.adapters.claude_code import HOOK_PATH
 from cressey.adapters.mcp import MCP_PATH
@@ -28,7 +29,7 @@ from cressey.domain.acts import Surface
 from cressey.domain.runs import Mandate, RunKind
 from cressey.engine.agent_text import PREFIX
 from cressey.replay.importers import load_transcript
-from cressey.replay.trajectory import Call, Say, Session, Trajectory
+from cressey.replay.trajectory import NO_REPORT, Call, Say, Session, Trajectory
 from cressey.settings import Settings
 
 # How a call went for the agent: Cressey refused it, it failed, or it ran.
@@ -46,10 +47,13 @@ class Played(BaseModel):
 
 class _Mcp:
     """An MCP client holding the run's key: its calls run on Cressey's upstream. Its words
-    and its report go through the agent API."""
+    and its report go through the agent API. `pace`: a beat after each call, as the
+    scripted demo plays."""
 
-    def __init__(self, h: httpx2.AsyncClient, base_url: str, run_id: str, key: str):
-        self.h, self.run_id = h, run_id
+    def __init__(
+        self, h: httpx2.AsyncClient, base_url: str, run_id: str, key: str, pace: float
+    ):
+        self.h, self.run_id, self.pace = h, run_id, pace
         self.auth = {"Authorization": f"Bearer {key}"}
         transport = StreamableHttpTransport(base_url + MCP_PATH, headers=self.auth)
         self.client = Client(transport)
@@ -68,10 +72,12 @@ class _Mcp:
 
     async def say(self, text: str) -> None:
         path = f"/api/runs/{self.run_id}/messages"
-        await self.h.post(path, json={"text": text}, headers=self.auth)
+        sent = await self.h.post(path, json={"text": text}, headers=self.auth)
+        sent.raise_for_status()
 
     async def call(self, step: Call, n: int) -> Outcome:
         result = await self.client.call_tool(step.call, step.args, raise_on_error=False)
+        await asyncio.sleep(self.pace)
         if not result.is_error:
             return "done"
         text = " ".join(
@@ -81,15 +87,17 @@ class _Mcp:
 
     async def end(self, report: str) -> None:
         path = f"/api/runs/{self.run_id}/report"
-        await self.h.post(path, json={"text": report}, headers=self.auth)
+        sent = await self.h.post(path, json={"text": report}, headers=self.auth)
+        sent.raise_for_status()
 
 
 class _Hook:
     """Claude Code's hook events, with the run's key: its words as they display, each call
-    before it runs, then what the recording says it returned, and the end of the turn."""
+    before it runs, then what the recording says it returned, and the end of the turn.
+    `pace`: a beat before each event, so a viewer reads the words before the call."""
 
-    def __init__(self, h: httpx2.AsyncClient, key: str, typing: float):
-        self.h, self.typing, self.said = h, typing, 0
+    def __init__(self, h: httpx2.AsyncClient, key: str, pace: float, typing: float):
+        self.h, self.pace, self.typing, self.said = h, pace, typing, 0
         self.auth = {"Authorization": f"Bearer {key}"}
 
     async def __aenter__(self) -> Self:
@@ -110,10 +118,14 @@ class _Hook:
 
     async def say(self, text: str) -> None:
         """Whole, or three words at a time when typed out to be filmed."""
+        await asyncio.sleep(self.pace)
         self.said += 1
         words = text.split(" ")
-        parts = range(0, len(words), 3) if self.typing else [0]
-        chunks = [" ".join(words[i : i + 3]) for i in parts] if self.typing else [text]
+        chunks = (
+            [" ".join(words[i : i + 3]) for i in range(0, len(words), 3)]
+            if self.typing
+            else [text]
+        )
         for i, chunk in enumerate(chunks):
             final = i == len(chunks) - 1
             delta = chunk if i == 0 else " " + chunk
@@ -128,6 +140,7 @@ class _Hook:
             "tool_input": step.args,
             "tool_use_id": f"c{n}",
         }
+        await asyncio.sleep(self.pace)
         answer = await self._send("PreToolUse", **call)
         decided = answer.get("hookSpecificOutput")
         if isinstance(decided, dict) and decided.get("permissionDecision") == "deny":
@@ -158,7 +171,8 @@ async def play(
 ) -> Played:
     """Play `trajectory` through Cressey: register the run with the control plane's key
     (`admin`), then the agent's words and calls with the run's own key, then its report.
-    `pace`: seconds after each call; `typing`: seconds between the words of a hook message;
+    `pace`: a beat in seconds, after each call through MCP, before each event through the
+    hook; `typing`: seconds between the words of a hook message;
     `transport`: an app in this process, for the hook (the MCP client goes over HTTP);
     `before_report`: awaited with the run's id before the report ends the run."""
     t = trajectory
@@ -182,12 +196,12 @@ async def play(
         )
         run = registered.raise_for_status().json()
         agent = (
-            _Mcp(h, base_url, run["id"], run["key"])
+            _Mcp(h, base_url, run["id"], run["key"], pace)
             if surface == "mcp"
-            else _Hook(h, run["key"], typing)
+            else _Hook(h, run["key"], pace, typing)
         )
         blocked_at = stopped_at = None
-        calls, last_said = 0, "(no final message)"
+        calls, last_said = 0, NO_REPORT
         async with agent:
             for step in t.steps:
                 if step.say:
@@ -204,7 +218,6 @@ async def play(
                 if outcome == "failed" and step.stop_if_error:
                     stopped_at = calls
                     break
-                await asyncio.sleep(pace)
         stopped = blocked_at is not None or stopped_at is not None
         # Stopped, it reports what it had said by then, never what the recording says later.
         report = (t.report_if_blocked or last_said) if stopped else t.report
@@ -226,16 +239,24 @@ def main() -> None:
     p.add_argument(
         "source",
         type=Path,
-        help="a scripted session (.yaml) or a Claude Code transcript (.jsonl)",
+        help="a scripted session (.yaml), played through MCP, or a Claude Code "
+        "transcript (.jsonl), played through the hook",
     )
     p.add_argument("--task", help="a transcript's task: it doesn't hold it")
     p.add_argument("--mandate", help="a transcript's mandate, as JSON")
-    p.add_argument("--surface", choices=["mcp", "hook"], help="default: mcp, hook")
-    p.add_argument("--kind", default="live", help="live, replay or control")
+    p.add_argument("--kind", default="live", choices=get_args(RunKind))
     p.add_argument("--url", default="http://localhost:8000")
-    p.add_argument("--pace", type=float, default=1.5, help="seconds after each call")
     p.add_argument(
-        "--typing", type=float, default=0, help="seconds between a message's words"
+        "--pace",
+        type=float,
+        default=1.5,
+        help="a beat in seconds: after each call (MCP), before each event (hook)",
+    )
+    p.add_argument(
+        "--typing",
+        type=float,
+        default=0,
+        help="hook: seconds between a message's words",
     )
     a = p.parse_args()
     admin = Settings().admin_token
@@ -246,28 +267,27 @@ def main() -> None:
     transcript = a.source.suffix == ".jsonl"
     if transcript and not a.task:
         p.error("a transcript needs its task: --task")
-    if transcript and a.surface == "mcp":
-        p.error("a transcript plays through the hook: through MCP its calls would run")
+    if not transcript and (a.task or a.mandate):
+        p.error("a scripted session holds its own task and mandate")
+    mandate = None
+    if a.mandate:
+        given = json.loads(a.mandate)
+        unknown = set(given) - set(Mandate.model_fields)
+        if unknown:
+            p.error(f"--mandate: unknown fields {sorted(unknown)}")
+        mandate = Mandate.model_validate(given)
     trajectory = (
-        load_transcript(
-            a.source,
-            a.task,
-            Mandate.model_validate_json(a.mandate) if a.mandate else None,
-        )
+        load_transcript(a.source, a.task, mandate)
         if transcript
         else Session.model_validate(yaml.safe_load(a.source.read_text()))
     )
-    surface = TypeAdapter(Surface).validate_python(
-        a.surface or ("hook" if transcript else "mcp")
-    )
-    kind = TypeAdapter(RunKind).validate_python(a.kind)
     played = play(
         a.url,
         trajectory,
-        kind,
+        a.kind,
         a.pace,
         admin=admin.get_secret_value(),
-        surface=surface,
+        surface="hook" if transcript else "mcp",
         typing=a.typing,
     )
     print(asyncio.run(played).model_dump_json(indent=1))

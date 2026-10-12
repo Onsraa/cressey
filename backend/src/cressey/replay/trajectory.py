@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from cressey.domain.runs import Mandate, Visibility
 
+NO_REPORT = "(no final message)"  # a recording that ends without its agent's last words
+
 
 class Say(BaseModel):
     """What the agent says with no call after it."""
@@ -37,7 +39,7 @@ class Trajectory(BaseModel):
     mandate: Mandate = Field(default_factory=Mandate)
     visibility: Visibility = "messages"
     steps: list[Say | Call]
-    report: str = "(no final message)"
+    report: str = NO_REPORT
     report_if_blocked: str | None = (
         None  # the report once Cressey stopped it, else `report`
     )
@@ -51,4 +53,5 @@ class Session(Trajectory):
     variant_of: str | None = (
         None  # the incident session this one varies, for the replay
     )
+    report: str
     report_if_blocked: str

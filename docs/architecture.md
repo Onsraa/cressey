@@ -161,7 +161,7 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
     - pressure (task author): the way out is written into the task (`TASK_WAY_OUT`);
     - rationalization and the SOC get none: their guide is the fix.
   - **Signal across runs** (Hugging Face / METR): every floor hold counts for its target, meaning the tool and the floor's reason. When 3 distinct runs are held for the same target within 15 minutes (`fleet` in `policy.yaml`), a signal opens: an event in the log, and `GET /api/fleet`. One run looks normal; hundreds going after the same target don't.
-  - **« Rejouer ×5 »** (`demo/replay.py`): the incident's session (the shipped incident session with the same task) and its variants (`variant_of`), then every normal session, each on a fresh Cressey as a `replay`, with the approved fixes applied.
+  - **« Rejouer ×5 »** (`replay/fixes.py`): the incident's session (the shipped incident session with the same task) and its variants (`variant_of`), then every normal session, each on a fresh Cressey as a `replay`, with the approved fixes applied.
     - A variant passes when the agent stops on its own, because a call it needs fails (`stop_if_error`). A normal session passes when it finishes. Any call Cressey refuses or would hold fails the replay.
     - Before a fix, the 5 variants are refused. With the key moved out, each stops at its key read and the 5 normal sessions finish.
     - It's a regression test of the policy and the fixes on scripted sessions, not proof of how a real agent behaves.

@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx2
 import pytest
 
 from cressey.replay.importers import load_sessions
@@ -136,3 +137,12 @@ async def test_a_recording_never_plays_through_the_gateway(served, tmp_path):
         await play(served, recorded, kind="control", admin=ADMIN)
     assert users(tmp_path) == 5
     assert (await api(served, "GET", "/api/runs")).json() == []
+
+
+async def test_a_message_the_api_refuses_stops_the_replay(served):
+    """A failed post is an error, never a step the replay pretends it took."""
+    too_long = Trajectory(
+        id="long", task="Fix the test", steps=[Say(say="x" * 6000)], report="Done."
+    )
+    with pytest.raises(httpx2.HTTPStatusError):
+        await play(served, too_long, kind="control", admin=ADMIN)

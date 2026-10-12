@@ -40,7 +40,6 @@ from cressey.replay.importers import load_sessions, load_transcript
 from cressey.replay.trajectory import Call, Say, Trajectory
 from cressey.settings import Settings
 
-HOOK = "/hook/claude"
 REPO = Path(__file__).resolve().parents[1]
 # The indicators that can open a hold or an alert (§7). Counters only close a thread.
 CALIBRATED = ["P1", "O1", "O2", "O3", "R", "C1"]

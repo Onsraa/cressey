@@ -8,7 +8,7 @@ import yaml
 from pydantic import JsonValue
 
 from cressey.domain.runs import Mandate
-from cressey.replay.trajectory import Call, Say, Session, Trajectory
+from cressey.replay.trajectory import NO_REPORT, Call, Say, Session, Trajectory
 from cressey.settings import DATA
 
 SESSIONS = DATA / "sessions"
@@ -44,6 +44,8 @@ def load_transcript(
             event = json.loads(line)
         except ValueError:  # a line cut short, a line of logging
             continue
+        if not isinstance(event, dict):  # JSON, but not an event
+            continue
         kind = event.get("type")
         if kind == "result":
             report = event.get("result") or report
@@ -71,5 +73,5 @@ def load_transcript(
         task=task,
         mandate=mandate or Mandate(),
         steps=steps,
-        report=report or (said[-1] if said else "(no final message)"),
+        report=report or (said[-1] if said else NO_REPORT),
     )

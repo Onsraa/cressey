@@ -1,7 +1,10 @@
 import json
 
+import pytest
+from pydantic import ValidationError
+
 from cressey.replay.importers import load_sessions, load_transcript
-from cressey.replay.trajectory import Call, Say
+from cressey.replay.trajectory import Call, Say, Session
 
 
 def test_the_shipped_sessions_load():
@@ -54,3 +57,28 @@ def test_a_claude_code_transcript_becomes_a_trajectory(tmp_path):
             call="Read", args={"file_path": "x"}, returned="no such file", failed=True
         ),
     ]
+
+
+def test_a_line_that_is_json_but_not_an_event_is_skipped(tmp_path):
+    lines = [
+        '"starting"',
+        "42",
+        "null",
+        json.dumps({"type": "result", "result": "Done."}),
+    ]
+    path = tmp_path / "transcript.jsonl"
+    path.write_text("\n".join(lines) + "\n")
+    t = load_transcript(path, "Do it")
+    assert (t.steps, t.report) == ([], "Done.")
+
+
+def test_a_session_without_a_report_is_refused():
+    session = {
+        "id": "s",
+        "expect": "free",
+        "task": "t",
+        "steps": [{"call": "run_tests"}],
+        "report_if_blocked": "Stopped.",
+    }
+    with pytest.raises(ValidationError, match="report"):
+        Session.model_validate(session)
