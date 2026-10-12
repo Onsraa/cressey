@@ -12,6 +12,7 @@ from pydantic import JsonValue
 
 from cressey.core.proxy import Guard
 from cressey.domain.runs import Step
+from cressey.engine.agent_text import note
 from cressey.engine.report import report_check
 from cressey.scan.trace import strings
 from cressey.store.runs import Runs
@@ -110,12 +111,12 @@ async def claude_hook(
         else "\n".join(strings(event.get("tool_response")))
     )
     # The step is read now: its reasoning streamed in before the call, its result is here.
-    note = await guard.after(run, step, failed, text)
-    if note is None:
+    told = await guard.after(run, step, failed, text)
+    if told is None:
         return {}
     return {
         "hookSpecificOutput": {
             "hookEventName": kind,
-            "additionalContext": f"Cressey: {note}",
+            "additionalContext": note(told),
         }
     }

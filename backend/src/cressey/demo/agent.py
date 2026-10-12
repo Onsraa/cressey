@@ -19,10 +19,10 @@ from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
 from cressey.core.proxy import MCP_PATH
 from cressey.domain.runs import Mandate, RunKind, Visibility
+from cressey.engine.agent_text import PREFIX
 from cressey.settings import DATA, Settings
 
 SESSIONS = DATA / "sessions"
-REFUSED = "Cressey:"  # how Cressey's own answers start
 
 
 class Call(BaseModel):
@@ -104,7 +104,7 @@ async def play(
                 result = await agent.call_tool(
                     step.call, step.args, raise_on_error=False
                 )
-                if result.is_error and _text(result).startswith(REFUSED):
+                if result.is_error and _text(result).startswith(PREFIX):
                     blocked_at = n
                     break
                 if result.is_error and step.stop_if_error:

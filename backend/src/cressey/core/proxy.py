@@ -19,17 +19,22 @@ from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
 from cressey.core.broker import scoped
-from cressey.core.draft import (
+from cressey.core.incidents import Incidents
+from cressey.domain.policy import Policy, Response, ToolRule
+from cressey.domain.runs import Legs, Run, Shadow, Step
+from cressey.engine.agent_text import (
+    REFUSED,
+    SUSPENDED,
+    UNKNOWN_KEY,
     WAY_OUT,
     Drafter,
     check_message,
     fallback,
     finish,
+    held,
+    note,
     stop_sentence,
 )
-from cressey.core.incidents import Incidents
-from cressey.domain.policy import Policy, Response, ToolRule
-from cressey.domain.runs import Legs, Run, Shadow, Step
 from cressey.engine.case.case import CaseReader, closing_excuse, excuse_reason
 from cressey.engine.floor.labels import ask_tool_kind, floor_labels, tool_kind
 from cressey.engine.floor.rules import check, edits_a_file
@@ -176,7 +181,7 @@ class Guard(Middleware):
         auth = get_http_headers(include={"authorization"}).get("authorization", "")
         run = self.runs.by_key(auth.removeprefix("Bearer ").strip())
         if run is None:
-            raise ToolError("Cressey: unknown key.")
+            raise ToolError(UNKNOWN_KEY)
         name, args = context.message.name, context.message.arguments or {}
         self.runs.route(run, "mcp")
         step = await self.before(run, name, args)
@@ -189,10 +194,10 @@ class Guard(Middleware):
                 message = context.message.model_copy(update={"arguments": dict(sent)})
                 context = context.copy(message=message)
             result = await call_next(context)
-            note = await self.after(run, step, result.is_error, _text(result))
+            told = await self.after(run, step, result.is_error, _text(result))
             # Added after the record: the ledger labels the tool's own text, not Cressey's.
-            if note:
-                result.content.append(mcp_types.TextContent(text=f"Cressey: {note}"))
+            if told:
+                result.content.append(mcp_types.TextContent(text=note(told)))
             return result
         finally:
             step.running = False  # its result is in, or the call failed
@@ -265,7 +270,7 @@ class Guard(Middleware):
         try:
             if run.revoked:
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
+                raise ToolError(SUSPENDED)
             # Side by side: the floor's label waits for no more than the triangle already does,
             # and with thought holds on, the agent's words before the call are read meanwhile.
             triangle, labelled, _ = await asyncio.gather(
@@ -275,7 +280,7 @@ class Guard(Middleware):
             )
             if run.revoked:  # a parallel call was held while this one was being judged
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
+                raise ToolError(SUSPENDED)
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
             excuse = closing_excuse(run, triangle) if self.thought_holds else None
             labels = "; ".join(why for why, _ in labelled) or None
@@ -310,10 +315,10 @@ class Guard(Middleware):
             if not reason and run.read_only_step and risk == "destructive":
                 step.reason = READ_ONLY
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey: action refused. {WAY_OUT}")
+                raise ToolError(REFUSED)
             # The agent learns it was held, never why: a reason teaches it what to route around
             # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
-            held = ToolError(f"Cressey: action held. {WAY_OUT}")
+            held_error = ToolError(held())
             response = self._response(
                 name,
                 reason,
@@ -328,16 +333,16 @@ class Guard(Middleware):
             elif reason and run.kind != "live":
                 self.runs.mark(run, step, "would_hold")
                 if run.kind == "replay":
-                    raise held
+                    raise held_error
             elif response == "stop":
                 run.revoked = True  # the rest of the run is denied
                 self.runs.mark(run, step, "denied")
-                raise ToolError(f"Cressey: action refused. {WAY_OUT}")
+                raise ToolError(REFUSED)
             elif reason:
                 self._draft(run, step)
                 stop_after = self.policy.stuck.rejections
                 if not await self.runs.hold(run, step, self.hold_timeout, stop_after):
-                    told = f"Cressey: action held. {step.message or WAY_OUT}"
+                    told = held(step.message)
                     if run.stopped:
                         told = f"{told} {stop_sentence(stop_after)}"
                     raise ToolError(told)

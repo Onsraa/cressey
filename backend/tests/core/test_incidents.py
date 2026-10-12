@@ -173,7 +173,7 @@ async def test_each_guide_gets_a_root_cause_sentence_for_its_leg():
 
 
 async def test_each_leg_cressey_can_fix_gets_a_fix_for_a_human_to_approve():
-    from cressey.core.incidents import TASK_WAY_OUT
+    from cressey.engine.agent_text import TASK_WAY_OUT
 
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=ON))

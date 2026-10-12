@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from cressey.core.draft import (
+from cressey.domain.runs import Mandate, Run, Secret, Step
+from cressey.engine.agent_text import (
     PROMPT_DRAFT_V1,
     WAY_OUT,
     CachedDrafter,
@@ -14,7 +15,6 @@ from cressey.core.draft import (
     finish,
     stop_sentence,
 )
-from cressey.domain.runs import Mandate, Run, Secret, Step
 from cressey.llm.cache import Cache
 from cressey.llm.clients import ModelUnavailable
 from cressey.settings import Settings

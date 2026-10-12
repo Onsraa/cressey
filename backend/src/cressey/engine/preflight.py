@@ -9,9 +9,9 @@ from fastmcp import FastMCP
 from pydantic import JsonValue
 from typesafe_sdk import Noul
 
-from cressey.core.incidents import TASK_WAY_OUT
 from cressey.domain.owners import OWNER_NAMES, OwnerRole
 from cressey.domain.runs import Mandate, Preflight
+from cressey.engine.agent_text import TASK_WAY_OUT
 from cressey.judge import Judge, NotRecorded, TooLarge, yes
 
 log = logging.getLogger(__name__)

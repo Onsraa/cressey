@@ -8,10 +8,10 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from cressey.core import proxy
-from cressey.core.draft import fallback, finish
 from cressey.core.proxy import WAY_OUT
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
 from cressey.domain.runs import Mandate, Risk
+from cressey.engine.agent_text import fallback, finish
 from cressey.llm.clients import ModelUnavailable
 from cressey.scan.secrets import redact
 from cressey.testing import QuietJudge, agent, api, next_hold, no_to_all, serving, users

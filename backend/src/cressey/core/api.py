@@ -9,7 +9,6 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from cressey.core.draft import check_message, finish
 from cressey.core.hook import HOOK_PATH
 from cressey.core.incidents import AssessTask, Incidents
 from cressey.core.proxy import MCP_PATH
@@ -18,6 +17,7 @@ from cressey.domain.owners import LegName
 from cressey.domain.policy import Responses
 from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn, TextIn
 from cressey.domain.status import EvalFile, LogHead, Status
+from cressey.engine.agent_text import check_message, finish
 from cressey.engine.report import report_check
 from cressey.settings import DATA
 from cressey.store.runs import Runs

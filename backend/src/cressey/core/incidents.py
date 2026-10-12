@@ -20,6 +20,7 @@ from cressey.domain.incidents import (
 from cressey.domain.owners import LEGS, OWNERS, LegName
 from cressey.domain.policy import Fleet
 from cressey.domain.runs import Mandate, Preflight, Run, Step
+from cressey.engine.agent_text import TASK_WAY_OUT
 from cressey.scan.secrets import redact
 from cressey.scan.trace import strings, trace
 from cressey.store.runs import Runs
@@ -30,11 +31,6 @@ ORDER = {"critique": 0, "haute": 1}
 Replayer = Callable[[list[Fix], str], Coroutine[Any, Any, Replay]]
 # The task and its mandate assessed for the triangle's risk factors (core/preflight.py).
 AssessTask = Callable[[str, Mandate], Awaitable[Preflight | None]]
-# The task author's fix: the way out, written into the task itself.
-TASK_WAY_OUT = (
-    "If the task can't be done without leaving the mandate, declare it impossible: "
-    "that is an accepted answer."
-)
 
 
 def sources(run: Run, step: Step) -> list[Source]:
