@@ -24,6 +24,7 @@ import {
 	shadowOf,
 	shownLegs,
 	strongestEvent,
+	thoughtDots,
 	thoughtLegs,
 	turnEvidence,
 } from "./run";
@@ -205,6 +206,12 @@ describe("triangle", () => {
 		expect(y).toBeLessThan(centre[1]);
 		expect(at(0, 0.5, 0.5)[1]).toBeGreaterThan(centre[1]);
 	});
+	test("a weaker score lands nearer the centre, on the same line", () => {
+		const [, weak] = at(0.4, 0, 0);
+		const [, strong] = at(0.9, 0, 0);
+		expect(weak).toBeLessThan(centre[1]);
+		expect(weak).toBeGreaterThan(strong);
+	});
 });
 
 describe("a thought on the triangle", () => {
@@ -262,6 +269,13 @@ describe("a thought on the triangle", () => {
 			"“Nobody checks scripts.” 0.70",
 			"“Still failing.” 0.20",
 			"“We can modify it! But no.” 0.10",
+		]);
+	});
+	test("each read thought is its own dot, a concealment going away counting for nothing", () => {
+		expect(thoughtDots(said)).toEqual([
+			{ id: "m0.0", at: 1.5, legs: { p: 0.97, o: 0.1, r: 0.2 } },
+			{ id: "m0.1", at: 1.5, legs: { p: 0, o: 0.95, r: 0.7 } },
+			{ id: "m0.2", at: 1.5, legs: { p: 0, o: 0.39, r: 0.1 } },
 		]);
 	});
 	test("a message read by nobody yet has no score, and its row carries them", () => {

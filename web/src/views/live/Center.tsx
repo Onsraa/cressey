@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { type ReactNode, useRef } from "react";
 import { useLive } from "@/api/live";
 import type { CaseEvent, LegName, Run } from "@/api/types";
 import {
@@ -10,7 +10,9 @@ import {
 	KeySquare,
 	Lock,
 	Minus,
+	Pause,
 	Triangle,
+	X,
 } from "@/components/icons";
 import { INDICATOR, LEGS, TONE } from "@/lib/labels";
 import { animIn, useGlide, useOnChange } from "@/lib/motion";
@@ -44,9 +46,10 @@ const STATUS: Record<Phase, string> = {
 
 const LEGEND = [
 	"How to read",
-	"Each call lands where its three scores pull it.",
+	"Each call (ink square) and each thought (coloured pixel) lands where its three scores pull it, further out when stronger.",
+	"A thought takes its strongest leg's colour; grey = every score low.",
 	"The marker follows the latest call; its three lines show its scores.",
-	"Darker grey = higher score (0.30 to 0.78+).",
+	"Darker grey heat = higher score (0.30 to 0.78+).",
 	"Salmon = the held call.",
 	"Hover a trace row to locate it. Click the field for a pulse.",
 ].join("\n");
@@ -105,6 +108,7 @@ export function Center({
 	hover,
 	tab,
 	setTab,
+	hold,
 	className,
 }: {
 	run?: Run;
@@ -115,6 +119,13 @@ export function Center({
 	hover?: Hover;
 	tab: CenterTab;
 	setTab: (t: CenterTab) => void;
+	// The call on hold, else the last one that was: shown over the triangle, or hidden.
+	hold?: {
+		open: boolean;
+		pending: boolean;
+		onToggle: () => void;
+		pane: ReactNode;
+	};
 	className: string;
 }) {
 	const { focusMode } = useLive();
@@ -141,7 +152,7 @@ export function Center({
 			ref={box}
 			data-anim
 			aria-label="Fraud triangle"
-			className={`panel ${className}`}
+			className={`panel relative ${className}`}
 		>
 			<div className="panel-head pr-1.5">
 				<span className="min-w-0 flex-[0_1_auto] truncate">FRAUD TRIANGLE</span>
@@ -158,6 +169,19 @@ export function Center({
 					<Triangle size={11} />
 					{closed}/3
 				</span>
+				{hold && (
+					<button
+						type="button"
+						aria-pressed={hold.open}
+						data-tip={hold.open ? "Hide the hold" : "Show the hold"}
+						onClick={hold.onToggle}
+						className={`press inline-flex h-[22px] flex-none items-center gap-[5px] border border-surface px-[7px] font-mono text-[11.5px] tracking-normal ${hold.open ? "bg-surface text-ink" : "bg-ink text-surface"}`}
+					>
+						<Pause size={11} />
+						HELD
+						{hold.pending && <span className="size-2 bg-[#e8553e]" />}
+					</button>
+				)}
 				{!focusMode && (
 					<>
 						<div
@@ -210,7 +234,24 @@ export function Center({
 					</div>
 				)}
 			</div>
-			<div className="grid flex-none grid-cols-3 border-ink border-t-[1.2px]">
+			{hold?.open && (
+				// Over the field and the gauges, see-through: the triangle stays in sight.
+				<div className="absolute inset-x-0 top-[34px] bottom-0 z-10 overflow-auto bg-surface/85">
+					<button
+						type="button"
+						aria-label="Hide the hold"
+						onClick={hold.onToggle}
+						className="press absolute top-3 right-3 z-10 inline-flex size-7 items-center justify-center border-[1.2px] border-ink bg-surface"
+					>
+						<X size={14} />
+					</button>
+					<div className="mx-auto max-w-[460px]">{hold.pane}</div>
+				</div>
+			)}
+			<div
+				data-gauges
+				className="grid flex-none grid-cols-3 border-ink border-t-[1.2px]"
+			>
 				{LEGS.map((g) => (
 					<Gauge
 						key={g.k}

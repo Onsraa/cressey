@@ -159,30 +159,43 @@ const ASKS: Record<LegName, string[]> = {
 	rationalization: ["R", "C1"],
 };
 
-// A message's thoughts on the triangle: each leg is its strongest thought, and each thought's
-// score is a fact, strongest first. A justification or concealment whose conclusion goes
-// away from the crossing counts for nothing, as in the case (core/case.py, leg_values).
-// Undefined until a thought is read.
-export function thoughtLegs(run: Run, message: number): Legs | undefined {
-	const m = run.messages[message];
-	const read = Object.entries(m.scores);
-	if (!read.length) return undefined;
+// One read thought of message `message` on each leg: its strongest question. A justification
+// or concealment whose conclusion goes away from the crossing counts for nothing, as in the
+// case (core/case.py, leg_values).
+function thoughtScores(run: Run, message: number) {
 	const away = (run.case?.events ?? []).filter(
 		(e) => e.message === message && e.direction === "away",
 	);
+	return Object.entries(run.messages[message].scores).map(([t, p]) => {
+		const leg = (k: LegName) =>
+			Math.max(
+				0,
+				...ASKS[k].map((q) =>
+					away.some((e) => e.thought === Number(t) && e.indicator === q)
+						? 0
+						: (p[q] ?? 0),
+				),
+			);
+		return {
+			thought: Number(t),
+			legs: {
+				pressure: leg("pressure"),
+				opportunity: leg("opportunity"),
+				rationalization: leg("rationalization"),
+			},
+		};
+	});
+}
+
+// A message's thoughts on the triangle: each leg is its strongest thought, and each thought's
+// score is a fact, strongest first. Undefined until a thought is read.
+export function thoughtLegs(run: Run, message: number): Legs | undefined {
+	const m = run.messages[message];
+	const read = thoughtScores(run, message);
+	if (!read.length) return undefined;
 	const leg = (k: LegName): Leg => {
 		const scored = read
-			.map(([t, p]) => ({
-				text: m.thoughts[Number(t)],
-				score: Math.max(
-					0,
-					...ASKS[k].map((q) =>
-						away.some((e) => e.thought === Number(t) && e.indicator === q)
-							? 0
-							: (p[q] ?? 0),
-					),
-				),
-			}))
+			.map((x) => ({ text: m.thoughts[x.thought], score: x.legs[k] }))
 			.filter((x) => x.score > 0)
 			.sort((a, b) => b.score - a.score);
 		return {
@@ -197,6 +210,21 @@ export function thoughtLegs(run: Run, message: number): Legs | undefined {
 		rationalization: leg("rationalization"),
 	};
 }
+
+// Every read thought of the run, in the order said, as its own point on the triangle; `at`
+// places it among the calls, as `rows` does. Display only, like the scores it is drawn from.
+export const thoughtDots = (run: Run) =>
+	run.messages.flatMap((m, i) =>
+		thoughtScores(run, i).map(({ thought, legs }) => ({
+			id: `m${i}.${thought}`,
+			at: m.after + 0.5,
+			legs: {
+				p: legs.pressure,
+				o: legs.opportunity,
+				r: legs.rationalization,
+			},
+		})),
+	);
 
 // The calls the triangle scored: a call refused on a suspended key has no legs.
 export const scored = (run: Run): Scored[] =>

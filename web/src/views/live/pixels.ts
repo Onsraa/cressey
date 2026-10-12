@@ -3,11 +3,14 @@ import { still } from "@/lib/motion";
 import { band, RAMP } from "./run";
 
 // The design's fraud-triangle field, ported from its prototype (frame, drawEdges, drawHL):
-// a canvas of 10 px cells, its noise drifting, calls landing as heat with a ring, the held
+// a canvas of 6 px cells, its noise drifting, calls landing as heat with a ring, the held
 // call pulsing salmon, the cursor painting a fading trail, a click sending a shockwave, and
-// a marker gliding to the latest (or hovered, or selected) call, leaving a trail.
+// a marker gliding to the latest (or hovered, or selected) call, leaving a trail. Each of
+// the agent's thoughts lands too, and every landed dot is drawn as solid cells over the heat.
+// New dots fire one after another in the order they were said or made, however they arrive.
 
-const CELL = 10; // the design's « medium » pixel
+const CELL = 6; // finer than the design's 10 px « medium » pixel: room for many dots
+const STAGGER = 90; // ms between two dots firing
 const HOT = "#EF7462";
 const SALMON = "#FFD6CE";
 const INK = "#1E1E1E";
@@ -18,10 +21,12 @@ export type P3 = { p: number; o: number; r: number };
 type Pt = [number, number];
 // The vertices, the side, the height, and the field's width.
 export type Tri = { P: Pt; O: Pt; R: Pt; s: number; h: number; W: number };
-// A scored call, and whether it was ever held.
-export type Dot = { id: string; legs: P3; hold: boolean };
+// A scored call or thought, whether it was ever held, and where it sits in the run: a call's
+// number, or k + 0.5 for a thought said after k calls.
+export type Dot = { id: string; legs: P3; hold: boolean; at: number };
 export type Scene = {
 	calls: Dot[];
+	thoughts: Dot[]; // every read thought, never held
 	confirmed: Record<keyof P3, boolean>; // a side closes when both its legs are
 	held: boolean; // a call waits for a human
 	holdId?: string; // the held call, pending or decided
@@ -60,25 +65,59 @@ export function mix(a: Tri, b: Tri, k: number): Tri {
 	return shape(m(a.P[0], b.P[0]), m(a.P[1], b.P[1]), m(a.s, b.s), b.W);
 }
 
-// Where a call lands: its squared scores pull it toward their vertices, eased 18 % toward
-// the centre. No score at all: the centre (the design divides by zero there).
-export function pos(T: Tri, legs: P3): Pt {
-	let a = legs.p * legs.p;
-	let b = legs.o * legs.o;
-	let c = legs.r * legs.r;
-	const s = a + b + c;
+// Each vertex's share in a dot's place: its squared scores, eased 18 % toward equal shares,
+// and only as far from equal as its strongest score, so a leg that grows walks its dots out.
+// No score at all: equal shares, the centre (the design divides by zero there).
+const EASE = 0.82; // how far a vertex's share can go from equal: never onto the vertex
+function shares(legs: P3): P3 {
+	const sq = { p: legs.p ** 2, o: legs.o ** 2, r: legs.r ** 2 };
+	const s = sq.p + sq.o + sq.r;
 	const m = 1 / 3;
-	const k = 0.82;
-	if (!s) a = b = c = m;
-	else {
-		a = m + (a / s - m) * k;
-		b = m + (b / s - m) * k;
-		c = m + (c / s - m) * k;
-	}
+	const far = Math.max(legs.p, legs.o, legs.r) * EASE;
+	const at = (v: number) => (s ? m + (v / s - m) * far : m);
+	return { p: at(sq.p), o: at(sq.o), r: at(sq.r) };
+}
+
+// Where a dot lands: its shares of the three vertices.
+export function pos(T: Tri, legs: P3): Pt {
+	const w = shares(legs);
 	return [
-		a * T.P[0] + b * T.O[0] + c * T.R[0],
-		a * T.P[1] + b * T.O[1] + c * T.R[1],
+		w.p * T.P[0] + w.o * T.O[0] + w.r * T.R[0],
+		w.p * T.P[1] + w.o * T.O[1] + w.r * T.R[1],
 	];
+}
+
+// How far (x, y) lies out on an apex-up triangle centred on 0: its inradius there, as hypot
+// is a circle's radius. The outward normals of its sides: down, up-left, up-right.
+const triNorm = (x: number, y: number) =>
+	Math.max(y, -0.866 * x - 0.5 * y, 0.866 * x - 0.5 * y);
+
+// The cells a landed dot fills: a thought one, a call two, one more for a strong score. Its
+// centre is where the marker points.
+function square(T: Tri, d: Dot, thought: boolean) {
+	const [x, y] = pos(T, d.legs);
+	const n =
+		(thought ? 1 : 2) + Math.round(Math.max(d.legs.p, d.legs.o, d.legs.r));
+	const x0 = Math.round(x / CELL - n / 2) * CELL;
+	const y0 = Math.round(y / CELL - n / 2) * CELL;
+	return { x0, y0, n, cx: x0 + (n * CELL) / 2, cy: y0 + (n * CELL) / 2 };
+}
+
+const rgb = (hex: string) =>
+	[1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const GREY = rgb(RAMP[2]);
+const LEG_RGB = { p: rgb(LC.p), o: rgb(LC.o), r: rgb(LC.r) };
+
+// A thought's colour: the legs' colours mixed in its shares of the triangle, from grey at the
+// centre to a leg's own colour at its vertex.
+function hue(legs: P3) {
+	const w = shares(legs);
+	const k = (Math.max(w.p, w.o, w.r) - 1 / 3) / ((2 / 3) * EASE); // 0 → 1, centre → vertex
+	const ch = GREY.map((g, i) => {
+		const leg = w.p * LEG_RGB.p[i] + w.o * LEG_RGB.o[i] + w.r * LEG_RGB.r[i];
+		return Math.round(g + (leg - g) * k);
+	});
+	return `rgb(${ch.join(",")})`;
 }
 
 function bary(T: Tri, x: number, y: number) {
@@ -90,6 +129,7 @@ function bary(T: Tri, x: number, y: number) {
 }
 
 const amp = (d: Dot) => Math.max(d.legs.p, d.legs.o, d.legs.r) * 0.95;
+const THOUGHT = 0.55; // a thought's ring against a call's
 const key = (d: Dot) => `${d.id}:${d.legs.p},${d.legs.o},${d.legs.r}:${d.hold}`;
 
 type Wave = {
@@ -100,6 +140,7 @@ type Wave = {
 	hot: boolean;
 	life: number;
 	rm: number;
+	tri?: boolean; // a click's: a triangle, slow at first, then fast
 };
 // A call in flight; k is its eased progress.
 type Probe = {
@@ -123,6 +164,7 @@ type Marker = {
 export class Pixels {
 	private read: () => Scene = () => ({
 		calls: [],
+		thoughts: [],
 		confirmed: { p: false, o: false, r: false },
 		held: false,
 	});
@@ -145,7 +187,10 @@ export class Pixels {
 	private pm: Pt | null = null;
 	private holdPos: Pt | null = null;
 	private hl: Marker | null = null;
-	private keys: string[] = [];
+	private seen = new Set<string>(); // dots fired, flying or landed
+	private landed = new Set<string>();
+	private drawn = ""; // the dots' scores the heat was last laid from
+	private next = 0; // when the next dot may fire, in performance.now() time
 	private DPR = 1;
 	private W = 0;
 	private H = 0;
@@ -176,6 +221,12 @@ export class Pixels {
 			this.waves = [];
 			this.holdPos = null;
 			this.hl = null;
+			// A run opened midway shows what it already has; only what comes next fires.
+			const sc = read();
+			const ids = [...sc.calls, ...sc.thoughts].map((d) => d.id);
+			this.seen = new Set(ids);
+			this.landed = new Set(ids);
+			this.drawn = "";
 		}
 		this.cv = cv;
 		this.ctx = cv.getContext("2d");
@@ -198,6 +249,9 @@ export class Pixels {
 		cancelAnimationFrame(this.raf);
 		for (const t of this.timers) clearTimeout(t);
 		this.timers = [];
+		// Dots still waiting or flying would never land: they are there when the page returns.
+		for (const id of this.seen) this.landed.add(id);
+		this.drawn = "";
 		for (const p of this.probes) gsap.killTweensOf(p);
 		this.probes = [];
 		this.glide?.kill();
@@ -206,16 +260,30 @@ export class Pixels {
 		this.pm = null;
 	}
 
-	// A call scored since the last look flies in; any other change redraws the heat at once.
+	// Each call or thought scored since the last look fires, in the run's order, one every
+	// STAGGER ms; a landed dot whose scores changed has its heat laid again at once.
 	sync() {
 		if (!this.tri) return;
-		const calls = this.read().calls;
-		const next = calls.map(key);
-		if (next.join() === this.keys.join()) return;
-		const appended = this.keys.every((k, i) => next[i] === k);
-		if (appended) for (const d of calls.slice(this.keys.length)) this.flyIn(d);
-		else this.rebuild();
-		this.keys = next;
+		const sc = this.read();
+		const fresh = [
+			...sc.calls.map((d) => ({ d, thought: false })),
+			...sc.thoughts.map((d) => ({ d, thought: true })),
+		]
+			.filter(({ d }) => !this.seen.has(d.id))
+			.sort((a, b) => a.d.at - b.d.at);
+		for (const { d, thought } of fresh) {
+			this.seen.add(d.id);
+			if (this.rm) {
+				this.flyIn(d, thought);
+				continue;
+			}
+			const now = performance.now();
+			this.next = Math.max(this.next, now);
+			this.later(() => this.flyIn(d, thought), this.next - now);
+			this.next += STAGGER;
+		}
+		if (this.drawn !== [...sc.calls, ...sc.thoughts].map(key).join())
+			this.rebuild();
 	}
 
 	private size() {
@@ -282,13 +350,17 @@ export class Pixels {
 		this.acc.fill(0);
 		const sc = this.read();
 		const sg = this.sigC();
+		// Only calls lay heat: a thought is its pixel, crisp on the paper.
 		for (const d of sc.calls) {
+			if (!this.landed.has(d.id)) continue;
 			const [x, y] = pos(T, d.legs);
 			this.dep(this.acc, x, y, amp(d), sg);
 		}
-		const he = sc.calls.find((d) => d.id === sc.holdId);
+		const he = sc.calls.find(
+			(d) => d.id === sc.holdId && this.landed.has(d.id),
+		);
 		this.holdPos = he ? pos(T, he.legs) : null;
-		this.keys = sc.calls.map(key);
+		this.drawn = [...sc.calls, ...sc.thoughts].map(key).join();
 	}
 
 	private hsh(c: number, r: number) {
@@ -309,9 +381,9 @@ export class Pixels {
 		return 0.5 + 0.5 * (v / 2.55);
 	}
 
-	// A blob's spread, in cells.
+	// A blob's spread, in cells: small, so a long run's dots stay apart.
 	private sigC() {
-		return Math.max(1.5, ((this.tri?.s ?? 0) * 0.034) / CELL);
+		return Math.max(0.75, ((this.tri?.s ?? 0) * 0.017) / CELL);
 	}
 
 	// Heat laid in a gaussian around (x, y).
@@ -362,15 +434,16 @@ export class Pixels {
 	// A call flies in from the left edge, trailing heat, and lands: its heat, a ring, and for
 	// a held call three salmon shockwaves and a shake. Its place is read when used, not when
 	// it arrives: a banner or a new gauge line can reshape the field while it flies.
-	private flyIn(d: Dot) {
+	private flyIn(d: Dot, thought = false) {
 		const T = this.tri;
 		if (!T) return;
 		const at = () => pos(this.tri ?? T, d.legs);
-		const amt = amp(d);
+		const k = thought ? THOUGHT : 1;
 		const land = () => {
 			const [tx, ty] = at();
-			this.dep(this.acc, tx, ty, amt, this.sigC());
-			if (!this.rm) this.wave(tx, ty, 1, false, 760, CELL * 6.5);
+			this.landed.add(d.id);
+			if (!thought) this.dep(this.acc, tx, ty, amp(d), this.sigC());
+			if (!this.rm) this.wave(tx, ty, k, false, 760, CELL * 6.5 * k);
 			if (d.hold) {
 				this.holdPos = [tx, ty];
 				if (!this.rm) {
@@ -392,7 +465,7 @@ export class Pixels {
 		this.probes.push(pr);
 		gsap.to(pr, {
 			k: 1,
-			duration: 0.95,
+			duration: thought ? 0.5 : 0.95,
 			ease: "power3.out",
 			onUpdate: () => {
 				const [x, y] = at();
@@ -438,7 +511,17 @@ export class Pixels {
 	private click = (e: MouseEvent) => {
 		if (this.rm || !this.cv) return;
 		const b = this.cv.getBoundingClientRect();
-		this.wave(e.clientX - b.left, e.clientY - b.top, 0.75, false);
+		const [x, y] = [e.clientX - b.left, e.clientY - b.top];
+		this.waves.push({
+			x,
+			y,
+			b: this.t,
+			pow: 0.75,
+			hot: false,
+			life: 1500,
+			rm: 0,
+			tri: true,
+		});
 	};
 
 	private frame = (ts: number) => {
@@ -511,6 +594,18 @@ export class Pixels {
 		const Rm = Math.hypot(W, H) * 0.62;
 		const ws = this.waves.map((w) => {
 			const a = (this.t - w.b) / 1000;
+			if (w.tri) {
+				const f = a / (w.life / 1000);
+				return {
+					x: w.x,
+					y: w.y,
+					R: Rm * 1.6 * f ** 3, // an ease-in: it crawls, then rushes out
+					s2: 2 * (c * 2.4 * w.pow) ** 2,
+					amp: (1 - f) * 1.1 * w.pow,
+					hot: w.hot,
+					tri: true,
+				};
+			}
 			if (w.rm) {
 				const f = a / (w.life / 1000);
 				return {
@@ -564,7 +659,10 @@ export class Pixels {
 						(fixed ? 0 : Math.sin(q * 0.6 + r * 0.8 + tt * 1.7) * 0.03);
 				let pv = pk[i];
 				for (const w of ws) {
-					const d = Math.hypot(x - w.x, y - w.y) - w.R;
+					const d =
+						("tri" in w
+							? triNorm(x - w.x, y - w.y)
+							: Math.hypot(x - w.x, y - w.y)) - w.R;
 					const val = w.amp * Math.exp(-(d * d) / w.s2);
 					if (w.hot) {
 						if (val > pv) pv = val;
@@ -587,6 +685,19 @@ export class Pixels {
 		this.drawEdges(ctx, T, sc);
 		this.drawMarker(ctx, T, sc, dt);
 	};
+
+	// The landed dots as solid cells over the heat: a thought in its colour, a call in ink,
+	// salmon once held, on top.
+	private drawDots(ctx: CanvasRenderingContext2D, T: Tri, sc: Scene) {
+		const put = (d: Dot, thought: boolean) => {
+			if (!this.landed.has(d.id)) return;
+			const { x0, y0, n } = square(T, d, thought);
+			ctx.fillStyle = thought ? hue(d.legs) : d.hold ? HOT : INK;
+			ctx.fillRect(x0, y0, n * CELL - 1, n * CELL - 1);
+		};
+		for (const d of sc.thoughts) put(d, true);
+		for (const d of sc.calls) put(d, false);
+	}
 
 	// The sides as cells: dashed while open, ink once closed, salmon while a call waits; the
 	// vertices as 3×3 blocks.
@@ -632,12 +743,12 @@ export class Pixels {
 	) {
 		const c = CELL;
 		const pin = sc.pin ? sc.calls.find((d) => d.id === sc.pin) : undefined;
-		const e = pin ?? sc.calls.at(-1);
+		const e = pin ?? sc.calls.findLast((d) => this.landed.has(d.id));
 		this.hl ??= {
 			x: (T.P[0] + T.O[0] + T.R[0]) / 3,
 			y: (T.P[1] + T.O[1] + T.R[1]) / 3,
 			a: 0,
-			s: 5,
+			s: 3,
 			id: null,
 			w: { p: 0, o: 0, r: 0 },
 			lx: null,
@@ -647,10 +758,10 @@ export class Pixels {
 		const fixed = this.rm;
 		const k = fixed ? 1 : 1 - Math.exp(-(dt || 16) * (pin ? 0.012 : 0.0046));
 		if (e) {
-			const [tx, ty] = pos(T, e.legs);
+			const { cx: tx, cy: ty } = square(T, e, false);
 			if (M.id !== e.id) {
 				M.id = e.id;
-				if (!fixed) M.s = 8;
+				if (!fixed) M.s = 5;
 			}
 			M.x += (tx - M.x) * k;
 			M.y += (ty - M.y) * k;
@@ -678,8 +789,8 @@ export class Pixels {
 			M.id = null;
 			M.lx = null;
 		}
-		M.s += (5 - M.s) * k;
-		if (M.a < 0.02) return;
+		M.s += (3 - M.s) * k;
+		if (M.a < 0.02) return this.drawDots(ctx, T, sc);
 		const held = Boolean(e && sc.held && e.id === sc.holdId);
 		const pu =
 			held && !fixed ? 0.5 + 0.5 * Math.sin((this.t * Math.PI * 2) / 1900) : 0;
@@ -704,21 +815,30 @@ export class Pixels {
 			ctx.lineWidth = w;
 			ctx.stroke();
 		}
-		const rx = Math.round(M.x - half) + 0.5;
-		const ry = Math.round(M.y - half) + 0.5;
-		const sz = Math.round(half * 2);
+		ctx.restore();
+		// The dots over the lines, under the square: a line never hides a dot.
+		this.drawDots(ctx, T, sc);
+		ctx.save();
+		// Centred on the call, unrounded: the dots under it show through the fill.
+		const sz = half * 2;
+		const rx = M.x - half;
+		const ry = M.y - half;
 		const ink = held ? "#B8331C" : INK;
+		const a = Math.min(1, M.a);
+		ctx.globalAlpha = a * 0.35;
 		ctx.fillStyle = held ? SALMON : PAPER;
-		ctx.fillRect(rx + 1, ry + 1, sz - 2, sz - 2);
-		ctx.lineWidth = 4;
+		ctx.fillRect(rx, ry, sz, sz);
+		ctx.globalAlpha = a * 0.6;
+		ctx.lineWidth = 2.5;
 		ctx.strokeStyle = PAPER;
 		ctx.strokeRect(rx, ry, sz, sz);
-		ctx.lineWidth = 1.6;
+		ctx.globalAlpha = a;
+		ctx.lineWidth = 1.2;
 		ctx.strokeStyle = ink;
 		ctx.strokeRect(rx, ry, sz, sz);
 		ctx.fillStyle = ink;
-		const d = Math.max(3, Math.round(c * 0.5));
-		ctx.fillRect(Math.round(M.x - d / 2), Math.round(M.y - d / 2), d, d);
+		const d = 4; // even, so it sits exactly on the centre
+		ctx.fillRect(M.x - d / 2, M.y - d / 2, d, d);
 		ctx.restore();
 	}
 }

@@ -385,6 +385,10 @@ const panel = (out: string, label: string) => {
 	return out.slice(from, next < 0 ? undefined : next);
 };
 
+// The gauges under the triangle, without the hold shown over them.
+const gaugesOf = (out: string) =>
+	out.slice(out.indexOf("data-gauges"), out.indexOf('aria-label="Inspector"'));
+
 // One trace row's markup.
 const row = (out: string, id: string) => {
 	const from = out.indexOf(`data-row="${id}"`);
@@ -479,7 +483,7 @@ test("each leg shows the quote of its strongest open thread, and where it was sa
 			},
 		),
 	]);
-	const gauges = panel(html(), "Fraud triangle");
+	const gauges = gaugesOf(html());
 	for (const s of [
 		"task impossible as asked",
 		">reasoning<",
@@ -508,7 +512,7 @@ test("the rationalization gauge shows the justification that goes toward the cro
 			),
 		]);
 	state = justify("toward");
-	const gauges = panel(html(), "Fraud triangle");
+	const gauges = gaugesOf(html());
 	expect(gauges).toContain(
 		"now I need to delete it using the shared ops token",
 	);
@@ -517,13 +521,22 @@ test("the rationalization gauge shows the justification that goes toward the cro
 	// The same words pointing away from the crossing, or nowhere, are no evidence.
 	for (const direction of ["away", "neither", undefined] as const) {
 		state = justify(direction);
-		expect(panel(html(), "Fraud triangle")).not.toContain("“");
+		expect(gaugesOf(html())).not.toContain("“");
 	}
+});
+
+test("the hold sits over the triangle; the inspector keeps reading the trace", () => {
+	state = live([demo({})]);
+	const out = html();
+	expect(panel(out, "Fraud triangle")).toContain("safe cancel in");
+	expect(panel(out, "Fraud triangle")).toContain('aria-label="Hide the hold"');
+	expect(panel(out, "Inspector")).not.toContain("safe cancel in");
+	expect(panel(out, "Inspector")).toContain("STEP");
 });
 
 test("no case yet: the gauges show no quote", () => {
 	state = live([demo({})]);
-	expect(panel(html(), "Fraud triangle")).not.toContain("“");
+	expect(gaugesOf(html())).not.toContain("“");
 });
 
 test("a Thought row shows the indicators its words raised: flags amber, counters green", () => {

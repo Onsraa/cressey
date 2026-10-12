@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useLive } from "@/api/live";
-import type { Incident, Leg, Run, Step } from "@/api/types";
+import type { Leg, Run, Step } from "@/api/types";
 import {
 	Check,
 	Eye,
@@ -8,12 +8,10 @@ import {
 	KeySquare,
 	List,
 	MousePointerClick,
-	Pause,
 } from "@/components/icons";
 import { LEGS, SHADOW_TIP, shown, TONE, VIA } from "@/lib/labels";
 import { animIn, useOnChange } from "@/lib/motion";
-import { type Decision, useUnlock } from "./decide";
-import { Hold } from "./Hold";
+import { useUnlock } from "./decide";
 import {
 	callText,
 	carried,
@@ -35,39 +33,28 @@ import {
 	StatusChip,
 } from "./ui";
 
-export type InspectorTab = "hold" | "step";
-
 const ms = (v: number) => `${v < 10 ? v.toFixed(1) : Math.round(v)} ms`;
 
+// The picked trace row, else the latest, read in full; the hold sits over the triangle.
 export function Inspector({
 	run,
-	held,
-	incident,
-	tab,
-	onTab,
 	row,
 	pinned,
 	watching,
-	decision,
 	className,
 }: {
 	run?: Run;
-	held?: Step; // the call on hold, else the last one that was
-	incident?: Incident;
-	tab: InspectorTab;
-	onTab: (t: InspectorTab) => void;
 	row?: Row; // the selected row, else the latest
 	pinned: boolean; // the row was selected, not just the latest
 	watching: boolean; // the run is going: the watching dot blinks
-	decision: Decision;
 	className: string;
 }) {
 	const { focusMode } = useLive();
 	const box = useRef<HTMLElement>(null);
-	// Focus mode has no STEP tab: the hold, or a quiet line.
-	const hold = run && held && (focusMode || tab === "hold") ? held : undefined;
-	const pane = hold ? "hold" : focusMode ? "watch" : "step";
-	useOnChange(pane, () => animIn(box.current, "[data-pane]"));
+	// Focus mode has no STEP tab: a quiet line.
+	useOnChange(focusMode ? "watch" : "step", () =>
+		animIn(box.current, "[data-pane]"),
+	);
 	return (
 		<section
 			ref={box}
@@ -80,32 +67,15 @@ export function Inspector({
 				aria-label="Inspector"
 				className="flex h-[34px] flex-none items-stretch bg-ink"
 			>
-				{held && (
-					<Tab
-						on={Boolean(hold)}
-						onClick={() => onTab("hold")}
-						Icon={Pause}
-						label="HELD"
-						dot={held.status === "held"}
-					/>
-				)}
-				{!focusMode && (
-					<Tab
-						on={!hold}
-						onClick={() => onTab("step")}
-						Icon={List}
-						label="STEP"
-					/>
-				)}
-				{focusMode && !held && (
+				{focusMode ? (
 					<Tab on onClick={() => {}} Icon={Eye} label="WATCHING" />
+				) : (
+					<Tab on onClick={() => {}} Icon={List} label="STEP" />
 				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
 				{run?.stopped && <Stopped run={run} />}
-				{run && hold ? (
-					<Hold run={run} step={hold} incident={incident} decision={decision} />
-				) : focusMode ? (
+				{focusMode ? (
 					<div
 						data-pane
 						className="flex h-full min-h-[200px] items-center justify-center p-6 text-center"
@@ -213,13 +183,11 @@ function Tab({
 	onClick,
 	Icon,
 	label,
-	dot,
 }: {
 	on: boolean;
 	onClick: () => void;
 	Icon: IconType;
 	label: string;
-	dot?: boolean;
 }) {
 	return (
 		<button
@@ -231,7 +199,6 @@ function Tab({
 		>
 			<Icon size={13} />
 			{label}
-			{dot && <span className="size-2 bg-[#e8553e]" />}
 		</button>
 	);
 }
