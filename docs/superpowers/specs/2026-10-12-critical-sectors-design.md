@@ -179,7 +179,7 @@ The code claims below were checked on `main` at `c1b51e1`.
   - **built:** an admin key on the control plane, and a dashboard key screen;
   - **built:** a code rule that holds calls aimed at Cressey;
   - **built:** runs, their keys and an anchored event log that survive restarts;
-  - **pending:** when Jev doesn't answer, hold the writes code can't vouch for. It waits for the "changes production" label work, which edits the same function.
+  - **built:** when Jev doesn't answer, hold the writes code can't vouch for (everything but a file edit), on top of the "changes production" label work.
 - **P1, the product for finance:**
   - **Gateway first.** The MCP proxy is the only door to business systems, and Cressey holds their credentials (the broker beyond `run_sql`). Add a thin Copilot Studio webhook adapter. The Claude Code hook stays a lab adapter.
   - **A finance charter pack:**

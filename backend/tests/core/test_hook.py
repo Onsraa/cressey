@@ -9,6 +9,7 @@ from typesafe_sdk import Choice
 
 from cressey.app import create_app
 from cressey.core.draft import WAY_OUT, stop_sentence
+from cressey.core.judge import NotRecorded
 from cressey.core.proxy import tool_kind
 from cressey.demo.server import serve
 from cressey.demo.tools import TRAP_KEY
@@ -557,6 +558,8 @@ class FloorJudge:
         self.labelled: list[str] = []
         self.floor_states: list[dict] = []
         self.judgment_states: list[dict] = []
+        self.down = False  # no answer to the floor's question, as when Jev is down
+        self.unrecorded = False  # a replay with no recorded answer to it
 
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
         if "kind" in questions:
@@ -565,6 +568,10 @@ class FloorJudge:
             return None if got is None else {"kind": got}
         if "irreversible" in questions:
             self.floor_states.append(state)
+            if self.unrecorded:
+                raise NotRecorded("floor")
+            if self.down:
+                return None
             args = state["current_step"]["args"]
             return {
                 label: max((p for part, p in by.items() if part in args), default=0.0)
@@ -732,6 +739,39 @@ async def test_a_write_both_labels_flag_gets_the_stricter_response(floor_judged)
         "denied",
         "Jev: irreversible beyond the mandate, 0.90; Jev: changes production, 0.95",
     )
+
+
+async def test_when_jev_doesnt_answer_a_write_waits_for_a_human_but_a_file_edit_runs(
+    floor_judged,
+):
+    """Code couldn't classify the push, and only Jev's label would hold it: without an
+    answer it waits for a human. A file edit's path is checked by code, so it runs."""
+    base, judge = floor_judged
+    judge.down = True
+    run = await new_run(base)
+    push = {"command": "git push origin main"}
+    out = await pre(base, run["key"], "Bash", push, "toolu_1")
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    edit = {"file_path": "src/app.py", "old_string": "a", "new_string": "b"}
+    assert await pre(base, run["key"], "Edit", edit, "toolu_2") == {}
+    steps = (await run_of(base, run))["steps"]
+    assert [(s["risk"], s["reason"]) for s in steps] == [
+        ("write", "Jev didn't answer"),
+        ("write", None),
+    ]
+    [incident] = (await api(base, "GET", "/api/incidents")).json()
+    assert incident["severity"] == "haute"
+
+
+async def test_a_replay_with_no_recorded_label_lets_the_write_through(floor_judged):
+    """Not asked, as on the run that was recorded: a replay miss is not Jev being down."""
+    base, judge = floor_judged
+    judge.unrecorded = True
+    run = await new_run(base)
+    push = {"command": "git push origin main"}
+    assert await pre(base, run["key"], "Bash", push, "toolu_1") == {}
+    [step] = (await run_of(base, run))["steps"]
+    assert (step["risk"], step["reason"]) == ("write", None)
 
 
 async def test_jevs_tool_answer_must_name_a_kind():

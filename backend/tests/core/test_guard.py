@@ -17,7 +17,7 @@ from cressey.core.proxy import WAY_OUT
 from cressey.core.secret_scan import redact
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
 from cressey.guide.clients import ModelUnavailable
-from tests.server import api, next_hold, users
+from tests.server import api, next_hold, serving, users
 
 pytestmark = pytest.mark.anyio
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -445,23 +445,26 @@ async def test_the_fleet_signal_is_served(served):
 
 
 async def test_the_broker_hands_the_database_a_read_key_unless_the_mandate_grants_changes(
-    served, tmp_path
+    tmp_path,
 ):
-    """Even an UPDATE the floor let through can't change a row: the database refuses it."""
-    run = await new_run(served)
-    async with agent(served, run["key"]) as a:
-        count = {"query": "SELECT count(*) FROM users", "key": "any key"}
-        assert (await a.call_tool("run_sql", count)).content[0].text == "[[5]]"
-        insert = {
-            "query": "INSERT INTO users VALUES (6, 'f@example.test')",
-            "key": PROD_KEY,
-        }
-        r = await a.call_tool("run_sql", insert, raise_on_error=False)
-    assert r.is_error and "read-only" in r.content[0].text
-    assert users(tmp_path) == 5
-    granted = await new_run(served, {"may_destroy": ["users"]})
-    async with agent(served, granted["key"]) as a:
-        assert not (await a.call_tool("run_sql", insert, raise_on_error=False)).is_error
+    """Even an UPDATE the floor let through can't change a row: the database refuses it.
+    Jev answers no to its labels, so the insert reaches the database."""
+    with serving(tmp_path, hold_timeout=10, judge=CountingJudge()) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            count = {"query": "SELECT count(*) FROM users", "key": "any key"}
+            assert (await a.call_tool("run_sql", count)).content[0].text == "[[5]]"
+            insert = {
+                "query": "INSERT INTO users VALUES (6, 'f@example.test')",
+                "key": PROD_KEY,
+            }
+            r = await a.call_tool("run_sql", insert, raise_on_error=False)
+        assert r.is_error and "read-only" in r.content[0].text
+        assert users(tmp_path) == 5
+        granted = await new_run(base, {"may_destroy": ["users"]})
+        async with agent(base, granted["key"]) as a:
+            insert_granted = await a.call_tool("run_sql", insert, raise_on_error=False)
+        assert not insert_granted.is_error
     assert users(tmp_path) == 6
 
 

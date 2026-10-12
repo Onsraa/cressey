@@ -56,7 +56,7 @@ The first run asks for your Jev key, checks it and saves it in `.env`. Then it s
 - **The reasoning shown is the agent's narration.** No provider exposes the raw chain of thought.
 - **What a restart keeps.** With `CRESSEY_STATE_DIR` (set by `./dev.sh` and the Docker image), the event log, its anchor and the runs' keys are kept on disk. After a restart a hooked agent carries on, its earlier steps come back from the log, and a call held at that moment is logged expired. What a run had only in memory (results, secrets read, the triangle's evidence, a suspension) starts afresh. The anchor sits next to the log: it catches a log cut short, by a crash or by hand, not someone who rewrites both. Shipping it off the machine is next.
 - **On one machine, the agent could read the admin key.** It runs as the same user as Cressey: without the key it can't decide a hold or change a response, but `.env` is readable. Cressey's own URL in a call is held, a tripwire, not the lock. For real isolation, run Cressey off the agent's machine, or sandbox the agent's files and network.
-- **When Jev doesn't answer,** the code rules and trap keys still hold, and a tool missing from the policy is held. But a write that only Jev's floor label would hold goes through unjudged. Holding it until a human decides is next.
+- **When Jev doesn't answer,** the code rules and trap keys still hold, and a tool missing from the policy is held. A write only Jev's floor label would judge waits for a human too (« Jev didn't answer », with the `irreversible` response). A file edit goes on: code checks its path against the mandate. The triangle can't confirm a judgment either, so it holds less.
 - **Local only.** Nothing is deployed. Before Claude Code 2.1.295, a hook that can't reach Cressey lets calls through.
 
 What happens when a part is down:
@@ -65,7 +65,7 @@ What happens when a part is down:
 |---|---|---|---|
 | Cressey, Claude Code 2.1.295+ (`onFailure: block`) | refused | refused | refused |
 | Cressey, older Claude Code | go through | go through | go through |
-| Jev | go through | go through, unjudged | held |
+| Jev | go through | held for a human, except file edits | held |
 
 ## Tests
 ```bash

@@ -398,6 +398,12 @@ def origin(url: str) -> tuple[str, int]:
     return _host(u.hostname or ""), u.port or DEFAULT_PORTS.get(u.scheme, 80)
 
 
+def edits_a_file(rule: ToolRule | None) -> bool:
+    """A write to a file at a path this floor checks against the mandate (protected, frozen):
+    what it does is known before it runs, and it contacts nothing."""
+    return rule is not None and rule.kind == "write" and rule.arg is not None
+
+
 def at_cressey(
     rule: ToolRule | None,
     args: Mapping[str, JsonValue],
@@ -407,7 +413,7 @@ def at_cressey(
     dashboard, whatever the mandate: an agent has no business with its guard. What a file
     edit writes contacts nothing, so it isn't read. A tripwire, not the lock: the admin key
     is that (a host spelled another way, or a URL built at run time, goes unseen)."""
-    if rule is not None and rule.kind == "write" and rule.arg:
+    if edits_a_file(rule):
         return None
     targets = set(guarded)
     text = " ".join(s for value in args.values() for s in strings(value))

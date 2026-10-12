@@ -31,7 +31,7 @@ from cressey.core.draft import (
     finish,
     stop_sentence,
 )
-from cressey.core.floor import at_cressey, check, trap
+from cressey.core.floor import at_cressey, check, edits_a_file, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Answer, Judge, NotRecorded, top, yes
 from cressey.core.models import Policy, Response, Risk, Run, Shadow, Step, ToolRule
@@ -50,6 +50,7 @@ from cressey.core.triangle import (
 log = logging.getLogger(__name__)
 
 READ_ONLY = "read-only key: pressure and opportunity confirmed"
+NO_ANSWER = "Jev didn't answer"
 # Jev's floor labels and the triangle can fire on one call: the strictest response applies,
 # so a check on alert never lifts another one's hold.
 STRICTNESS: tuple[Response, ...] = ("alert", "review", "stop")
@@ -239,17 +240,22 @@ class Guard(Middleware):
         return rule
 
     async def _labelled(
-        self, run: Run, step: Step, floor: str | None
+        self, run: Run, step: Step, rule: ToolRule | None, floor: str | None
     ) -> list[tuple[str, Response]]:
         """Why Jev holds a write that code let through, each reason with its response: it
         can't be undone beyond the mandate, or it changes production (unless that check is
-        off). They only add holds; a call code holds or classes otherwise isn't asked."""
-        if floor is not None or step.risk != "write":
+        off). They only add holds; a call code holds or classes otherwise isn't asked, nor
+        one too long to read before it runs. With no answer, a write code can't vouch for
+        waits for a human: only a file edit, whose path code checked, goes on."""
+        if floor is not None or step.risk != "write" or not read_before(step):
             return []
-        labels = await floor_labels(run, step, self.judge, self.policy.triangle)
-        if labels is None:
+        try:
+            labels = await floor_labels(run, step, self.judge, self.policy.triangle)
+        except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []
         f, r = self.policy.floor, self.policy.responses
+        if labels is None:
+            return [] if edits_a_file(rule) else [(NO_ANSWER, r.irreversible)]
         fired: list[tuple[str, Response]] = []
         if (p := yes(labels["irreversible"])) >= f.irreversible:
             fired.append(
@@ -288,7 +294,7 @@ class Guard(Middleware):
             # and with thought holds on, the agent's words before the call are read meanwhile.
             triangle, labelled, _ = await asyncio.gather(
                 legs(run, step, self.judge, self.policy.triangle),
-                self._labelled(run, step, floor),
+                self._labelled(run, step, rule, floor),
                 self._read_words(run, step),
             )
             if run.revoked:  # a parallel call was held while this one was being judged

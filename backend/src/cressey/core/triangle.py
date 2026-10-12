@@ -581,20 +581,15 @@ async def floor_labels(
 ) -> Answers | None:
     """The probabilities that the call can't be undone beyond the mandate (`irreversible`)
     and that it changes production (`production`), on its actions alone, each the highest
-    over its parts. None when no model answers, no answer is recorded, or the call is too
-    long to read before it runs."""
-    if not read_before(call):
-        return None
+    over its parts. None when no model answers. Raises NotRecorded on a replay with no
+    recorded answer."""
     shown = await _redacted_off_loop(run, _before(run, call.n)[-1:])
-    try:
-        return await _max_over_parts(
-            judge,
-            lambda part: judgment_state(run, call, t, shown, part, words=False),
-            _args_parts(call),
-            FLOOR,
-        )
-    except NotRecorded:
-        return None
+    return await _max_over_parts(
+        judge,
+        lambda part: judgment_state(run, call, t, shown, part, words=False),
+        _args_parts(call),
+        FLOOR,
+    )
 
 
 async def views(
