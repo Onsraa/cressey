@@ -13,8 +13,6 @@ from typing import Literal
 
 from pydantic import JsonValue
 
-from cressey.core.eventlog import EventLog
-from cressey.core.triangle import read_only
 from cressey.domain.runs import (
     Hold,
     Leg,
@@ -30,6 +28,7 @@ from cressey.domain.runs import (
     confirmed,
 )
 from cressey.scan.secrets import redact
+from cressey.store.eventlog import EventLog
 
 # The step field each later event of a step sets, as the log records it.
 FROM_LOG = {"status": "status", "legs": "reason", "result": "is_error"}
@@ -105,7 +104,7 @@ class Runs:
             run.steps.append(step)
             if step.status == "held":
                 step.status = "expired"
-                self._log(run, step, "status", status="expired", after="restart")
+                self.log_step(run, step, "status", status="expired", after="restart")
 
     def create(self, spec: RunIn) -> RunCreated:
         run = self._new(spec)
@@ -182,38 +181,30 @@ class Runs:
             running=True,
         )
         run.steps.append(step)
-        self._log(run, step, "call", tool=tool, args=shown, risk=risk, reason=reason)
+        self.log_step(
+            run, step, "call", tool=tool, args=shown, risk=risk, reason=reason
+        )
         return step
 
     def score(self, run: Run, step: Step, legs: Legs, reason: str | None) -> None:
         step.legs, step.reason = legs, reason
         legs_confirmed: list[JsonValue] = list(confirmed(legs))
-        self._log(run, step, "legs", confirmed=legs_confirmed, reason=reason)
+        self.log_step(run, step, "legs", confirmed=legs_confirmed, reason=reason)
 
     def set_shadow(self, run: Run, step: Step, s: Shadow) -> None:
         """What the case would have done with this call: stored and logged beside the
         decision taken, which it never changes."""
         step.shadow = s
         uses: list[JsonValue] = list(s.uses)
-        self._log(
+        self.log_step(
             run, step, "shadow", decision=s.decision, uses=uses, words_read=s.words_read
         )
-
-    def act_on_pressure(self, run: Run, step: Step, legs: Legs) -> None:
-        """Without a human, once each: pressure sends the way out with this call's result;
-        pressure and opportunity drop the key to read-only for destructive calls."""
-        if legs.pressure.confirmed and run.way_out_step is None:
-            run.way_out_step = step.n
-            self._log(run, step, "way_out")
-        if read_only(legs) and run.read_only_step is None:
-            run.read_only_step = step.n
-            self._log(run, step, "read_only")
 
     def mark(
         self, run: Run, step: Step, status: Literal["alerted", "denied", "would_hold"]
     ) -> None:
         step.status = status
-        self._log(run, step, "status", status=status)
+        self.log_step(run, step, "status", status=status)
 
     def say(self, run: Run, text: str) -> None:
         message = Message(after=len(run.steps), text=redact(text, run.known))
@@ -321,9 +312,9 @@ class Runs:
         step.secrets = [s for _, s in found]
         run.known |= {value: s.fingerprint for value, s in found}
         fingerprints: list[JsonValue] = [s.fingerprint for s in step.secrets]
-        self._log(run, step, "result", is_error=is_error, secrets=fingerprints)
+        self.log_step(run, step, "result", is_error=is_error, secrets=fingerprints)
 
-    def _log(self, run: Run, step: Step, kind: str, **data: JsonValue) -> None:
+    def log_step(self, run: Run, step: Step, kind: str, **data: JsonValue) -> None:
         self.log.append(kind, {"run": run.id, "n": step.n, **data})
 
     def holds(self) -> list[Hold]:
@@ -340,7 +331,7 @@ class Runs:
         run.revoked = True
         step.status = "held"
         step.held_until = (_now() + timedelta(seconds=timeout)).isoformat()
-        self._log(run, step, "status", status="held")
+        self.log_step(run, step, "status", status="held")
         key = (run.id, step.n)
         self._waiting[key] = decision = asyncio.get_running_loop().create_future()
         try:
@@ -354,7 +345,7 @@ class Runs:
             else:
                 step.status = "approved" if decision.result() else "rejected"
             step.decided_at = _now().isoformat()
-            self._log(run, step, "status", status=step.status)
+            self.log_step(run, step, "status", status=step.status)
             # In the finally: a cancelled hold is an expired one, and must not leave the key
             # suspended with nothing held and no stop.
             if step.status != "approved":

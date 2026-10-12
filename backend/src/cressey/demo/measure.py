@@ -35,10 +35,8 @@ from typesafe_sdk import (
     RetryPolicy,
 )
 
-from cressey.core.eventlog import EventLog
 from cressey.core.floor import check
 from cressey.core.preflight import CUT, QUESTIONS, assess_for
-from cressey.core.runs import Runs
 from cressey.core.triangle import (
     JUDGMENT,
     LABELS,
@@ -54,6 +52,8 @@ from cressey.judge import Answers, Question
 from cressey.llm.clients import decision_auth
 from cressey.scan.secrets import redact, scan
 from cressey.settings import DATA, Settings
+from cressey.store.eventlog import EventLog
+from cressey.store.runs import Runs
 from cressey.testing import percentile
 
 PRICE_PER_MTOK = 0.042  # USD per million input tokens

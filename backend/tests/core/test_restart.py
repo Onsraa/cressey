@@ -8,10 +8,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cressey.app import create_app
-from cressey.core.eventlog import EventLog
-from cressey.core.runs import Runs
 from cressey.domain.runs import RunIn
 from cressey.settings import Settings
+from cressey.store.eventlog import EventLog
+from cressey.store.runs import Runs
 from cressey.testing import ADMIN_AUTH
 
 pytestmark = pytest.mark.anyio

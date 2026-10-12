@@ -12,13 +12,11 @@ from starlette.routing import Route
 from cressey.core.api import agent_router, require_admin
 from cressey.core.api import router as core_router
 from cressey.core.draft import cached_drafter
-from cressey.core.eventlog import EventLog
 from cressey.core.floor import origin
 from cressey.core.hook import router as hook_router
 from cressey.core.incidents import Incidents
 from cressey.core.preflight import assess_for
 from cressey.core.proxy import MCP_PATH, Guard, build_mcp
-from cressey.core.runs import Runs
 from cressey.demo.agent import load_sessions
 from cressey.demo.replay import replay
 from cressey.demo.tools import demo_tools
@@ -29,6 +27,8 @@ from cressey.guide.api import write_guide
 from cressey.guide.corpus import load_corpus
 from cressey.judge import JevJudge, Judge
 from cressey.settings import DATA, Settings
+from cressey.store.eventlog import EventLog
+from cressey.store.runs import Runs
 
 
 def create_app(

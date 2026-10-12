@@ -586,10 +586,10 @@ class GatedLabels:
 async def test_a_result_still_coming_is_labelled_once_it_is_in():
     """A parallel write doesn't label a read still running with an empty result: the read
     is labelled when its result is in, so its injected instruction is seen."""
-    from cressey.core.eventlog import EventLog
-    from cressey.core.runs import Runs
     from cressey.core.triangle import label_soon
     from cressey.domain.runs import RunIn
+    from cressey.store.eventlog import EventLog
+    from cressey.store.runs import Runs
 
     runs = Runs(EventLog())
     run = runs.get(runs.create(RunIn(task="corrige le README")).id)

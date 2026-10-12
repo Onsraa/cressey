@@ -31,7 +31,6 @@ from cressey.core.draft import (
 )
 from cressey.core.floor import at_cressey, check, edits_a_file, trap
 from cressey.core.incidents import Incidents
-from cressey.core.runs import Runs
 from cressey.core.triangle import (
     alarm,
     alarm_reason,
@@ -40,11 +39,13 @@ from cressey.core.triangle import (
     legs,
     read_after,
     read_before,
+    read_only,
 )
 from cressey.domain.policy import Policy, Response, ToolRule
-from cressey.domain.runs import Risk, Run, Shadow, Step
+from cressey.domain.runs import Legs, Risk, Run, Shadow, Step
 from cressey.judge import Answer, Judge, NotRecorded, top, yes
 from cressey.scan.secrets import fingerprint, redact, scan
+from cressey.store.runs import Runs
 
 log = logging.getLogger(__name__)
 
@@ -127,6 +128,17 @@ def _text(result: ToolResult) -> str:
     if structured is not None and not _mirrors(texts, structured):
         lines.append(json.dumps(structured, ensure_ascii=False))
     return "\n".join(lines)
+
+
+def act_on_pressure(runs: Runs, run: Run, step: Step, legs: Legs) -> None:
+    """Without a human, once each: pressure sends the way out with this call's result;
+    pressure and opportunity drop the key to read-only for destructive calls."""
+    if legs.pressure.confirmed and run.way_out_step is None:
+        run.way_out_step = step.n
+        runs.log_step(run, step, "way_out")
+    if read_only(legs) and run.read_only_step is None:
+        run.read_only_step = step.n
+        runs.log_step(run, step, "read_only")
 
 
 def _ms_since(start: float) -> float:
@@ -316,7 +328,7 @@ class Guard(Middleware):
             self._shadow_later(run, step, floor)
             # The Observateur run and the floor-alone ablation show what happens without it.
             if self.triangle_holds and run.kind != "control":
-                self.runs.act_on_pressure(run, step, triangle)
+                act_on_pressure(self.runs, run, step, triangle)
             # A trap key used again only to read opens no second incident: one per key.
             if (
                 reason

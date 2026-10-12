@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cressey.core.eventlog import Event, EventLog, _hash, verify
+from cressey.store.eventlog import Event, EventLog, _hash, verify
 
 
 def _log(n: int, path: Path | None = None) -> EventLog:

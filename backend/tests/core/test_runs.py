@@ -3,10 +3,11 @@ import asyncio
 import pytest
 from pydantic import JsonValue
 
-from cressey.core.eventlog import EventLog
-from cressey.core.runs import Runs
+from cressey.core.proxy import act_on_pressure
 from cressey.domain.policy import Thresholds
 from cressey.domain.runs import Leg, Legs, Message, Run, RunIn, Shadow, Step, TextIn
+from cressey.store.eventlog import EventLog
+from cressey.store.runs import Runs
 
 ON = Leg(score=1, confirmed=True, facts=[])
 OFF = Leg(score=0, confirmed=False, facts=[])
@@ -21,7 +22,7 @@ def test_acting_on_pressure_is_logged_once_each():
     for n, legs in enumerate([pressure, with_key, with_key], start=1):
         args: dict[str, JsonValue] = {"path": f"f{n}.md"}
         step = runs.add_step(run, "read_file", args, str(args), "read", None)
-        runs.act_on_pressure(run, step, legs)
+        act_on_pressure(runs, run, step, legs)
     acted = [
         (e.kind, e.data["n"])
         for e in runs.log.events

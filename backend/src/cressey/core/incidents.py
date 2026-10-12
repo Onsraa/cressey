@@ -8,7 +8,6 @@ from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from cressey.core.runs import Runs
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.incidents import (
     Fix,
@@ -23,6 +22,7 @@ from cressey.domain.policy import Fleet
 from cressey.domain.runs import Mandate, Preflight, Run, Step
 from cressey.scan.secrets import redact
 from cressey.scan.trace import strings, trace
+from cressey.store.runs import Runs
 
 log = logging.getLogger(__name__)
 ORDER = {"critique": 0, "haute": 1}
