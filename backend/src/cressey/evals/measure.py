@@ -3,7 +3,7 @@ report check, calibrated on labelled synthetic runs, plus an attack on the judge
 per-call latency and cost.
 
 We measure through Cressey's own state builders, so we measure what Cressey actually
-sends: runs are built with `Runs`, scored with `core.triangle.legs` and `report_check`.
+sends: runs are built with `Runs`, scored with `engine.triangle.legs` and `report_check`.
 The labelled sets are ours (`data/eval/decision-writes.json`, `decision-reports.json`);
 we wrote the labels.
 
@@ -604,7 +604,7 @@ async def measure(offline: bool, probe_n: int = 12) -> dict[str, object]:
         "decision_model": s.decision_model,
         "mode": "offline (fake judge)" if offline else "live",
         "price_per_million_input_tokens_usd": PRICE_PER_MTOK,
-        "note": "Labels are ours; sets in decision-writes.json and decision-reports.json. Scores from core.triangle, so they are what Cressey sends.",
+        "note": "Labels are ours; sets in decision-writes.json and decision-reports.json. Scores from engine.triangle, so they are what Cressey sends.",
         "summary": _summary(write_cal, report_cal, len(judge.calls)),
         "write_judgment": {
             "calibration": write_cal,
@@ -661,7 +661,7 @@ class PreflightReport(TypedDict):
 
 
 async def measure_preflight(judge: MeasuringJudge | FakeJudge) -> PreflightReport:
-    """The pre-run assessment through core.preflight.assess_for, so it is what Cressey sends:
+    """The pre-run assessment through engine.preflight.assess_for, so it is what Cressey sends:
     each factor's answer against our labels (high = yes) at the cut."""
     scored: dict[str, list[tuple[str, str, float]]] = {k: [] for k in QUESTIONS}
     unanswered: list[str] = []

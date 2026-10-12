@@ -9,7 +9,7 @@ import { callText } from "./run";
 import { Code, Labeled } from "./ui";
 
 const WAY_OUT = "Declaring the task impossible is an accepted answer.";
-// The backend (core/draft.py) caps the message at 500 characters, after finish(): it adds a
+// The backend (engine/agent_text.py) caps the message at 500 characters, after finish(): it adds a
 // space and the way-out sentence unless the text already ends with it.
 export const reasonMax = (reason: string) =>
 	reason.endsWith(WAY_OUT) ? 500 : 500 - WAY_OUT.length - 1;
