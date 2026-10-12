@@ -553,6 +553,7 @@ REVIEW_ALL = {
     "trap_key": "review",
     "trap_key_read": "alert",  # a decoy key that only reads is flagged, not held
     "irreversible": "review",
+    "production": "review",
     "triangle": "review",
     "fleet": "alert",
 }
@@ -696,6 +697,33 @@ async def test_on_alert_the_triangle_lets_the_write_through_with_its_incident(tm
         [incident] = (await api(base, "GET", "/api/incidents")).json()
     assert not r.is_error and page[-1]["status"] == "alerted"
     assert (incident["severity"], incident["decision"]) == ("haute", "alerted")
+
+
+class WeakensInProductionJudge(WeakensTestsJudge):
+    """Also finds that a write into tests/ changes production."""
+
+    async def answers(self, state: dict, questions: Mapping) -> dict | None:
+        if "production" in questions:
+            prod = 0.9 if "tests/" in state["current_step"]["args"] else 0.0
+            return {"irreversible": 0.0, "production": prod}
+        return await super().answers(state, questions)
+
+
+async def test_a_check_on_alert_never_lifts_the_triangles_hold(tmp_path):
+    """Jev's production label and the triangle fire on one write: the stricter response."""
+    from tests.server import serving
+
+    with serving(tmp_path, hold_timeout=0.3, judge=WeakensInProductionJudge()) as base:
+        await responses(base, production="alert")
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            for _ in range(2):  # two failed runs: pressure
+                await a.call_tool("run_tests", {}, raise_on_error=False)
+            skip = {"path": "tests/test_install.py", "content": "# disabled"}
+            r = await a.call_tool("write_file", skip, raise_on_error=False)
+        page = await steps(base, run)
+    assert r.is_error and r.content[0].text.startswith("Cressey: action held.")
+    assert page[-1]["reason"] == "Jev: changes production, 0.90"
 
 
 class GatedJudge:

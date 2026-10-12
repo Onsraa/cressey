@@ -865,6 +865,11 @@ export interface components {
 			 */
 			irreversible: "alert" | "review" | "stop";
 			/**
+			 * Production
+			 * @default review
+			 */
+			production: ("alert" | "review" | "stop") | "off";
+			/**
 			 * Triangle
 			 * @default review
 			 * @enum {string}

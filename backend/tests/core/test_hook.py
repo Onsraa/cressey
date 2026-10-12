@@ -546,13 +546,14 @@ async def test_claude_codes_own_tools_pass_and_a_tool_nobody_labelled_is_held(
 
 class FloorJudge:
     """Labels a tool by its name from `kinds` (name -> probabilities; missing: no answer) and
-    a write by its arguments from `irreversible` (substring -> probability); every other
-    question gets a plain no. Keeps the states the floor's question and the write judgment
-    were asked about."""
+    a write by its arguments from `irreversible` and `production` (substring -> probability);
+    every other question gets a plain no. Keeps the states the floor's questions and the
+    write judgment were asked about."""
 
     def __init__(self) -> None:
         self.kinds: dict[str, dict[str, float]] = {}
         self.irreversible: dict[str, float] = {}
+        self.production: dict[str, float] = {}
         self.labelled: list[str] = []
         self.floor_states: list[dict] = []
         self.judgment_states: list[dict] = []
@@ -565,8 +566,13 @@ class FloorJudge:
         if "irreversible" in questions:
             self.floor_states.append(state)
             args = state["current_step"]["args"]
-            hits = [p for part, p in self.irreversible.items() if part in args]
-            return {"irreversible": max(hits, default=0.0)}
+            return {
+                label: max((p for part, p in by.items() if part in args), default=0.0)
+                for label, by in (
+                    ("irreversible", self.irreversible),
+                    ("production", self.production),
+                )
+            }
         if "weakens" in questions:
             self.judgment_states.append(state)
         return {
@@ -686,6 +692,46 @@ async def test_on_alert_an_irreversible_write_goes_through_with_its_incident(
     [step] = (await run_of(base, run))["steps"]
     [incident] = (await api(base, "GET", "/api/incidents")).json()
     assert (step["status"], incident["decision"]) == ("alerted", "alerted")
+
+
+async def test_a_write_that_changes_production_is_held_unless_that_check_is_off(
+    floor_judged,
+):
+    base, judge = floor_judged
+    judge.production = {"--prod": 0.93}
+    run = await new_run(base)
+    deploy = {"command": "vercel deploy --prod --yes"}
+    out = await pre(base, run["key"], "Bash", deploy, "toolu_1")
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    now = (await api(base, "GET", "/api/policy/responses")).json()
+    off = {**now, "production": "off"}
+    assert (
+        await api(base, "PUT", "/api/policy/responses", json=off)
+    ).status_code == 200
+    assert await pre(base, run["key"], "Bash", deploy, "toolu_2") == {}
+    steps = (await run_of(base, run))["steps"]
+    assert [s["reason"] for s in steps] == ["Jev: changes production, 0.93", None]
+    assert len(judge.floor_states) == 2  # off or not, both labels come in one call
+
+
+async def test_a_write_both_labels_flag_gets_the_stricter_response(floor_judged):
+    base, judge = floor_judged
+    judge.irreversible = {"dropdb": 0.9}
+    judge.production = {"prod-db": 0.95}
+    now = (await api(base, "GET", "/api/policy/responses")).json()
+    changed = {**now, "irreversible": "alert", "production": "stop"}
+    assert (
+        await api(base, "PUT", "/api/policy/responses", json=changed)
+    ).status_code == 200
+    run = await new_run(base)
+    drop = {"command": "dropdb -h prod-db app"}
+    out = await pre(base, run["key"], "Bash", drop, "toolu_1")
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    [step] = (await run_of(base, run))["steps"]
+    assert (step["status"], step["reason"]) == (
+        "denied",
+        "Jev: irreversible beyond the mandate, 0.90; Jev: changes production, 0.95",
+    )
 
 
 async def test_jevs_tool_answer_must_name_a_kind():

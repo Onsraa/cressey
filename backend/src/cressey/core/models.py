@@ -123,6 +123,8 @@ class Responses(BaseModel):
     trap_key: Response = "review"
     trap_key_read: Response = "alert"  # a decoy key in a call that only reads
     irreversible: Response = "review"  # Jev: a write that can't be undone
+    # Jev: a write that changes production; off: not held for that alone.
+    production: Response | Literal["off"] = "review"
     triangle: Response = "review"  # the judgment, with pressure or opportunity
     fleet: Literal["alert", "stop"] = (
         "alert"  # stop: once the signal is up, refuse its target
@@ -135,6 +137,7 @@ class Floor(BaseModel):
 
     read: float = 0.95  # a tool missing from `tools` is a read from this probability
     irreversible: float = 0.5  # a write is held from this probability
+    production: float = 0.7  # a write changes production from this probability
 
 
 class Policy(BaseModel):

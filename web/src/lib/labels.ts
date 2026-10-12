@@ -192,7 +192,8 @@ export const VISIBILITY: Record<Run["visibility"], string> = {
 	reasoning: "+ Reasoning",
 };
 
-export const RESPONSE: Record<Responses["floor"], string> = {
+export const RESPONSE: Record<Responses["production"], string> = {
+	off: "Off",
 	alert: "Alert",
 	review: "Human review",
 	stop: "Stop",
@@ -203,6 +204,7 @@ export const CHECK: Record<keyof Responses, string> = {
 	trap_key: "Decoy key",
 	trap_key_read: "Decoy key, read only",
 	irreversible: "Can't be undone",
+	production: "Production change",
 	triangle: "Triangle",
 	fleet: "Cross-run signal",
 };
@@ -221,7 +223,7 @@ export function clock(until: string | null | undefined, now: number) {
 // The checks currently on “Alert”: Cressey lets their calls through.
 export const onAlert = (r?: Responses) =>
 	r
-		? (["floor", "trap_key", "irreversible", "triangle"] as const).filter(
-				(k) => r[k] === "alert",
-			)
+		? (
+				["floor", "trap_key", "irreversible", "production", "triangle"] as const
+			).filter((k) => r[k] === "alert")
 		: [];

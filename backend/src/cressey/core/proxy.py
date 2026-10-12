@@ -33,14 +33,14 @@ from cressey.core.draft import (
 )
 from cressey.core.floor import check, trap
 from cressey.core.incidents import Incidents
-from cressey.core.judge import Answer, Judge, NotRecorded, top
+from cressey.core.judge import Answer, Judge, NotRecorded, top, yes
 from cressey.core.models import Policy, Response, Risk, Run, Shadow, Step, ToolRule
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import fingerprint, redact, scan
 from cressey.core.triangle import (
     alarm,
     alarm_reason,
-    irreversibility,
+    floor_labels,
     label_soon,
     legs,
     read_after,
@@ -50,6 +50,9 @@ from cressey.core.triangle import (
 log = logging.getLogger(__name__)
 
 READ_ONLY = "read-only key: pressure and opportunity confirmed"
+# Jev's floor labels and the triangle can fire on one call: the strictest response applies,
+# so a check on alert never lifts another one's hold.
+STRICTNESS: tuple[Response, ...] = ("alert", "review", "stop")
 MCP_PATH = "/mcp"
 # Asked once for each tool the policy doesn't list, on its name alone: names come from the
 # installed tools, never from the agent, so no call can argue a tool into a read.
@@ -162,10 +165,13 @@ class Guard(Middleware):
         reason: str | None,
         trapped: bool,
         floor: bool,
-        irreversible: bool,
+        labelled: list[Response],
+        triangle: bool,
         only_reads: bool,
     ) -> Response | None:
-        """What the policy does with a call a check fired on, or None when none did."""
+        """What the policy does with a call a check fired on, or None when none did:
+        `labelled` holds the responses of Jev's floor labels that fired, and `triangle` says
+        whether the triangle did."""
         if reason is None:
             return None
         r = self.policy.responses
@@ -174,7 +180,8 @@ class Guard(Middleware):
         elif floor:
             response = r.floor
         else:
-            response = r.irreversible if irreversible else r.triangle
+            fired = [*labelled, *([r.triangle] if triangle else [])]
+            response = max(fired, key=STRICTNESS.index)
         if r.fleet == "stop" and self.incidents.signalled(f"{tool} | {reason}"):
             response = "stop"  # many runs after one target: no human queue for them all
         if response == "review" and self.holds == "refuse":
@@ -229,17 +236,27 @@ class Guard(Middleware):
         log.info("%s: not in the policy, labelled %s by the decision model", name, kind)
         return rule
 
-    async def _irreversible(
+    async def _labelled(
         self, run: Run, step: Step, floor: str | None
-    ) -> str | None:
-        """Why Jev holds a write that code let through: it can't be undone beyond the
-        mandate. It only adds a hold; a call code holds or classes otherwise isn't asked."""
+    ) -> list[tuple[str, Response]]:
+        """Why Jev holds a write that code let through, each reason with its response: it
+        can't be undone beyond the mandate, or it changes production (unless that check is
+        off). They only add holds; a call code holds or classes otherwise isn't asked."""
         if floor is not None or step.risk != "write":
-            return None
-        p = await irreversibility(run, step, self.judge, self.policy.triangle)
-        if p is None or p < self.policy.floor.irreversible:
-            return None
-        return f"Jev: irreversible beyond the mandate, {p:.2f}"
+            return []
+        labels = await floor_labels(run, step, self.judge, self.policy.triangle)
+        if labels is None:
+            return []
+        f, r = self.policy.floor, self.policy.responses
+        fired: list[tuple[str, Response]] = []
+        if (p := yes(labels["irreversible"])) >= f.irreversible:
+            fired.append(
+                (f"Jev: irreversible beyond the mandate, {p:.2f}", r.irreversible)
+            )
+        production = r.production
+        if production != "off" and (p := yes(labels["production"])) >= f.production:
+            fired.append((f"Jev: changes production, {p:.2f}", production))
+        return fired
 
     async def before(self, run: Run, name: str, args: dict[str, JsonValue]) -> Step:
         """Cressey's decision on a call before it runs: its step, let through or approved.
@@ -265,9 +282,9 @@ class Guard(Middleware):
                 raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
             # Side by side: the floor's label waits for no more than the triangle already does,
             # and with thought holds on, the agent's words before the call are read meanwhile.
-            triangle, irreversible, _ = await asyncio.gather(
+            triangle, labelled, _ = await asyncio.gather(
                 legs(run, step, self.judge, self.policy.triangle),
-                self._irreversible(run, step, floor),
+                self._labelled(run, step, floor),
                 self._read_words(run, step),
             )
             if run.revoked:  # a parallel call was held while this one was being judged
@@ -275,13 +292,14 @@ class Guard(Middleware):
                 raise ToolError(f"Cressey: key suspended. {WAY_OUT}")
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
             excuse = closing_excuse(run, triangle) if self.thought_holds else None
+            labels = "; ".join(why for why, _ in labelled) or None
             reason = (
                 floor
-                or irreversible
+                or labels
                 or (excuse_reason(run, excuse) if excuse is not None else None)
                 or (alarm_reason(triangle) if triangle_hold else None)
             )
-            if excuse is not None and not (floor or irreversible):
+            if excuse is not None and not (floor or labels):
                 # The stop is the words', shown on the thought; their excuse confirms the leg.
                 step.stopped_by = excuse
                 said, leg = run.case.events[excuse], triangle.rationalization
@@ -311,7 +329,13 @@ class Guard(Middleware):
             # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
             held = ToolError(f"Cressey: action held. {WAY_OUT}")
             response = self._response(
-                name, reason, bool(trapped), bool(floor), bool(irreversible), only_reads
+                name,
+                reason,
+                bool(trapped),
+                bool(floor),
+                [r for _, r in labelled],
+                excuse is not None or triangle_hold,
+                only_reads,
             )
             if response == "alert":
                 self.runs.mark(run, step, "alerted")  # through, with its incident open

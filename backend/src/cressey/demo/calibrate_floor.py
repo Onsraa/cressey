@@ -1,5 +1,5 @@
-"""Calibrate the safety floor's two labels from the decision model (Jev) on labelled sets,
-through the very questions Cressey asks (`ask_tool_kind`, `irreversibility`), so a new model
+"""Calibrate the safety floor's labels from the decision model (Jev) on labelled sets,
+through the very questions Cressey asks (`ask_tool_kind`, `floor_labels`), so a new model
 gets measured thresholds rather than guesses. The sets are ours (`data/eval/floor-labels.json`).
 Only what Cressey would ask is measured: a tool the policy lists gets no label, and an action
 that code already classes or holds isn't asked.
@@ -15,10 +15,10 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue
 
 from cressey.core.floor import check
-from cressey.core.judge import JevJudge, Judge, top
+from cressey.core.judge import JevJudge, Judge, top, yes
 from cressey.core.models import Mandate, Policy, Run, Step, ToolRule
 from cressey.core.proxy import ask_tool_kind, load_policy
-from cressey.core.triangle import irreversibility
+from cressey.core.triangle import floor_labels
 from cressey.guide.corpus import DATA
 from cressey.settings import Settings
 
@@ -35,6 +35,8 @@ class ToolCase(BaseModel):
 
 class ActionCase(BaseModel):
     irreversible: bool
+    # None: the call alone doesn't say which environment it changes.
+    production: bool | None
     task: str
     mandate: Mandate = Mandate()
     tool: str
@@ -52,9 +54,10 @@ class ToolRow(ToolCase):
 
 
 class ActionRow(ActionCase):
-    p: list[
-        float | None
-    ]  # Jev's probability that the action can't be undone, per answer
+    # Jev's probabilities, per answer, that the action can't be undone and that it changes
+    # production.
+    p_irreversible: list[float | None]
+    p_production: list[float | None]
 
 
 class CodeDecides(BaseModel):
@@ -73,10 +76,10 @@ class ReadFloor(BaseModel):
 
 class Held(BaseModel):
     threshold: float
-    held: int
-    irreversible: int
-    false_holds: int
-    undoable: int
+    held: int  # actions to hold, held at every answer
+    to_hold: int
+    false_holds: int  # actions to let through, held at any answer
+    to_pass: int
 
 
 class Calibration(BaseModel):
@@ -89,6 +92,7 @@ class Calibration(BaseModel):
     read_floor: list[ReadFloor]
     actions: list[ActionRow]
     irreversible: list[Held]
+    production: list[Held]
 
 
 def action_step(case: ActionCase) -> tuple[Run, Step]:
@@ -136,17 +140,28 @@ def read_floor(rows: list[ToolRow], floor: float) -> ReadFloor:
     )
 
 
-def held(rows: list[ActionRow], threshold: float) -> Held:
-    """Irreversible actions held, and undoable ones held by mistake, from this threshold."""
-    sure = [r for r in rows if r.irreversible]
-    undoable = [r for r in rows if not r.irreversible]
+def held(cases: list[tuple[bool | None, list[float | None]]], threshold: float) -> Held:
+    """From this threshold, the actions to hold that are held, and those to let through that
+    are held by mistake, from (truth, answers) pairs. A case with no truth counts in neither."""
+    hold = [p for truth, p in cases if truth is True]
+    let = [p for truth, p in cases if truth is False]
     return Held(
         threshold=threshold,
-        held=sum(all(_at_least(r.p, threshold)) for r in sure),
-        irreversible=len(sure),
-        false_holds=sum(any(_at_least(r.p, threshold)) for r in undoable),
-        undoable=len(undoable),
+        held=sum(all(_at_least(p, threshold)) for p in hold),
+        to_hold=len(hold),
+        false_holds=sum(any(_at_least(p, threshold)) for p in let),
+        to_pass=len(let),
     )
+
+
+def _irreversible(
+    rows: list[ActionRow],
+) -> list[tuple[bool | None, list[float | None]]]:
+    return [(r.irreversible, r.p_irreversible) for r in rows]
+
+
+def _production(rows: list[ActionRow]) -> list[tuple[bool | None, list[float | None]]]:
+    return [(r.production, r.p_production) for r in rows]
 
 
 async def calibrate(
@@ -162,12 +177,15 @@ async def calibrate(
             return None, None
         return answer.get("read", 0.0), top(answer)
 
-    async def irreversible(case: ActionCase) -> float | None:
+    async def labelled(case: ActionCase) -> tuple[float | None, float | None]:
         run, step = action_step(case)
-        return await irreversibility(run, step, judge, policy.triangle)
+        got = await floor_labels(run, step, judge, policy.triangle)
+        if got is None:
+            return None, None
+        return yes(got["irreversible"]), yes(got["production"])
 
     kinds = await asyncio.gather(*(kind(c) for c in tools for _ in range(REPEATS)))
-    ps = await asyncio.gather(*(irreversible(c) for c in asked for _ in range(REPEATS)))
+    ps = await asyncio.gather(*(labelled(c) for c in asked for _ in range(REPEATS)))
     tool_rows = [
         ToolRow(
             **c.model_dump(),
@@ -177,7 +195,11 @@ async def calibrate(
         for i, c in enumerate(tools)
     ]
     action_rows = [
-        ActionRow(**c.model_dump(), p=ps[i * REPEATS : (i + 1) * REPEATS])
+        ActionRow(
+            **c.model_dump(),
+            p_irreversible=[a for a, _ in ps[i * REPEATS : (i + 1) * REPEATS]],
+            p_production=[b for _, b in ps[i * REPEATS : (i + 1) * REPEATS]],
+        )
         for i, c in enumerate(asked)
     ]
     return Calibration(
@@ -193,20 +215,26 @@ async def calibrate(
         tools=tool_rows,
         read_floor=[read_floor(tool_rows, x) for x in CANDIDATES],
         actions=action_rows,
-        irreversible=[held(action_rows, x) for x in CANDIDATES],
+        irreversible=[held(_irreversible(action_rows), x) for x in CANDIDATES],
+        production=[held(_production(action_rows), x) for x in CANDIDATES],
     )
 
 
 def summary(report: Calibration, policy: Policy) -> str:
     f = read_floor(report.tools, policy.floor.read)
-    h = held(report.actions, policy.floor.irreversible)
+    i = held(_irreversible(report.actions), policy.floor.irreversible)
+    p = held(_production(report.actions), policy.floor.production)
+    unnamed = sum(r.production is None for r in report.actions)
     return (
         f"{report.model}, each case asked {report.repeats} times\n"
         f"tool kinds, a read from {f.floor}: {f.reads_kept}/{f.reads} reads kept, "
         f"{f.others_as_read}/{f.others} other tools passed as a read\n"
-        f"irreversible from {h.threshold}: {h.held}/{h.irreversible} held, "
-        f"{h.false_holds}/{h.undoable} undoable actions held by mistake "
-        f"({len(report.code_decides)} actions left to code)"
+        f"irreversible from {i.threshold}: {i.held}/{i.to_hold} held, "
+        f"{i.false_holds}/{i.to_pass} undoable actions held by mistake "
+        f"({len(report.code_decides)} actions left to code)\n"
+        f"changes production from {p.threshold}: {p.held}/{p.to_hold} held, "
+        f"{p.false_holds}/{p.to_pass} other actions held by mistake "
+        f"({unnamed} with no environment named, in neither count)"
     )
 
 

@@ -5,13 +5,16 @@ import type { Responses } from "@/api/types";
 import { Hash, SlidersHorizontal } from "@/components/icons";
 import { CHECK, RESPONSE } from "@/lib/labels";
 
-type Response = Responses["floor"];
+// Every response: only the production check can be switched off.
+type Response = Responses["production"];
 
-const ALL: readonly Response[] = ["alert", "review", "stop"];
+const ALL: readonly Responses["floor"][] = ["alert", "review", "stop"];
 const NO_REVIEW: readonly Responses["fleet"][] = ["alert", "stop"];
+const SWITCH: readonly Response[] = ["off", "alert", "review", "stop"];
 
 // What each response does, as the design's POLOPT.
 const EFFECT: Record<Response, string> = {
+	off: "not held for this alone: the other checks still apply",
 	alert: "the call goes through and an incident opens",
 	review: "the call waits for a human",
 	stop: "refused outright, run key suspended",
@@ -25,6 +28,7 @@ const WHAT: Record<keyof Responses, string> = {
 	trap_key: "a decoy key was used",
 	trap_key_read: "a decoy key was used in a call that only reads",
 	irreversible: "Jev: a write that can't be undone, beyond the mandate",
+	production: "Jev: a write that deploys to or changes production",
 	triangle: "pressure + opportunity + rationalization",
 	fleet: "3 runs held on the same target within 15 min",
 };
@@ -121,6 +125,12 @@ export function ResponsesPanel() {
 							value={r.irreversible}
 							options={ALL}
 							pick={(irreversible) => save({ ...r, irreversible })}
+						/>
+						<Row
+							check="production"
+							value={r.production}
+							options={SWITCH}
+							pick={(production) => save({ ...r, production })}
 						/>
 						<Row
 							check="triangle"
