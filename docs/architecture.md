@@ -4,6 +4,7 @@
 | Component | Path | Status |
 |---|---|---|
 | App factory, settings, health, SPA fallback | `backend/src/cressey/app.py`, `settings.py` | built |
+| Layers: the types (`domain/`), the model clients and the one record-and-replay cache (`llm/`), and the doubles the tests and the evals share (`testing.py`). Imports point one way: `domain` imports nothing of ours, `llm` the types, `core` and `guide` both but never each other; only the app wires them (`tests/test_layers.py`) | `backend/src/cressey/domain/`, `llm/`, `testing.py` | built 10-12 |
 | Guide pipeline: corpus, retrieval, adapters, pipeline, store, API, eval, cache | `backend/src/cressey/guide/` | built |
 | Core loop, piece 1: MCP proxy, safety floor, hold and revoke, runs API | `backend/src/cressey/core/` (`proxy.py`, `floor.py`, `runs.py`, `api.py`), `backend/data/policy.yaml` | built |
 | Core loop, building blocks: source tracing, hash-chained event log | `core/trace.py`, `core/eventlog.py` | built, not wired in yet |
@@ -11,7 +12,7 @@
 | Core loop, piece 3: incidents with source tracing, guides per owner written in the background | `core/incidents.py` | built |
 | Fixes and « Rejouer ×5 »: a fix for each leg Cressey can change itself, approved by a human, then the incident's variants and the normal sessions replayed on a fresh Cressey with the approved fixes (details under « Incidents ») | `core/incidents.py`, `demo/replay.py`, `core/api.py`, `demo/agent.py` | built |
 | Core loop, next: the full-run review on hold | — | to build |
-| Decision model switch to Strands Decider 2B: reversed. The triangle keeps Jev (S9: it separates no subtle case), and so does the guides' re-ranking (Strands Decider 3/8 guides, Cohere Rerank 3.5 on Bedrock 6/8, Jev 8/8: `evaluation.md`). One setting switches each: `CRESSEY_DECIDER_URL`, `CRESSEY_RERANKER` | `core/judge.py`, `guide/clients.py` | decided and built 10-10 |
+| Decision model switch to Strands Decider 2B: reversed. The triangle keeps Jev (S9: it separates no subtle case), and so does the guides' re-ranking (Strands Decider 3/8 guides, Cohere Rerank 3.5 on Bedrock 6/8, Jev 8/8: `evaluation.md`). One setting switches each: `CRESSEY_DECIDER_URL`, `CRESSEY_RERANKER` | `core/judge.py`, `llm/clients.py` | decided and built 10-10 |
 | Acting on pressure: pressure puts the way out in the next tool result; pressure and opportunity together drop the run key to read-only for destructive calls | `core/proxy.py`, `core/runs.py`, `core/triangle.py` | built |
 | Trap keys: decoy keys in the workspace; a use is held when it changes something, flagged when it only reads, and traced to where it was read | `core/floor.py` (`trap`), `decoys` in `backend/data/policy.yaml`, `demo/tools.py` (`.env.admin`) | built 10-10 |
 | Demo tools (synthetic): a workspace holding a fake production key and a trap key, a SQLite database of 5 fake users | `backend/src/cressey/demo/tools.py` | built |
@@ -94,7 +95,7 @@ A run key never opens the control plane. With no `CRESSEY_ADMIN_TOKEN`, each sta
 | GET | `/api/status` | — | 200 `{"mode": "guard", "model_mode", "mcp_path", "log": {"hash", "count", "intact"}}`. `intact`: the log checked at start against the head the last start anchored, then extended by its own appends |
 | any | `/mcp` | MCP over streamable HTTP, `Authorization: Bearer <run key>` | the proxied tools |
 
-Types are in `backend/src/cressey/guide/models.py`. The web app uses the generated `web/src/api/schema.d.ts`.
+Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/src/api/schema.d.ts`.
 
 ## Core loop, piece 1
 - **Check:** each call is classified with the policy (`backend/data/policy.yaml`: `read`, `write`, `destructive`, `sql`, `egress`) and checked against the run's mandate (`core/floor.py`).
