@@ -335,6 +335,7 @@ The floor's egress rule is recipient-based; it never inspects content. So the fi
 
 - 500-step run: per-call `check_ms` 8.4 → 10.0 ms (×1.2 over the run; per call is O(steps-so-far)); peak tracemalloc 7.3 MB (~15 KB/step, no leak).
 - Secret scan 64 KB: 17 ms capped vs 19 ms full. Trace over 200 reads: 3.4 ms.
+- Soak, 10-12 (`stress.py`, `soak`: 10,000 hooked calls in 100 runs, each run ended by its session's end, in about 21 min): **14.2 KB kept per call, whether each call returned 2 KB or 20 KB**, since an ended run drops what its calls returned. The dashboard's every-second poll is 12.3 KB for the 100 runs' summaries, plus 77 KB for the one run it shows; it used to serve every run with its steps, about 7.7 MB here. What stays (the steps, their labels, the event log kept in memory) still grows until runs are forgotten.
 
 ### Crafted input to the secret scan (measured after F4 and F5, 10-10)
 The near-linear cost above holds for benign lines only. On one line of "password" repeated, detect-secrets' regexes are quadratic, and they hold the GIL, so a scan in a thread still stalls the event loop. "sk-", "eyJ" and "://a" are superlinear too.
