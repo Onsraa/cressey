@@ -191,6 +191,10 @@ class Ledger:
         then waits for one judgment, not for every earlier step."""
         return self._reading.once((run.id, i), lambda: label_step(run, i, self.judge))
 
+    async def settled(self, run: Run) -> None:
+        """The reads in flight on this run are done."""
+        await self._reading.settled(run.id)
+
     async def read(self, run: Run, steps: Sequence[Step]) -> None:
         """Every one of these steps read once: the reads in flight are awaited, not repeated.
         A call still running is left for when its result is in (`label_soon` then)."""

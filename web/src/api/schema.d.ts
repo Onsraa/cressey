@@ -1009,6 +1009,27 @@ export interface components {
 			 */
 			kind: "live" | "replay" | "control";
 		};
+		/**
+		 * RunSummary
+		 * @description A run as the dashboard polls it every second; the run itself is served on demand.
+		 */
+		RunSummary: {
+			/** Id */
+			id: string;
+			/** Task */
+			task: string;
+			/**
+			 * Kind
+			 * @enum {string}
+			 */
+			kind: "live" | "replay" | "control";
+			/** Via */
+			via: ("mcp" | "hook") | null;
+			/** Started At */
+			started_at: string;
+			/** Calls */
+			calls: number;
+		};
 		/** Secret */
 		Secret: {
 			/** Kind */
@@ -1401,7 +1422,7 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					"application/json": components["schemas"]["Run"][];
+					"application/json": components["schemas"]["RunSummary"][];
 				};
 			};
 			/** @description Validation Error */

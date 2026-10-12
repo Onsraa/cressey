@@ -402,7 +402,8 @@ async def test_each_claude_code_session_on_a_key_gets_its_own_run(served):
     # After /clear, or from a second window: another session id on the same key.
     for session, text in [("s1", "first"), ("s2", "second"), ("s1", "third")]:
         await hook(served, key, session_event("UserPromptSubmit", session, prompt=text))
-    runs = (await api(served, "GET", "/api/runs")).json()
+    listed = (await api(served, "GET", "/api/runs")).json()
+    runs = [await run_of(served, r) for r in listed]
     mine = [r for r in runs if r["task"] == TASK and r["messages"]]
     assert sorted([m["text"] for m in r["messages"]] for r in mine) == [
         ["first", "third"],

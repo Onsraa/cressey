@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useLive } from "@/api/live";
+import { useLive, useRun } from "@/api/live";
 import type { Incident, StepStatus } from "@/api/types";
 import {
 	BookOpen,
@@ -39,12 +39,14 @@ export function Detail({ incident: i }: { incident: Incident }) {
 	const { runs, focusMode } = useLive();
 	const [tab, setTab] = useState<Tab>("overview");
 	const body = useRef<HTMLDivElement>(null);
-	const run = runs.find((r) => r.id === i.run_id);
+	const run = useRun(i.run_id);
+	const task = runs.find((r) => r.id === i.run_id)?.task;
 	// The same task in « Observer » mode: logged, never held.
 	const control = runs
-		.filter((r) => r.kind === "control" && r.task === run?.task)
+		.filter((r) => r.kind === "control" && r.task === task)
 		.toSorted((a, b) => a.started_at.localeCompare(b.started_at))
 		.at(-1);
+	const observed = useRun(control?.id);
 	const tabs = TABS.filter((t) => t.k !== "observer" || control);
 	const shown = tabs.some((t) => t.k === tab) ? tab : "overview";
 	// Another tab or another incident: its blocks rise in.
@@ -145,7 +147,7 @@ export function Detail({ incident: i }: { incident: Incident }) {
 				{shown === "overview" && <Overview incident={i} run={run} />}
 				{shown === "guides" && <Guides incident={i} />}
 				{shown === "fixes" && <Fixes incident={i} />}
-				{shown === "observer" && control && <Observer run={control} />}
+				{shown === "observer" && observed && <Observer run={observed} />}
 			</div>
 		</>
 	);

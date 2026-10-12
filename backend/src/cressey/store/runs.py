@@ -280,8 +280,7 @@ class Runs:
         doesn't report. It starts a new turn: the count of refused calls resets and a
         suspended key unlocks, the user being back, but the key waits while a call is still
         held (see `unlock`)."""
-        for key in [k for k in self._streaming if k[0] == run.id]:
-            self._streaming.pop(key)[0].streaming = False
+        self._close_streams(run)
         message = Message(
             after=len(run.steps), text=redact(text, run.known), role="user"
         )
@@ -293,6 +292,10 @@ class Runs:
         if run.revoked or run.refused:
             self.unlock(run)
         return message
+
+    def _close_streams(self, run: Run) -> None:
+        for key in [k for k in self._streaming if k[0] == run.id]:
+            self._streaming.pop(key)[0].streaming = False
 
     def unlock(self, run: Run) -> None:
         """Reset the count of refused calls and give the key back, the user being back or
@@ -322,9 +325,17 @@ class Runs:
         run.turn = "waiting"
 
     def disconnect(self, run: Run) -> None:
-        """The Claude Code session ended (SessionEnd): the run ends with it."""
+        """The Claude Code session ended (SessionEnd): the run ends with it, and so does a
+        message it cut short."""
+        self._close_streams(run)
         run.ended_at = _now().isoformat()
         self.log.append("session", {"run": run.id, "state": "ended"})
+
+    def forget_results(self, steps: list[Step]) -> None:
+        """What these calls returned, dropped from memory once nothing reads it (the log
+        never had it)."""
+        for step in steps:
+            step.result = ""
 
     def route(self, run: Run, via: Literal["mcp", "hook"]) -> None:
         """How this run reached Cressey, for the Run view's badge. Set once, on its first call."""

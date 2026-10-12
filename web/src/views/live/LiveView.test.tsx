@@ -7,6 +7,7 @@ import type {
 	Indicator,
 	Legs,
 	Run,
+	RunSummary,
 	Step,
 	Thread,
 } from "@/api/types";
@@ -154,34 +155,52 @@ const incident: Incident = {
 };
 
 let state: real.Live;
+let detailed: Run[] = []; // what useRun fetches: the runs the poll summarizes
+const summary = (r: Run): RunSummary => ({
+	id: r.id,
+	task: r.task,
+	kind: r.kind,
+	via: r.via ?? null,
+	started_at: r.started_at,
+	calls: r.steps.length,
+});
 const live = (
 	runs: Run[],
 	focus: real.Focus = {},
 	stop_after = 3,
-): real.Live => ({
-	status: {
-		mode: "guard",
-		model_mode: "live",
-		mcp_path: "/mcp",
-		hook_path: "/hook/claude",
-		stop_after,
-		log: { hash: "h", count: 1, intact: true },
-	},
-	runs,
-	holds: [],
-	incidents: [incident],
-	fleet: [],
-	now: NOW,
-	offline: false,
-	locked: false,
-	refresh: () => {},
-	view: "live",
-	focus,
-	go: () => {},
-	focusMode: false,
-	toggleFocus: () => {},
-});
-mock.module("@/api/live", () => ({ ...real, useLive: () => state }));
+): real.Live => {
+	detailed = runs;
+	return {
+		status: {
+			mode: "guard",
+			model_mode: "live",
+			mcp_path: "/mcp",
+			hook_path: "/hook/claude",
+			stop_after,
+			log: { hash: "h", count: 1, intact: true },
+		},
+		runs: runs.map(summary),
+		holds: [],
+		incidents: [incident],
+		fleet: [],
+		now: NOW,
+		offline: false,
+		locked: false,
+		refresh: () => {},
+		view: "live",
+		focus,
+		go: () => {},
+		focusMode: false,
+		toggleFocus: () => {},
+		shown: runs,
+		show: () => () => {},
+	};
+};
+mock.module("@/api/live", () => ({
+	...real,
+	useLive: () => state,
+	useRun: (id?: string) => detailed.find((r) => r.id === id),
+}));
 const { LiveView } = await import("./LiveView");
 const { Hold, ReasonBox, reasonMax } = await import("./Hold");
 const html = () =>
@@ -815,7 +834,7 @@ test("the limit shown is the policy's, not three", () => {
 });
 
 test("a run that ended while stopped reads Ended, with no Unlock", () => {
-	state = live([demo({}, { ...stopped().runs[0], ended_at: at(-1) })]);
+	state = live([demo({}, { ...stopped().shown[0], ended_at: at(-1) })]);
 	const out = html();
 	expect(out).toContain("Ended");
 	expect(out).not.toContain("Stopped");

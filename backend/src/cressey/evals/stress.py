@@ -5,7 +5,7 @@ Models are never called: the judge is a local fake (down, slow or counting), so 
 hits Jev or OpenAI.
 
     uv run python -m cressey.evals.stress            # everything, writes data/stress/results.json
-    uv run python -m cressey.evals.stress --quick    # skip the 50-concurrency efficiency pass
+    uv run python -m cressey.evals.stress --quick    # skip the 50-concurrency pass, soak 2,000 steps
 """
 
 import argparse
@@ -18,6 +18,12 @@ import tracemalloc
 from pathlib import Path
 from typing import Any
 
+import httpx2
+from fastapi import FastAPI
+from pydantic import JsonValue
+
+from cressey.adapters.claude_code import HOOK_PATH
+from cressey.app import create_app
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.policy import Policy, Thresholds, load_policy, load_profile
 from cressey.domain.runs import Mandate, Run, Step
@@ -26,8 +32,19 @@ from cressey.engine.ledger import Ledger
 from cressey.engine.triangle import legs
 from cressey.scan.secrets import SCAN_LIMIT, find_secrets, redact
 from cressey.scan.trace import trace
-from cressey.settings import DATA, DEMO_PROFILE
-from cressey.testing import DownJudge, QuietJudge, agent, api, percentile, serving
+from cressey.settings import DATA, DEMO_PROFILE, Settings
+from cressey.store.runs import Runs
+from cressey.testing import (
+    ADMIN,
+    ADMIN_AUTH,
+    DownJudge,
+    QuietJudge,
+    agent,
+    api,
+    fake_guide,
+    percentile,
+    serving,
+)
 
 RESULTS = DATA / "stress" / "results.json"
 
@@ -513,6 +530,80 @@ async def _run_500(base: str) -> list[float]:
     return check or times
 
 
+def section_soak(steps: int, per_run: int = 100) -> dict:
+    """A long-lived Cressey: `steps` hooked calls in runs of `per_run`, each run ended by its
+    session's end, once with calls returning 2 KB and once 20 KB. The memory kept per step
+    once its run ended, against what each call returned, and the size of the dashboard's
+    every-second poll. In process, so it can wait until what the calls returned is gone."""
+    settings = Settings(
+        _env_file=None, openai_api_key=None, typesafe_api_key=None, admin_token=ADMIN
+    )
+    out = {}
+    for kb in (2, 20):
+        app = create_app(settings, make_guide=fake_guide, judge=QuietJudge())
+        out[f"returning_{kb}kb"] = asyncio.run(_soak(app, steps, per_run, kb))
+    return out
+
+
+async def _soak(app: FastAPI, steps: int, per_run: int, kb: int) -> dict:
+    kept_runs: Runs = app.state.runs
+    runs = steps // per_run
+    warm = max(1, runs // 10)  # the first runs fill what a fresh process allocates once
+    # Long lines: detect-secrets costs about 70 µs a line, which is not what this measures.
+    line = "lorem ipsum dolor sit amet consectetur adipiscing elit " * 8 + "\n"
+    transport = httpx2.ASGITransport(app=app)
+    async with httpx2.AsyncClient(
+        transport=transport, base_url="http://cressey", headers=ADMIN_AUTH
+    ) as h:
+
+        async def session(r: int) -> str:
+            created = (await h.post("/api/runs", json={"task": "soak"})).json()
+            auth = {"Authorization": f"Bearer {created['key']}"}
+
+            async def send(kind: str, **extra: JsonValue) -> None:
+                body = {"hook_event_name": kind, "session_id": f"s{r}", **extra}
+                (await h.post(HOOK_PATH, json=body, headers=auth)).raise_for_status()
+
+            for j in range(per_run):
+                read: dict[str, JsonValue] = {"file_path": f"f{j}.md"}
+                tool: dict[str, JsonValue] = {
+                    "tool_name": "Read",
+                    "tool_use_id": f"t{j}",
+                    "tool_input": read,
+                }
+                returned = f"{r}-{j}\n" + line * (kb * 1024 // len(line))
+                await send("PreToolUse", **tool)
+                await send("PostToolUse", **tool, tool_response=returned)
+            await send("SessionEnd")
+            return created["id"]
+
+        async def dropped() -> None:
+            """Until every ended run's reads are done and what its calls returned is gone."""
+            while any(s.result for run in kept_runs.all() for s in run.steps):
+                await asyncio.sleep(0.05)
+
+        for r in range(warm):
+            await session(r)
+        await dropped()
+        tracemalloc.start()
+        last = ""
+        for r in range(warm, runs):
+            last = await session(r)
+        await asyncio.wait_for(dropped(), 300)
+        kept, _peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        listing = await h.get("/api/runs")
+        page = await h.get(f"/api/runs/{last}")
+    measured = (runs - warm) * per_run
+    return {
+        "steps": runs * per_run,
+        "kept_kb_per_step": round(kept / measured / 1024, 2),
+        "poll_bytes_for_runs": len(listing.content),
+        "runs": runs,
+        "run_detail_bytes": len(page.content),
+    }
+
+
 def section_scan_trace_cost() -> dict:
     """Secret scan and trace cost on large inputs (the result/args path)."""
     out = {}
@@ -542,7 +633,9 @@ def section_scan_trace_cost() -> dict:
 # ---------------------------------------------------------------------------
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--quick", action="store_true", help="skip the 50-concurrency pass")
+    ap.add_argument(
+        "--quick", action="store_true", help="skip the 50-concurrency pass, soak less"
+    )
     args = ap.parse_args()
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
     tmp = RESULTS.parent / "work"
@@ -560,6 +653,7 @@ def main() -> None:
     results["decision_latency"] = section_decision_latency(tmp, levels)
     results["triangle_scaling"] = section_triangle_scaling([1, 50, 200, 500])
     results["five_hundred_step"] = section_500_step(tmp)
+    results["soak"] = section_soak(2_000 if args.quick else 10_000)
     results["scan_trace_cost"] = section_scan_trace_cost()
 
     RESULTS.write_text(json.dumps(results, indent=2, ensure_ascii=False))
@@ -590,6 +684,7 @@ def _print_summary(r: dict) -> None:
     print(f"=== DECISION LATENCY (check_ms) === {r['decision_latency']}")
     print(f"=== TRIANGLE SCALING === {r['triangle_scaling']['rows']}")
     print(f"=== 500-STEP === {r['five_hundred_step']}")
+    print(f"=== SOAK === {r['soak']}")
     print(f"=== SCAN/TRACE COST === {r['scan_trace_cost']}")
 
 

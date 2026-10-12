@@ -58,6 +58,7 @@ The first run asks for your Jev key, checks it and saves it in `.env`. Then it s
 - **On one machine, the agent could read the admin key.** It runs as the same user as Cressey: without the key it can't decide a hold or change a response, but `.env` is readable. Cressey's own URL in a call is held, a tripwire, not the lock. For real isolation, run Cressey off the agent's machine, or sandbox the agent's files and network.
 - **When Jev doesn't answer,** the code rules and trap keys still hold, and a tool missing from the policy is held. A write only Jev's floor label would judge waits for a human too (« Jev didn't answer », with the `irreversible` response). A file edit goes on: code checks its path against the mandate. The triangle can't confirm a judgment either, so it holds less.
 - **Your own MCP servers, tried on a test server only.** A profile (`CRESSEY_PROFILE`) names them the way MCP clients do (`mcpServers`), with what each tool does; Cressey fronts them instead of the demo tools. The tests run it against a local MCP server, not a company's.
+- **Memory grows with the record.** An ended run drops what its calls returned, so memory no longer grows with what agents read, but each call still keeps about 14 KB (its step, its labels, its log events) until a restart. Forgetting old runs is next.
 - **Local only.** Nothing is deployed. Before Claude Code 2.1.295, a hook that can't reach Cressey lets calls through.
 
 What happens when a part is down:

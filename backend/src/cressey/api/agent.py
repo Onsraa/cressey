@@ -35,3 +35,4 @@ async def report(
     runs.end(run, body.text)
     state = request.app.state
     runs.checked(run, await report_check(run, state.ledger, state.thresholds))
+    state.engine.ended(run)

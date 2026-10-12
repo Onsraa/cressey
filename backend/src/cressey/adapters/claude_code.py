@@ -91,7 +91,10 @@ async def claude_hook(
         runs.model(run, str(event["to_model"]), str(event.get("source", "")))
         return {}
     if kind == "SessionEnd":
+        for call in [c for c in pending if c[0] == run.id]:
+            pending.pop(call).running = False  # killed mid-call: its result never comes
         runs.disconnect(run)
+        engine.ended(run)
         return {}
     if kind == "UserPromptSubmit":
         prompt = runs.prompt(run, event.get("prompt") or "")
@@ -113,6 +116,8 @@ async def claude_hook(
         else:
             runs.answered(run, last)
         runs.checked(run, await report_check(run, engine.ledger, state.thresholds))
+        if run.turn is None:
+            engine.ended(run)
         return {}
     if kind not in TOOL_EVENTS:  # an event Cressey doesn't follow
         return {}

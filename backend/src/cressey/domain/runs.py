@@ -259,6 +259,28 @@ class Run(BaseModel):
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
 
 
+class RunSummary(BaseModel):
+    """A run as the dashboard polls it every second; the run itself is served on demand."""
+
+    id: str
+    task: str
+    kind: RunKind
+    via: Literal["mcp", "hook"] | None
+    started_at: str
+    calls: int
+
+    @classmethod
+    def of(cls, run: Run) -> "RunSummary":
+        return cls(
+            id=run.id,
+            task=run.task,
+            kind=run.kind,
+            via=run.via,
+            started_at=run.started_at,
+            calls=len(run.steps),
+        )
+
+
 class TextIn(BaseModel):
     """A message or the final report, from the agent."""
 

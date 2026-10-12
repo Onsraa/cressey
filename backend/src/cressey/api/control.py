@@ -13,7 +13,7 @@ from cressey.api.auth import IncidentsDep, RunsDep
 from cressey.domain.incidents import FleetSignal, Incident, Replay
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Responses
-from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn
+from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn, RunSummary
 from cressey.domain.status import EvalFile, LogHead, Status
 from cressey.engine.agent_text import check_message, finish
 from cressey.incidents.incidents import AssessTask
@@ -41,8 +41,8 @@ async def create_run(spec: RunIn, request: Request, runs: RunsDep) -> RunCreated
 
 
 @router.get("/runs")
-async def list_runs(runs: RunsDep) -> list[Run]:
-    return runs.all()
+async def list_runs(runs: RunsDep) -> list[RunSummary]:
+    return [RunSummary.of(run) for run in runs.all()]
 
 
 @router.get("/runs/{run_id}")

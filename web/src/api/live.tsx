@@ -14,6 +14,7 @@ import type {
 	Incident,
 	Responses,
 	Run,
+	RunSummary,
 	Status,
 } from "./types";
 
@@ -23,11 +24,12 @@ export type Focus = { incident?: string; run?: string; step?: number };
 
 type Polled = {
 	status?: Status;
-	runs: Run[];
+	runs: RunSummary[];
 	holds: Hold[];
 	incidents: Incident[];
 	responses?: Responses;
 	fleet: FleetSignal[];
+	shown: Run[]; // the runs the views show, with their steps
 };
 
 export type Live = Polled & {
@@ -40,23 +42,40 @@ export type Live = Polled & {
 	go: (view: View, focus?: Focus) => void;
 	focusMode: boolean; // for the demo: the views hide their secondary contents
 	toggleFocus: () => void;
+	show: (run: string) => () => void; // poll this run's steps until the returned call
 };
 
 const LiveContext = createContext<Live | null>(null);
 
-const EMPTY: Polled = { runs: [], holds: [], incidents: [], fleet: [] };
+const EMPTY: Polled = {
+	runs: [],
+	holds: [],
+	incidents: [],
+	fleet: [],
+	shown: [],
+};
 const FOCUS_KEY = "cressey.focus";
 
-async function poll(): Promise<Polled> {
-	const [status, runs, holds, incidents, responses, fleet] = await Promise.all([
-		apiGet<Status>("/status"),
-		apiGet<Run[]>("/runs"),
-		apiGet<Hold[]>("/holds"),
-		apiGet<Incident[]>("/incidents"),
-		apiGet<Responses>("/policy/responses"),
-		apiGet<FleetSignal[]>("/fleet"),
-	]);
-	return { status, runs, holds, incidents, responses, fleet };
+// A run a view shows, in the same poll as its holds; one that is gone (an old link) is none.
+const runOf = (id: string) =>
+	apiGet<Run>(`/runs/${encodeURIComponent(id)}`).catch((e: unknown) => {
+		if (e instanceof ApiError && e.status === 404) return undefined;
+		throw e;
+	});
+
+async function poll(shown: string[]): Promise<Polled> {
+	const [status, runs, holds, incidents, responses, fleet, details] =
+		await Promise.all([
+			apiGet<Status>("/status"),
+			apiGet<RunSummary[]>("/runs"),
+			apiGet<Hold[]>("/holds"),
+			apiGet<Incident[]>("/incidents"),
+			apiGet<Responses>("/policy/responses"),
+			apiGet<FleetSignal[]>("/fleet"),
+			Promise.all(shown.map(runOf)),
+		]);
+	const found = details.filter((r): r is Run => r !== undefined);
+	return { status, runs, holds, incidents, responses, fleet, shown: found };
 }
 
 // The dashboard polls about once a second (dashboard.md, Data); it keeps the last answer
@@ -69,12 +88,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 	const [view, setView] = useState<View>("live");
 	const [focus, setFocus] = useState<Focus>({});
 	const busy = useRef(false);
+	const showing = useRef(new Map<string, number>()); // run id -> views showing it
 
 	const refresh = useCallback(() => {
 		setNow(Date.now());
 		if (busy.current) return;
 		busy.current = true;
-		poll()
+		poll([...showing.current.keys()])
 			.then((d) => {
 				setData(d);
 				setOffline(false);
@@ -94,6 +114,20 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 		const id = setInterval(refresh, 1000);
 		return () => clearInterval(id);
 	}, [refresh]);
+
+	const show = useCallback(
+		(id: string) => {
+			const views = showing.current;
+			views.set(id, (views.get(id) ?? 0) + 1);
+			refresh();
+			return () => {
+				const left = (views.get(id) ?? 1) - 1;
+				if (left) views.set(id, left);
+				else views.delete(id);
+			};
+		},
+		[refresh],
+	);
 
 	const go = useCallback((v: View, f: Focus = {}) => {
 		setView(v);
@@ -130,6 +164,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 				go,
 				focusMode,
 				toggleFocus,
+				show,
 			}}
 		>
 			{children}
@@ -144,7 +179,7 @@ export function useLive(): Live {
 }
 
 // The Run view follows the latest live run.
-export function latestLive(runs: Run[]): Run | undefined {
+export function latestLive(runs: RunSummary[]): RunSummary | undefined {
 	return runs
 		.filter((r) => r.kind === "live")
 		.sort((a, b) => a.started_at.localeCompare(b.started_at))
@@ -152,5 +187,12 @@ export function latestLive(runs: Run[]): Run | undefined {
 }
 
 // The run the Live view shows: the one another view linked to, else the latest live run.
-export const shownRun = (runs: Run[], focus: Focus) =>
+export const shownRun = (runs: RunSummary[], focus: Focus) =>
 	focus.run ? runs.find((r) => r.id === focus.run) : latestLive(runs);
+
+// A run with its steps, polled while a view shows it: the poll itself carries summaries.
+export function useRun(id: string | undefined): Run | undefined {
+	const { show, shown } = useLive();
+	useEffect(() => (id ? show(id) : undefined), [id, show]);
+	return shown.find((r) => r.id === id);
+}

@@ -272,3 +272,18 @@ def test_a_shadow_is_stored_on_its_step_and_logged():
         "uses": ["svc:9"],
         "words_read": False,
     }
+
+
+def test_a_session_end_closes_a_message_left_streaming():
+    """A session killed mid-message: its message stops streaming and nothing keeps it."""
+    runs = Runs(EventLog())
+    run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)
+    assert run is not None
+    runs.stream(run, "m1", "I'll delete the", False)
+    runs.disconnect(run)
+    # Nothing of it is kept: the same id starts a new message, it doesn't grow the old one.
+    runs.stream(run, "m1", "table", True)
+    assert [(m.text, m.streaming) for m in run.messages] == [
+        ("I'll delete the", False),
+        ("table", False),
+    ]

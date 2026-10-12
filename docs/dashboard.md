@@ -118,4 +118,4 @@ An executive overview, trends over time, login and roles (a known limit), correl
 | Header and waiting state | status: protection mode, model mode, MCP URL | exists: `GET /api/status` (`mode`, `model_mode`, `mcp_path`) |
 | Évaluation | the eval reports, with their date and their misses | exists: `GET /api/eval` serves `report-dev.json` (guides) and `report-detection.json` (sessions held, misses, time to stop, decision time per call), each with its file and date. The guide report doesn't list its misses yet. `decision-model.json` is served too (kind `decision`): the write judgment's and the report check's calibration on our labelled cases, our own attack, and the latency per call |
 
-The interface polls the runs and holds about once a second. It moves to SSE only if polling lags.
+The interface polls the runs' summaries, the holds, and the runs it shows with their steps about once a second, in one round. It moves to SSE only if polling lags.

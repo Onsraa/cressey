@@ -20,6 +20,7 @@ export type Replay = Schemas["Replay"];
 export type ReplayResult = Schemas["ReplayResult"];
 export type Responses = Schemas["Responses"];
 export type Run = Schemas["Run"];
+export type RunSummary = Schemas["RunSummary"];
 export type Secret = Schemas["Secret"];
 export type Shadow = Schemas["Shadow"];
 export type Source = Schemas["Source"];

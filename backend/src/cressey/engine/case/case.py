@@ -462,6 +462,11 @@ class CaseReader:
         async with self._turn(run):
             await read_prompt(run, text, self.judge, self.t)
 
+    async def settled(self, run: Run) -> None:
+        """The shadows and prompts in flight on this run are read."""
+        await self._shadows.settled(run.id)
+        await self._prompts.settled(run.id)
+
     def shadow_soon(
         self, run: Run, call: Step, floor: str | None
     ) -> asyncio.Task[Shadow] | None:

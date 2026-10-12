@@ -105,6 +105,9 @@ class Engine:
         self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self.drafts: Tasks[None] = Tasks()  # the drafter's, while a call is held
         self._late: Tasks[None] = Tasks()  # the reads of calls too long to read first
+        self._ending: Tasks[None] = (
+            Tasks()
+        )  # ended runs, waiting for their reads to end
         self._kinds: dict[str, ToolRule] = {}  # Jev's labels, per tool name
 
     def _response(
@@ -327,8 +330,22 @@ class Engine:
         # Too long to read before it ran: read now, without holding the developer's work.
         late = step.reason is None and step.risk != "read" and not read_before(step)
         if late and run.kind != "replay":
-            self._late.spawn(self._read_late(run, step))
+            self._late.once((run.id, step.n), lambda: self._read_late(run, step))
         return WAY_OUT if run.way_out_step == step.n else None
+
+    def ended(self, run: Run) -> None:
+        """The run ended (its report, its session's end): what its calls returned is dropped
+        once every read of its steps is done, so a long-lived Cressey keeps what it decided,
+        not all its agents read. A session resumed meanwhile keeps it all."""
+        self._ending.spawn(self._forget_results(run, list(run.steps)))
+
+    async def _forget_results(self, run: Run, steps: list[Step]) -> None:
+        # The shadows and late reads may still ask the ledger for labels: they settle first.
+        await self.case.settled(run)
+        await self._late.settled(run.id)
+        await self.ledger.settled(run)
+        if run.ended_at is not None:
+            self.runs.forget_results(steps)
 
     def _draft(self, run: Run, step: Step) -> None:
         """What the human can send if they reject this hold: the fallback at once, then a
