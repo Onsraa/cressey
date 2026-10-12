@@ -38,7 +38,6 @@ from typesafe_sdk import (
 from cressey.core.eventlog import EventLog
 from cressey.core.floor import check
 from cressey.core.judge import Answers, Question
-from cressey.core.models import Mandate, Run, RunIn, Thresholds
 from cressey.core.preflight import CUT, QUESTIONS, assess_for
 from cressey.core.proxy import load_policy
 from cressey.core.runs import Runs
@@ -52,9 +51,10 @@ from cressey.core.triangle import (
     views,
 )
 from cressey.demo.tools import demo_tools
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Mandate, Run, RunIn
 from cressey.guide.clients import decision_auth
-from cressey.guide.corpus import DATA
-from cressey.settings import Settings
+from cressey.settings import DATA, Settings
 
 PRICE_PER_MTOK = 0.042  # USD per million input tokens
 WRITES = DATA / "eval" / "decision-writes.json"

@@ -17,7 +17,6 @@ from pydantic import BaseModel, JsonValue
 from typesafe_sdk import Choice, Noul
 
 from cressey.core.judge import Answers, Judge, NotRecorded, Question, TooLarge, top, yes
-from cressey.core.models import Case, Event, Message, Run, Thread, Thresholds
 from cressey.core.triangle import (
     LAST_RESULT,
     NOTE,
@@ -27,6 +26,8 @@ from cressey.core.triangle import (
     _pieces,
     _redacted_off_loop,
 )
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Case, Event, Message, Run, Thread
 
 log = logging.getLogger(__name__)
 

@@ -2,8 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cressey.app import create_app
+from cressey.domain.guides import Guide, GuideDraft, WhyAnswer
 from cressey.guide.api import get_pipeline, get_store
-from cressey.guide.models import Guide, GuideDraft, WhyAnswer
 from cressey.guide.pipeline import GuidePipeline
 from cressey.guide.store import GuideStore
 from cressey.settings import Settings

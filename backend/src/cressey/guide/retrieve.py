@@ -6,8 +6,8 @@ from pathlib import Path
 import bm25s
 import numpy as np
 
+from cressey.domain.guides import Unit
 from cressey.guide.clients import Embedder, ModelUnavailable
-from cressey.guide.models import Unit
 
 log = logging.getLogger(__name__)
 

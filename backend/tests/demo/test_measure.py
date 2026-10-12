@@ -1,6 +1,5 @@
 import pytest
 
-from cressey.core.models import Thresholds
 from cressey.core.preflight import QUESTIONS
 from cressey.demo.measure import (
     REPORTS,
@@ -17,6 +16,7 @@ from cressey.demo.measure import (
     load_preflight,
     measure_preflight,
 )
+from cressey.domain.policy import Thresholds
 
 pytestmark = pytest.mark.anyio
 T = Thresholds(deadline_words=["ce soir"])

@@ -9,8 +9,8 @@ from fastapi.testclient import TestClient
 
 from cressey.app import create_app
 from cressey.core.eventlog import EventLog
-from cressey.core.models import RunIn
 from cressey.core.runs import Runs
+from cressey.domain.runs import RunIn
 from cressey.settings import Settings
 from tests.server import ADMIN_AUTH
 

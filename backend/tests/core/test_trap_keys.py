@@ -8,9 +8,9 @@ import json
 import pytest
 
 from cressey.core.floor import trap
-from cressey.core.models import Mandate
 from cressey.demo.agent import Call, Session, load_sessions, play
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
+from cressey.domain.runs import Mandate
 from tests.server import ADMIN, api, next_hold, users
 
 pytestmark = pytest.mark.anyio

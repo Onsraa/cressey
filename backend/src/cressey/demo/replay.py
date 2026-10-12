@@ -10,9 +10,9 @@ from pathlib import Path
 import httpx2
 from fastapi import FastAPI
 
-from cressey.core.models import Fix, Replay, ReplayResult
 from cressey.demo.agent import Session, play
 from cressey.demo.server import serve
+from cressey.domain.incidents import Fix, Replay, ReplayResult
 
 # A fresh Cressey whose demo state lives in that folder.
 MakeApp = Callable[[Path], FastAPI]

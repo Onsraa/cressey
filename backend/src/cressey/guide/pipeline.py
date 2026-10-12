@@ -3,20 +3,20 @@
 import uuid
 from typing import Protocol
 
-from cressey.guide.clients import (
-    GuideWriter,
-    ModelUnavailable,
-    QueryRewriter,
-    Reranker,
-    incident_text,
-)
-from cressey.guide.models import (
+from cressey.domain.guides import (
     Guide,
     GuideDraft,
     GuideIncident,
     GuideStep,
     Unit,
     WhyAnswer,
+)
+from cressey.guide.clients import (
+    GuideWriter,
+    ModelUnavailable,
+    QueryRewriter,
+    Reranker,
+    incident_text,
 )
 from cressey.guide.quotes import verify_quote
 

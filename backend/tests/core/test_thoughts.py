@@ -4,8 +4,6 @@ from typing import get_args
 import pytest
 from typesafe_sdk import Noul
 
-from cressey.core.models import Case, Direction, Event, Kind, Thread, Thresholds
-from cressey.core.secret_scan import Secret
 from cressey.core.thoughts import (
     DIRECTION,
     KINDS,
@@ -15,6 +13,8 @@ from cressey.core.thoughts import (
     segment,
 )
 from cressey.core.triangle import LAST_RESULT, PREVIOUS
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Case, Direction, Event, Kind, Secret, Thread
 from tests.core.helpers import message, run_with, step
 
 pytestmark = pytest.mark.anyio

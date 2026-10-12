@@ -9,7 +9,7 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from cressey.guide.models import GuideIncident
+from cressey.domain.guides import GuideIncident
 from cressey.guide.pipeline import GuidePipeline
 
 
@@ -154,9 +154,8 @@ if __name__ == "__main__":
     from datetime import UTC, datetime
 
     from cressey.guide.api import get_pipeline
-    from cressey.guide.corpus import DATA
     from cressey.guide.retrieve import Retriever
-    from cressey.settings import Settings
+    from cressey.settings import DATA, Settings
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--split", default="dev")

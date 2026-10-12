@@ -1,4 +1,4 @@
-from cressey.guide.models import Unit
+from cressey.domain.guides import Unit
 
 _TYPO = str.maketrans({"’": "'", "‘": "'", "«": '"', "»": '"', "“": '"', "”": '"'})
 

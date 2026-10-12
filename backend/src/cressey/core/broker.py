@@ -5,7 +5,8 @@ from collections.abc import Mapping
 
 from pydantic import JsonValue
 
-from cressey.core.models import Credential, Mandate
+from cressey.domain.policy import Credential
+from cressey.domain.runs import Mandate
 
 
 def scoped(

@@ -4,18 +4,9 @@ import pytest
 from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
-from cressey.core.models import (
-    Leg,
-    Legs,
-    Message,
-    Run,
-    RunIn,
-    Shadow,
-    Step,
-    TextIn,
-    Thresholds,
-)
 from cressey.core.runs import Runs
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Leg, Legs, Message, Run, RunIn, Shadow, Step, TextIn
 
 ON = Leg(score=1, confirmed=True, facts=[])
 OFF = Leg(score=0, confirmed=False, facts=[])

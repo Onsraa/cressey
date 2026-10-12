@@ -10,7 +10,7 @@ from typing import Protocol, Self
 
 from pydantic import BaseModel, Field
 
-from cressey.core.models import Mandate, Risk, Run
+from cressey.domain.runs import Mandate, Risk, Run
 from cressey.guide.clients import _Adapter, _responses
 from cressey.settings import Settings
 

@@ -7,11 +7,11 @@ from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
 from cressey.core.incidents import Incidents
-from cressey.core.models import Leg, Legs, Run, RunIn, Step
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact, scan
 from cressey.demo.tools import PROD_KEY
-from cressey.guide.models import Guide, GuideIncident
+from cressey.domain.guides import Guide, GuideIncident
+from cressey.domain.runs import Leg, Legs, Run, RunIn, Step
 
 pytestmark = pytest.mark.anyio
 ON = Leg(score=1, confirmed=True, facts=["fait observé"])
@@ -209,7 +209,7 @@ def held_by_floor(
 
 async def test_runs_going_after_the_same_target_raise_a_fleet_signal():
     """Hugging Face / METR: hundreds of agents hit the same target; one run looks normal."""
-    from cressey.core.models import Fleet
+    from cressey.domain.policy import Fleet
 
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide, fleet=Fleet(runs=3, window_minutes=15))
@@ -223,7 +223,7 @@ async def test_runs_going_after_the_same_target_raise_a_fleet_signal():
 
 
 async def test_one_run_held_again_and_again_is_not_a_fleet():
-    from cressey.core.models import Fleet
+    from cressey.domain.policy import Fleet
 
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide, fleet=Fleet(runs=3, window_minutes=15))
@@ -240,7 +240,7 @@ async def test_one_run_held_again_and_again_is_not_a_fleet():
 async def test_holds_older_than_the_window_dont_count():
     from datetime import UTC, datetime, timedelta
 
-    from cressey.core.models import Fleet
+    from cressey.domain.policy import Fleet
 
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide, fleet=Fleet(runs=2, window_minutes=15))

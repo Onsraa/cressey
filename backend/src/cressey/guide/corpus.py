@@ -11,10 +11,10 @@ from typing import Literal
 import yaml
 from pypdf import PdfReader
 
-from cressey.guide.models import Unit
+from cressey.domain.guides import Unit
+from cressey.settings import DATA
 
 log = logging.getLogger(__name__)
-DATA = Path(__file__).parents[3] / "data"
 
 
 class CorpusIntegrityError(Exception):

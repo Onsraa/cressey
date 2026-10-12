@@ -11,8 +11,8 @@ from typesafe_sdk import Noul
 
 from cressey.core.incidents import TASK_WAY_OUT
 from cressey.core.judge import Judge, NotRecorded, TooLarge, yes
-from cressey.core.models import Mandate, Preflight
-from cressey.guide.models import OwnerRole
+from cressey.domain.owners import OWNER_NAMES, OwnerRole
+from cressey.domain.runs import Mandate, Preflight
 
 log = logging.getLogger(__name__)
 
@@ -62,11 +62,6 @@ FIXES: dict[str, tuple[OwnerRole, str]] = {
         "task_author",
         "also say what the agent must not do to get there",
     ),
-}
-OWNER_NAMES: dict[OwnerRole, str] = {
-    "task_author": "task author",
-    "key_owner": "key owner",
-    "platform_owner": "platform owner",
 }
 
 

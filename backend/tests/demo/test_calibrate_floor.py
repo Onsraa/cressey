@@ -11,7 +11,7 @@ from cressey.demo.calibrate_floor import (
     calibrate,
     summary,
 )
-from cressey.guide.corpus import DATA
+from cressey.settings import DATA
 
 pytestmark = pytest.mark.anyio
 POLICY = load_policy(DATA / "policy.yaml")

@@ -1,7 +1,8 @@
 import pytest
 
 from cressey.core.floor import at_cressey, check, origin, shell_risk, sql_risk
-from cressey.core.models import Mandate, ToolRule
+from cressey.domain.policy import ToolRule
+from cressey.domain.runs import Mandate
 
 SQL = ToolRule(kind="sql", arg="query")
 MAIL = ToolRule(kind="egress", arg="to")

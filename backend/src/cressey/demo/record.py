@@ -26,10 +26,9 @@ from cressey.app import create_app
 from cressey.demo.agent import Session, load_sessions, play
 from cressey.demo.evaluate import ABLATION, REPORT, ablation, evaluate
 from cressey.demo.server import serve
+from cressey.domain.guides import Guide, GuideIncident
 from cressey.guide.api import write_guide
-from cressey.guide.corpus import DATA
-from cressey.guide.models import Guide, GuideIncident
-from cressey.settings import Settings
+from cressey.settings import DATA, Settings
 
 FLOWS = (
     "record-flows.json"  # in the cache folder: what the recorded incident flows gave

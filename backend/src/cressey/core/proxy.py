@@ -34,7 +34,6 @@ from cressey.core.draft import (
 from cressey.core.floor import at_cressey, check, edits_a_file, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Answer, Judge, NotRecorded, top, yes
-from cressey.core.models import Policy, Response, Risk, Run, Shadow, Step, ToolRule
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import fingerprint, redact, scan
 from cressey.core.triangle import (
@@ -46,6 +45,8 @@ from cressey.core.triangle import (
     read_after,
     read_before,
 )
+from cressey.domain.policy import Policy, Response, ToolRule
+from cressey.domain.runs import Risk, Run, Shadow, Step
 
 log = logging.getLogger(__name__)
 

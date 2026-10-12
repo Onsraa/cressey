@@ -17,10 +17,9 @@ from fastmcp.client.client import CallToolResult
 from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
-from cressey.core.models import Mandate, RunKind, Visibility
 from cressey.core.proxy import MCP_PATH
-from cressey.guide.corpus import DATA
-from cressey.settings import Settings
+from cressey.domain.runs import Mandate, RunKind, Visibility
+from cressey.settings import DATA, Settings
 
 SESSIONS = DATA / "sessions"
 REFUSED = "Cressey:"  # how Cressey's own answers start

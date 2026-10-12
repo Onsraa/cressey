@@ -8,32 +8,23 @@ from collections.abc import Awaitable, Callable, Coroutine
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from cressey.core.models import (
-    Fix,
-    Fleet,
-    FleetSignal,
-    Incident,
-    Mandate,
-    OwnerGuide,
-    Preflight,
-    Replay,
-    Run,
-    Source,
-    Step,
-)
 from cressey.core.runs import Runs
 from cressey.core.secret_scan import redact
 from cressey.core.trace import strings, trace
-from cressey.guide.models import Guide, GuideIncident, OwnerRole
-from cressey.guide.models import Leg as LegName
+from cressey.domain.guides import Guide, GuideIncident
+from cressey.domain.incidents import (
+    Fix,
+    FleetSignal,
+    Incident,
+    OwnerGuide,
+    Replay,
+    Source,
+)
+from cressey.domain.owners import LEGS, OWNERS, LegName
+from cressey.domain.policy import Fleet
+from cressey.domain.runs import Mandate, Preflight, Run, Step
 
 log = logging.getLogger(__name__)
-LEGS: tuple[LegName, ...] = ("pressure", "opportunity", "rationalization")
-OWNERS: dict[LegName, OwnerRole] = {
-    "pressure": "task_author",
-    "opportunity": "key_owner",
-    "rationalization": "platform_owner",
-}
 ORDER = {"critique": 0, "haute": 1}
 # Plays the incident's variants again with these fixes, for this task: « Replay ×5 ».
 Replayer = Callable[[list[Fix], str], Coroutine[Any, Any, Replay]]

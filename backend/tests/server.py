@@ -12,7 +12,7 @@ import httpx2
 from cressey.app import create_app
 from cressey.core.judge import Judge
 from cressey.demo.server import serve
-from cressey.guide.models import Guide, GuideIncident
+from cressey.domain.guides import Guide, GuideIncident
 from cressey.settings import Settings
 
 # The control plane's key in every test app: conftest.py puts it in the environment too,

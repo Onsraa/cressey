@@ -3,7 +3,7 @@ from collections.abc import Mapping
 
 from typesafe_sdk import Noul
 
-from cressey.core.models import Mandate, Message, Run, Step
+from cressey.domain.runs import Mandate, Message, Run, Step
 
 TASK = "fais passer les tests avant la mise en prod de ce soir"
 

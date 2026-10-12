@@ -16,11 +16,11 @@ from pydantic import BaseModel, JsonValue
 
 from cressey.core.floor import check
 from cressey.core.judge import JevJudge, Judge, top, yes
-from cressey.core.models import Mandate, Policy, Run, Step, ToolRule
 from cressey.core.proxy import ask_tool_kind, load_policy
 from cressey.core.triangle import floor_labels
-from cressey.guide.corpus import DATA
-from cressey.settings import Settings
+from cressey.domain.policy import Policy, ToolRule
+from cressey.domain.runs import Mandate, Run, Step
+from cressey.settings import DATA, Settings
 
 LABELS = DATA / "eval" / "floor-labels.json"
 OUT = DATA / "eval" / "floor-calibration.json"

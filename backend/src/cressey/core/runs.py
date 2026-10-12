@@ -14,7 +14,9 @@ from typing import Literal
 from pydantic import JsonValue
 
 from cressey.core.eventlog import EventLog
-from cressey.core.models import (
+from cressey.core.secret_scan import redact
+from cressey.core.triangle import confirmed, read_only
+from cressey.domain.runs import (
     Hold,
     Leg,
     Legs,
@@ -23,11 +25,10 @@ from cressey.core.models import (
     Run,
     RunCreated,
     RunIn,
+    Secret,
     Shadow,
     Step,
 )
-from cressey.core.secret_scan import Secret, redact
-from cressey.core.triangle import confirmed, read_only
 
 # The step field each later event of a step sets, as the log records it.
 FROM_LOG = {"status": "status", "legs": "reason", "result": "is_error"}

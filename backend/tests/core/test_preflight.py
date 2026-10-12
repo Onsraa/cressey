@@ -10,10 +10,10 @@ import pytest
 from cressey.app import create_app
 from cressey.core.eventlog import EventLog
 from cressey.core.incidents import TASK_WAY_OUT, Incidents
-from cressey.core.models import Legs, Mandate, Preflight
 from cressey.core.preflight import QUESTIONS, assess
 from cressey.core.runs import Runs
 from cressey.demo.server import serve
+from cressey.domain.runs import Legs, Mandate, Preflight
 from cressey.settings import Settings
 from tests.core.test_incidents import OFF, ON, demo_run, guide, until
 from tests.server import api, fake_guide

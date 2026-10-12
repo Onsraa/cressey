@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
+from cressey.domain.guides import GuideDraft
 from cressey.guide.cache import Cached, cache_key, wrap_all
 from cressey.guide.clients import BedrockEmbedder, ModelUnavailable
-from cressey.guide.models import GuideDraft
 from cressey.settings import Settings
 from tests.guide.test_pipeline import GOOD, INC, R9, Rer, Rew, Wri
 

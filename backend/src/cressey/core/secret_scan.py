@@ -17,9 +17,9 @@ from collections.abc import Iterator, Mapping
 
 from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
-from pydantic import BaseModel
 
 from cressey.core.trace import encoded
+from cressey.domain.runs import Secret
 
 MIN_VALUE = 8
 _NAMED = "Named secret"
@@ -45,13 +45,6 @@ _ASSIGNMENT = re.compile(
     re.IGNORECASE,
 )
 _VALUE = re.compile(r""""[^"]*"|'[^']*'|\S+""")
-
-
-class Secret(BaseModel):
-    kind: str  # detect-secrets plugin name, or "Named secret" for the naming rule
-    name: str | None  # the variable name, when the naming rule matched
-    fingerprint: str  # first 12 hex chars of sha256(value)
-    line: int  # 1-based
 
 
 def _encodable(text: str) -> str:

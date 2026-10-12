@@ -14,8 +14,9 @@ import sqlglot
 from pydantic import JsonValue
 from sqlglot import exp
 
-from cressey.core.models import Mandate, Risk, ToolRule
 from cressey.core.trace import decoded, strings
+from cressey.domain.policy import ToolRule
+from cressey.domain.runs import Mandate, Risk
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
 # Shell commands (the Claude Code hook). A command made only of these, with no redirection

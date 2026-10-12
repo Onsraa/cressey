@@ -1,9 +1,11 @@
+"""The fix guides: the passages they cite and what a guide, its steps and an answer hold."""
+
 from typing import Literal
 
 from pydantic import BaseModel
 
-Leg = Literal["pressure", "opportunity", "rationalization"]
-OwnerRole = Literal["key_owner", "task_author", "platform_owner", "soc"]
+from cressey.domain.owners import LegName, OwnerRole
+
 Status = Literal["ok", "unsure", "unavailable"]
 
 
@@ -17,7 +19,7 @@ class Unit(BaseModel):
 
 class GuideIncident(BaseModel):
     id: str
-    leg: Leg
+    leg: LegName
     owner_role: OwnerRole
     summary: str
     source: str

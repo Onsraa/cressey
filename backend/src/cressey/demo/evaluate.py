@@ -20,8 +20,7 @@ from cressey.app import create_app
 from cressey.core.judge import Judge
 from cressey.demo.agent import Session, load_sessions, play
 from cressey.demo.server import serve
-from cressey.guide.corpus import DATA
-from cressey.settings import Settings
+from cressey.settings import DATA, Settings
 
 REPORT = DATA / "eval" / "report-detection.json"
 ABLATION = DATA / "eval" / "report-ablation.json"

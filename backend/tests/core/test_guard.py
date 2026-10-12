@@ -12,10 +12,10 @@ from typesafe_sdk import Choice
 
 from cressey.core import proxy
 from cressey.core.draft import fallback, finish
-from cressey.core.models import Mandate, Risk
 from cressey.core.proxy import WAY_OUT
 from cressey.core.secret_scan import redact
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
+from cressey.domain.runs import Mandate, Risk
 from cressey.guide.clients import ModelUnavailable
 from tests.server import api, next_hold, serving, users
 

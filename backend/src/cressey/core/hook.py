@@ -11,11 +11,11 @@ from fastmcp.exceptions import ToolError
 from pydantic import JsonValue
 
 from cressey.core.case import read_prompt_soon
-from cressey.core.models import Step
 from cressey.core.proxy import Guard
 from cressey.core.runs import Runs
 from cressey.core.trace import strings
 from cressey.core.triangle import report_check
+from cressey.domain.runs import Step
 
 router = APIRouter()
 HOOK_PATH = "/hook/claude"

@@ -22,12 +22,12 @@ from cressey.core.runs import Runs
 from cressey.demo.agent import load_sessions
 from cressey.demo.replay import replay
 from cressey.demo.tools import demo_tools
+from cressey.domain.guides import Guide, GuideIncident
 from cressey.guide.api import router as guide_router
 from cressey.guide.api import write_guide
 from cressey.guide.cache import wrap_drafter
-from cressey.guide.corpus import DATA, load_corpus
-from cressey.guide.models import Guide, GuideIncident
-from cressey.settings import Settings
+from cressey.guide.corpus import load_corpus
+from cressey.settings import DATA, Settings
 
 
 def create_app(

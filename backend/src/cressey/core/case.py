@@ -16,7 +16,11 @@ from pydantic import JsonValue
 from typesafe_sdk import Noul
 
 from cressey.core.judge import Judge, NotRecorded, Question, yes
-from cressey.core.models import (
+from cressey.core.thoughts import CASE_QUOTE, _label, read_thought, thoughts_of
+from cressey.core.triangle import _max_over_parts, _pieces
+from cressey.domain.owners import LegName
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import (
     Case,
     Event,
     Legs,
@@ -26,14 +30,10 @@ from cressey.core.models import (
     Shadow,
     Step,
     Thread,
-    Thresholds,
 )
-from cressey.core.thoughts import CASE_QUOTE, _label, read_thought, thoughts_of
-from cressey.core.triangle import _max_over_parts, _pieces
-from cressey.guide.models import Leg
 
 # An indicator that belongs to no leg (plan, the N counters) is absent.
-LEG: dict[str, Leg] = {
+LEG: dict[str, LegName] = {
     **dict.fromkeys(("P1", "P3", "P4"), "pressure"),
     **dict.fromkeys(("O1", "O2", "O3", "O4", "I1"), "opportunity"),
     **dict.fromkeys(("R", "C1"), "rationalization"),
@@ -66,7 +66,7 @@ def threads(
     """One thread per leg and object, in the order each first appears. `names` is
     fingerprint to secret name (`secret_names`): without it no secret is the mandate's."""
     names = names or {}
-    built: dict[tuple[Leg, str | None], Thread] = {}
+    built: dict[tuple[LegName, str | None], Thread] = {}
     for i, e in enumerate(case.events):
         leg = LEG.get(e.indicator)
         if leg is None or leg == "rationalization":
@@ -230,12 +230,12 @@ def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
     return Shadow(decision="allow", why=[], uses=objects)
 
 
-def leg_values(case: Case) -> dict[Leg, float]:
+def leg_values(case: Case) -> dict[LegName, float]:
     """Each leg as the case holds it: the strongest event of its open threads. R and C1 open
     no thread, so rationalization is the strongest of them going toward the crossing (one
     going away, a pause or a refusal, is no justification). 0 when there is none."""
 
-    def strongest(leg: Leg) -> float:
+    def strongest(leg: LegName) -> float:
         return max(
             (
                 case.events[i].p

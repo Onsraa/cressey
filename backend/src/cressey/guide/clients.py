@@ -17,7 +17,7 @@ from openai.providers import bedrock
 from pydantic import BaseModel, ValidationError
 from typesafe_sdk import Noul, RetryPolicy, TypeSafeClient
 
-from cressey.guide.models import GuideDraft, GuideIncident, Unit
+from cressey.domain.guides import GuideDraft, GuideIncident, Unit
 from cressey.settings import Settings
 
 log = logging.getLogger(__name__)

@@ -1,6 +1,7 @@
 from cressey.core.broker import scoped
-from cressey.core.models import Credential, Mandate
 from cressey.demo.tools import PROD_KEY, READ_KEY
+from cressey.domain.policy import Credential
+from cressey.domain.runs import Mandate
 
 DB = Credential(arg="key", read=READ_KEY, write=PROD_KEY)
 SQL = {"query": "DELETE FROM users", "key": PROD_KEY}

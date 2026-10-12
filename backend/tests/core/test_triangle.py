@@ -5,8 +5,6 @@ from collections.abc import Mapping
 import pytest
 
 from cressey.core.judge import NotRecorded
-from cressey.core.models import Leg, Legs, Mandate, Message, Run, Step
-from cressey.core.secret_scan import Secret
 from cressey.core.triangle import (
     CHUNK,
     PART,
@@ -18,6 +16,7 @@ from cressey.core.triangle import (
     pressure,
 )
 from cressey.demo.tools import PROD_KEY
+from cressey.domain.runs import Leg, Legs, Mandate, Message, Run, Secret, Step
 from tests.core.helpers import TASK, run_with, step
 
 pytestmark = pytest.mark.anyio
@@ -588,9 +587,9 @@ async def test_a_result_still_coming_is_labelled_once_it_is_in():
     """A parallel write doesn't label a read still running with an empty result: the read
     is labelled when its result is in, so its injected instruction is seen."""
     from cressey.core.eventlog import EventLog
-    from cressey.core.models import RunIn
     from cressey.core.runs import Runs
     from cressey.core.triangle import label_soon
+    from cressey.domain.runs import RunIn
 
     runs = Runs(EventLog())
     run = runs.get(runs.create(RunIn(task="corrige le README")).id)

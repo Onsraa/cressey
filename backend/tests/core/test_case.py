@@ -17,8 +17,8 @@ from cressey.core.case import (
     shadow_soon,
     uses,
 )
-from cressey.core.models import Case, Event, Mandate, Thresholds
-from cressey.core.secret_scan import Secret
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Case, Event, Mandate, Secret
 from tests.core.helpers import message, run_with, step
 from tests.core.test_thoughts import ScriptedJudge
 

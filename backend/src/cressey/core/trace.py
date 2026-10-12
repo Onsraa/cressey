@@ -8,14 +8,14 @@ encrypted or rebuilt from several reads are not traced, by design.
 import base64
 import re
 from collections.abc import Callable, Iterator, Sequence
-from typing import Literal
 from urllib.parse import unquote
 
 from pydantic import BaseModel, JsonValue
 
+from cressey.domain.incidents import How
+
 MIN_TOKEN = 8  # shorter tokens match by chance
 
-How = Literal["exact", "lowercase", "base64", "hex", "url"]
 Reads = Sequence[tuple[int, str]]  # (step, tool output), in step order
 
 _WORD_BREAK = re.compile(r"""[\s"',;()\[\]{}<>]+""")

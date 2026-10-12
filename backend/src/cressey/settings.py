@@ -4,6 +4,9 @@ from typing import Literal
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# The backend's data: the policy, the corpus, the sessions, the recorded model answers.
+DATA = Path(__file__).parents[2] / "data"
+
 
 class Settings(BaseSettings):
     # populate_by_name lets tests pass web_dir=…; it also makes plain WEB_DIR readable (harmless).

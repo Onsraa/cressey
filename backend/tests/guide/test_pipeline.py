@@ -1,7 +1,7 @@
 import pytest
 
+from cressey.domain.guides import DraftStep, Guide, GuideDraft, GuideIncident, Unit
 from cressey.guide.clients import ModelUnavailable
-from cressey.guide.models import DraftStep, Guide, GuideDraft, GuideIncident, Unit
 from cressey.guide.pipeline import GuidePipeline
 
 R9 = Unit(

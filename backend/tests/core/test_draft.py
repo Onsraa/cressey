@@ -12,8 +12,7 @@ from cressey.core.draft import (
     finish,
     stop_sentence,
 )
-from cressey.core.models import Mandate, Run, Step
-from cressey.core.secret_scan import Secret
+from cressey.domain.runs import Mandate, Run, Secret, Step
 from cressey.guide.cache import Cached, wrap_drafter
 from cressey.guide.clients import ModelUnavailable
 from cressey.settings import Settings

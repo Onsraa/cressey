@@ -22,8 +22,9 @@ from cressey.core.judge import (
     top,
     yes,
 )
-from cressey.core.models import Leg, Legs, Risk, Run, Step, Thresholds
 from cressey.core.secret_scan import redact
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Leg, Legs, Risk, Run, Step
 
 log = logging.getLogger(__name__)
 

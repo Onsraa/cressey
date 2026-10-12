@@ -27,16 +27,16 @@ from typesafe_sdk import Choice
 
 from cressey.app import create_app
 from cressey.core.floor import check
-from cressey.core.models import Mandate, Policy, Run, Step, Thresholds
 from cressey.core.proxy import MCP_PATH, load_policy
 from cressey.core.secret_scan import SCAN_LIMIT, find_secrets, redact
 from cressey.core.trace import trace
 from cressey.core.triangle import legs
 from cressey.demo.server import serve
 from cressey.demo.tools import PROD_KEY
-from cressey.guide.corpus import DATA
-from cressey.guide.models import Guide, GuideIncident
-from cressey.settings import Settings
+from cressey.domain.guides import Guide, GuideIncident
+from cressey.domain.policy import Policy, Thresholds
+from cressey.domain.runs import Mandate, Run, Step
+from cressey.settings import DATA, Settings
 
 RESULTS = DATA / "stress" / "results.json"
 

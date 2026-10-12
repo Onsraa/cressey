@@ -16,7 +16,8 @@ from typing import Any, Literal
 import numpy as np
 
 from cressey.core.draft import PROMPT_DRAFT_V1, OpenAIDrafter
-from cressey.core.models import Mandate, Risk
+from cressey.domain.guides import GuideDraft, GuideIncident, Unit
+from cressey.domain.runs import Mandate, Risk
 from cressey.guide.clients import (
     PROMPT_GUIDE_V1,
     PROMPT_REWRITE_INCIDENT_V1,
@@ -30,7 +31,6 @@ from cressey.guide.clients import (
     OpenAIRewriter,
     OpenAIWriter,
 )
-from cressey.guide.models import GuideDraft, GuideIncident, Unit
 from cressey.settings import Settings
 
 log = logging.getLogger(__name__)

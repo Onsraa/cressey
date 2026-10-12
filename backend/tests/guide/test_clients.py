@@ -6,14 +6,15 @@ import numpy as np
 import openai
 import pytest
 
+from cressey.domain.guides import GuideDraft, GuideIncident, Unit
 from cressey.guide.clients import (
     JevReranker,
     ModelUnavailable,
     OpenAIRewriter,
     OpenAIWriter,
 )
-from cressey.guide.corpus import DATA, load_corpus
-from cressey.guide.models import GuideDraft, GuideIncident, Unit
+from cressey.guide.corpus import load_corpus
+from cressey.settings import DATA
 
 INC = GuideIncident(
     id="i1",

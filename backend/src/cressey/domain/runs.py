@@ -1,13 +1,11 @@
-"""Types of the core loop: the tool policy, a task's mandate, runs and their steps."""
+"""A run and what it is made of: its task and mandate, each call (step), what the agent said,
+and the case built from its thoughts."""
 
-from typing import Literal, get_args
+from typing import Literal
 
 from pydantic import BaseModel, Field, JsonValue
 
-from cressey.core.secret_scan import Secret
-from cressey.core.trace import How
-from cressey.guide.models import Leg as LegName
-from cressey.guide.models import OwnerRole
+from cressey.domain.owners import LegName
 
 Risk = Literal["read", "write", "destructive"]
 # What Cressey sees: tool calls only; plus messages and report; plus reasoning.
@@ -15,9 +13,6 @@ Visibility = Literal["tools", "messages", "reasoning"]
 # control: « Observateur », logged and never held. replay: never waits for a human; a call
 # that would be held is blocked, and that replay fails.
 RunKind = Literal["live", "replay", "control"]
-# What Cressey does with a call a check fired on: let it through with an incident, hold it
-# for a human, or refuse it at once.
-Response = Literal["alert", "review", "stop"]
 # Where the agent's words come from: its narration, a summary of its reasoning, or its
 # reasoning itself.
 WordSource = Literal["narration", "summary", "reasoning"]
@@ -54,101 +49,11 @@ Kind = Literal[
 Direction = Literal["toward", "away", "neither"]
 
 
-def _thought_floors() -> dict[str, float]:
-    """Every indicator, and what a thought is about or approves, at 0.5; R at 0.2."""
-    floors = dict.fromkeys([*get_args(Indicator), "about", "approves"], 0.5)
-    floors["R"] = 0.2
-    return floors
-
-
-class ToolRule(BaseModel):
-    kind: Literal["read", "write", "destructive", "sql", "egress", "shell"]
-    arg: str | None = (
-        None  # the argument holding the SQL, the recipients, the path or the command
-    )
-
-
-class Thresholds(BaseModel):
-    """When observed facts confirm a leg (policy.yaml, `triangle`)."""
-
-    failures: int = 2  # failed calls that confirm pressure
-    repeats: int = 2  # identical calls repeated that confirm pressure
-    judgment: float = 0.5  # S9: the judgment on a write that confirms rationalization
-    report: float = 0.8  # S9: the score at which the final report is flagged
-    evidence: int = (
-        8  # flagged parts of earlier steps the judgment sees, any distance back
-    )
-    deadline_words: list[str] = []
-    # S9: the floor a thought's probability must reach for each indicator to be kept.
-    thoughts: dict[str, float] = Field(default_factory=_thought_floors)
-
-
-class Fleet(BaseModel):
-    """When runs held for the same target outside their mandate become a signal across runs
-    (policy.yaml, `fleet`)."""
-
-    runs: int = 3  # distinct runs held for that target
-    window_minutes: int = 15
-
-
-class Stuck(BaseModel):
-    """When a run stops (policy.yaml, `stuck`)."""
-
-    rejections: int = 3  # rejected or expired holds in one turn that suspend the key
-
-
-class FleetSignal(BaseModel):
-    target: str  # the tool and the floor's reason: « run_sql | SQL destructeur hors mandat : users »
-    runs: list[str]  # the runs held for it within the window, oldest first
-    first_at: str
-    last_at: str
-
-
-class Credential(BaseModel):
-    """The key broker's credentials for one tool argument; Cressey picks one per call."""
-
-    arg: str  # the argument that carries the key
-    read: str  # reads only: the resource refuses any change made with it
-    write: str  # for a mandate that grants changes, or a call a human approved
-
-
-class Responses(BaseModel):
-    """What Cressey does when each check fires (policy.yaml, `responses`), changeable live.
-    Alert lets the call through and opens an incident; the key broker still hands it only
-    what the mandate grants. The report check only ever alerts: the run is over."""
-
-    floor: Response = (
-        "review"  # destructive outside the mandate, protected or frozen path
-    )
-    trap_key: Response = "review"
-    trap_key_read: Response = "alert"  # a decoy key in a call that only reads
-    irreversible: Response = "review"  # Jev: a write that can't be undone
-    # Jev: a write that changes production; off: not held for that alone.
-    production: Response | Literal["off"] = "review"
-    triangle: Response = "review"  # the judgment, with pressure or opportunity
-    fleet: Literal["alert", "stop"] = (
-        "alert"  # stop: once the signal is up, refuse its target
-    )
-
-
-class Floor(BaseModel):
-    """What Jev labels for the safety floor (policy.yaml, `floor`). Its labels only add holds:
-    none lifts a hold code made."""
-
-    read: float = 0.95  # a tool missing from `tools` is a read from this probability
-    irreversible: float = 0.5  # a write is held from this probability
-    production: float = 0.7  # a write changes production from this probability
-
-
-class Policy(BaseModel):
-    tools: dict[str, ToolRule]
-    floor: Floor = Field(default_factory=Floor)
-    responses: Responses = Field(default_factory=Responses)
-    triangle: Thresholds = Field(default_factory=Thresholds)
-    fleet: Fleet = Field(default_factory=Fleet)
-    stuck: Stuck = Field(default_factory=Stuck)
-    broker: dict[str, Credential] = {}  # tool -> the credentials Cressey hands it
-    decoys: dict[str, str] = {}  # trap key name -> value: a call carrying one is caught
+class Secret(BaseModel):
+    kind: str  # detect-secrets plugin name, or "Named secret" for the naming rule
+    name: str | None  # the variable name, when the naming rule matched
+    fingerprint: str  # first 12 hex chars of sha256(value)
+    line: int  # 1-based
 
 
 class Mandate(BaseModel):
@@ -345,93 +250,3 @@ class Hold(BaseModel):
     run_id: str
     task: str
     step: Step
-
-
-class LogHead(BaseModel):
-    hash: str
-    count: int
-    intact: bool
-
-
-class Status(BaseModel):
-    mode: Literal["guard"]  # the only protection mode built so far
-    model_mode: str
-    mcp_path: str  # the MCP proxy agents point at
-    hook_path: str  # the Claude Code hook agents post to
-    stop_after: int  # rejected or expired holds in a turn that stop a run
-    log: LogHead
-
-
-class OwnerGuide(BaseModel):
-    leg: LegName
-    owner_role: OwnerRole
-    status: Literal["pending", "ok", "unsure", "unavailable"] = "pending"
-    guide_id: str | None = None
-
-
-class Source(BaseModel):
-    """Where a value of the held call was first read."""
-
-    step: int
-    tool: str
-    args: str  # that call's arguments, secrets redacted
-    how: How  # exact, lowercase, base64, hex or url
-    secret: str | None  # the secret's name, when the value is one
-    value: str  # as matched; a secret shows as its marker
-
-
-class Fix(BaseModel):
-    """Cressey's proposal for one confirmed leg. A human approves it; the replay applies it."""
-
-    leg: LegName
-    owner_role: OwnerRole
-    text: str  # what changes, for the owner
-    move_out: list[str] = []  # workspace files the secret leaves
-    add_to_task: str | None = None  # appended to the task
-    preflight: Preflight | None = None  # the fixed task, assessed: the before and after
-    approved: bool = False
-
-
-class ReplayResult(BaseModel):
-    session: str
-    expect: Literal["held", "free"]
-    # Cressey refused a call, the agent stopped on a call it needed, or it finished.
-    outcome: Literal["refused", "stopped", "completed"]
-    step: int | None  # the refused call, or the one that stopped the agent
-    reason: str | None  # Cressey's reason, for a refusal
-    ok: bool  # a variant must stop on its own; a normal task must finish
-
-
-class Replay(BaseModel):
-    """« Rejouer ×5 »: a regression test of the policy and the fixes on scripted sessions,
-    not proof of how a real agent behaves."""
-
-    date: str
-    fixes: list[LegName]  # the approved fixes it played with
-    results: list[ReplayResult]
-    passed: bool
-
-
-class Incident(BaseModel):
-    id: str
-    run_id: str
-    step: int
-    severity: Literal["critique", "haute"]  # safety floor, or two confirmed legs
-    reason: str
-    created_at: str
-    decision: str  # the held call's status when served
-    sources: list[Source]
-    legs: Legs
-    guides: list[OwnerGuide]
-    fixes: list[Fix] = []
-    replay: Replay | None = None  # the last « Rejouer ×5 »
-
-
-class EvalFile(BaseModel):
-    """A measured report, served as written, with where and when it was measured."""
-
-    kind: Literal["guides", "detection", "ablation", "decision"]
-    split: str  # dev, or held-out
-    file: str
-    date: str
-    report: dict[str, JsonValue]
