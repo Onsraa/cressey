@@ -10,7 +10,7 @@ import logging
 import weakref
 from collections.abc import Awaitable, Callable, Mapping
 from pathlib import Path
-from typing import Literal, Protocol, Self
+from typing import Protocol, Self
 
 import typesafe_sdk
 from pydantic import JsonValue
@@ -23,8 +23,8 @@ from typesafe_sdk import (
     RetryPolicy,
 )
 
-from cressey.guide.cache import cache_key
-from cressey.guide.clients import decision_auth
+from cressey.llm.cache import Cache, Mode
+from cressey.llm.clients import decision_auth
 from cressey.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -111,11 +111,12 @@ class JevJudge:
     def __init__(
         self,
         ask: Ask | None,
-        mode: Literal["live", "record", "replay", "fallback", "replay-first"],
+        mode: Mode,
         cache_dir: Path,
         model: str,
     ) -> None:
-        self.ask, self.mode, self.dir, self.model = ask, mode, cache_dir, model
+        self.ask, self.model = ask, model
+        self.cache = Cache(mode, cache_dir)
         # One cap per event loop: replays serve fresh apps on their own loops with this judge.
         self._slots: weakref.WeakKeyDictionary[
             asyncio.AbstractEventLoop, asyncio.Semaphore
@@ -147,29 +148,21 @@ class JevJudge:
         asked = json.dumps(
             {n: q.model_dump() for n, q in questions.items()}, sort_keys=True
         )
-        path = (
-            self.dir / f"{cache_key('judge', self.model, asked, {'state': state})}.json"
-        )
-        recorded: Answers | None = (
-            json.loads(path.read_text()) if path.exists() else None
-        )
-        # record too: a state asked twice in one recording replays one answer, the first.
-        if recorded is not None and self.mode in ("replay", "replay-first", "record"):
+        file = self.cache.file("judge", self.model, asked, {"state": state})
+        if (recorded := self.cache.first(file)) is not None:
             return recorded
-        if self.mode in ("replay", "replay-first"):
+        if self.cache.mode in ("replay", "replay-first"):
             # On stage a miss means the state changed after recording: say which field.
             log.error(
-                "judge: no recorded answer %s (%s)", path.name, _fingerprints(state)
+                "judge: no recorded answer %s (%s)", file.name, _fingerprints(state)
             )
-            if self.mode == "replay":
-                raise NotRecorded(path.name)
+            if self.cache.mode == "replay":
+                raise NotRecorded(file.name)
         live = None
         if self.ask:
             async with self._in_flight():
                 live = await self.ask(state, questions)
         if live is None:
-            return recorded if self.mode == "fallback" else None
-        if self.mode == "record":
-            self.dir.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(live))
+            return self.cache.fallback(file)
+        self.cache.keep(file, live)
         return live

@@ -1,8 +1,8 @@
 import pytest
 
 from cressey.domain.guides import DraftStep, Guide, GuideDraft, GuideIncident, Unit
-from cressey.guide.clients import ModelUnavailable
 from cressey.guide.pipeline import GuidePipeline
+from cressey.llm.clients import ModelUnavailable
 
 R9 = Unit(
     id="anssi-fr:R9",

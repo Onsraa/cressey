@@ -11,6 +11,7 @@ from starlette.routing import Route
 
 from cressey.core.api import agent_router, require_admin
 from cressey.core.api import router as core_router
+from cressey.core.draft import cached_drafter
 from cressey.core.eventlog import EventLog
 from cressey.core.floor import origin
 from cressey.core.hook import router as hook_router
@@ -25,7 +26,6 @@ from cressey.demo.tools import demo_tools
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.guide.api import router as guide_router
 from cressey.guide.api import write_guide
-from cressey.guide.cache import wrap_drafter
 from cressey.guide.corpus import load_corpus
 from cressey.settings import DATA, Settings
 
@@ -69,7 +69,7 @@ def create_app(
     # On Bedrock the guide models sign with the AWS credentials: .env or boto3's own chain.
     guides = s.models == "bedrock" or s.openai_api_key is not None
     models_ready = guides and s.typesafe_api_key is not None
-    drafter = wrap_drafter(s) if models_ready else None
+    drafter = cached_drafter(s) if models_ready else None
     guard = Guard(
         runs,
         incidents,

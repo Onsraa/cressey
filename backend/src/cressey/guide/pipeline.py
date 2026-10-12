@@ -11,14 +11,9 @@ from cressey.domain.guides import (
     Unit,
     WhyAnswer,
 )
-from cressey.guide.clients import (
-    GuideWriter,
-    ModelUnavailable,
-    QueryRewriter,
-    Reranker,
-    incident_text,
-)
+from cressey.guide.clients import GuideWriter, QueryRewriter, Reranker, incident_text
 from cressey.guide.quotes import verify_quote
+from cressey.llm.clients import ModelUnavailable
 
 MSG_NO_SOURCE = (
     "I don't know: no reliable source covers this case. Ask the security team."

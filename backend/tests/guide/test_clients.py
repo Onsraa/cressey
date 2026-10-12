@@ -7,13 +7,9 @@ import openai
 import pytest
 
 from cressey.domain.guides import GuideDraft, GuideIncident, Unit
-from cressey.guide.clients import (
-    JevReranker,
-    ModelUnavailable,
-    OpenAIRewriter,
-    OpenAIWriter,
-)
+from cressey.guide.clients import JevReranker, OpenAIRewriter, OpenAIWriter
 from cressey.guide.corpus import load_corpus
+from cressey.llm.clients import ModelUnavailable
 from cressey.settings import DATA
 
 INC = GuideIncident(
@@ -145,11 +141,11 @@ def test_jev_answer_missing_for_a_passage_is_left_out():
 
 
 def test_openai_client_fails_fast(monkeypatch):
-    from cressey.guide.clients import _openai
+    from cressey.llm.clients import openai_client
     from cressey.settings import Settings
 
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    c = _openai(Settings(_env_file=None, openai_api_key="k"))
+    c = openai_client(Settings(_env_file=None, openai_api_key="k"))
     assert c is not None
     assert (c.max_retries, c.timeout, str(c.base_url)) == (
         1,
@@ -197,7 +193,7 @@ def test_live_jev_separates_r9():
 
 def test_the_decision_model_is_jev_by_default_and_a_url_switches_it():
     """S9: Strands Decider 2B separates no subtle case for the triangle, so Jev is the default."""
-    from cressey.guide.clients import decision_auth
+    from cressey.llm.clients import decision_auth
     from cressey.settings import Settings
 
     s = Settings(_env_file=None, typesafe_api_key="jev-key")
@@ -208,7 +204,7 @@ def test_the_decision_model_is_jev_by_default_and_a_url_switches_it():
 
 
 def test_an_empty_decider_url_falls_back_to_jev():
-    from cressey.guide.clients import decision_auth
+    from cressey.llm.clients import decision_auth
     from cressey.settings import Settings
 
     s = Settings(_env_file=None, typesafe_api_key="jev-key", decider_url=" ")
@@ -216,7 +212,7 @@ def test_an_empty_decider_url_falls_back_to_jev():
 
 
 def test_no_decision_model_without_a_url_or_a_jev_key():
-    from cressey.guide.clients import decision_auth
+    from cressey.llm.clients import decision_auth
     from cressey.settings import Settings
 
     s = Settings(_env_file=None, typesafe_api_key=None, decider_url=None)

@@ -16,7 +16,7 @@ from cressey.core.proxy import WAY_OUT
 from cressey.core.secret_scan import redact
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
 from cressey.domain.runs import Mandate, Risk
-from cressey.guide.clients import ModelUnavailable
+from cressey.llm.clients import ModelUnavailable
 from tests.server import api, next_hold, serving, users
 
 pytestmark = pytest.mark.anyio

@@ -53,7 +53,7 @@ from cressey.core.triangle import (
 from cressey.demo.tools import demo_tools
 from cressey.domain.policy import Thresholds
 from cressey.domain.runs import Mandate, Run, RunIn
-from cressey.guide.clients import decision_auth
+from cressey.llm.clients import decision_auth
 from cressey.settings import DATA, Settings
 
 PRICE_PER_MTOK = 0.042  # USD per million input tokens

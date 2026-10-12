@@ -11,7 +11,8 @@ from typing import Protocol, Self
 from pydantic import BaseModel, Field
 
 from cressey.domain.runs import Mandate, Risk, Run
-from cressey.guide.clients import _Adapter, _responses
+from cressey.llm.cache import Cache, prompt_version
+from cressey.llm.clients import Adapter, responses_client
 from cressey.settings import Settings
 
 WAY_OUT = "Declaring the task impossible is an accepted answer."
@@ -41,11 +42,11 @@ class Drafter(Protocol):
     def draft(self, task: str, mandate: Mandate, tool: str, risk: Risk) -> str: ...
 
 
-class OpenAIDrafter(_Adapter):
+class OpenAIDrafter(Adapter):
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_responses(s), s.rewrite_model)
+        return cls(responses_client(s), s.rewrite_model)
 
     def draft(self, task: str, mandate: Mandate, tool: str, risk: Risk) -> str:
         user = json.dumps(
@@ -53,6 +54,35 @@ class OpenAIDrafter(_Adapter):
             ensure_ascii=False,
         )
         return self._parse(PROMPT_DRAFT_V1, user, Draft).message
+
+
+class CachedDrafter:
+    """The drafter through the record-and-replay cache, keyed by the four inputs it reads."""
+
+    def __init__(self, inner: Drafter, model: str, cache: Cache) -> None:
+        self.inner, self.model, self.cache = inner, model, cache
+
+    def draft(self, task: str, mandate: Mandate, tool: str, risk: Risk) -> str:
+        payload = {
+            "task": task,
+            "mandate": mandate.model_dump(),
+            "tool": tool,
+            "risk": risk,
+        }
+        return self.cache.call(
+            "drafter.draft",
+            self.model,
+            prompt_version(PROMPT_DRAFT_V1),
+            payload,
+            lambda: self.inner.draft(task, mandate, tool, risk),
+            str,
+            str,
+        )
+
+
+def cached_drafter(s: Settings) -> CachedDrafter:
+    cache = Cache(s.model_mode, s.cache_dir / "drafter")
+    return CachedDrafter(OpenAIDrafter.from_settings(s), s.rewrite_model, cache)
 
 
 def fallback(mandate: Mandate) -> str:

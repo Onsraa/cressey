@@ -7,7 +7,8 @@ import bm25s
 import numpy as np
 
 from cressey.domain.guides import Unit
-from cressey.guide.clients import Embedder, ModelUnavailable
+from cressey.guide.clients import Embedder
+from cressey.llm.clients import ModelUnavailable
 
 log = logging.getLogger(__name__)
 

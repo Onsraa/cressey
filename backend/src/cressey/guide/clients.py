@@ -4,20 +4,23 @@ import html
 import json
 import logging
 import threading
-from typing import Any, Protocol, Self
+from typing import Protocol, Self
 
-import boto3
 import numpy as np
 import openai
 import typesafe_sdk
-from botocore.client import BaseClient
-from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
-from openai.providers import bedrock
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from typesafe_sdk import Noul, RetryPolicy, TypeSafeClient
 
 from cressey.domain.guides import GuideDraft, GuideIncident, Unit
+from cressey.llm.clients import (
+    Adapter,
+    ModelUnavailable,
+    aws_client,
+    openai_client,
+    responses_client,
+)
 from cressey.settings import Settings
 
 log = logging.getLogger(__name__)
@@ -50,10 +53,6 @@ PROMPT_WHY_V1 = (
 # stay under it: 16 for the decision model (core/judge.py), 4 for this re-ranker.
 RERANK_IN_FLIGHT = 4
 _RERANK_SLOTS = threading.BoundedSemaphore(RERANK_IN_FLIGHT)
-
-
-class ModelUnavailable(Exception):
-    """A model call failed (SDK error, timeout, 429 after retries, missing key, cache miss in replay)."""
 
 
 class Embedder(Protocol):
@@ -97,73 +96,11 @@ def _passages(units: list[Unit], limit: int) -> str:
     return json.dumps({u.id: u.text[:limit] for u in units}, ensure_ascii=False)
 
 
-class _Adapter:
-    def __init__(self, client: Any, model: str = "") -> None:
-        self.client, self.model = client, model
-
-    def _c(self) -> Any:
-        if self.client is None:
-            raise ModelUnavailable("missing key")
-        return self.client
-
-    def _parse[T: BaseModel](self, system: str, user: str, fmt: type[T]) -> T:
-        try:
-            r = self._c().responses.parse(
-                model=self.model,
-                input=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                text_format=fmt,
-                store=False,  # incident text must not be kept by the provider (30 days by default)
-            )
-        except (
-            openai.OpenAIError,
-            ValidationError,
-        ) as e:  # ValidationError: truncated output
-            raise ModelUnavailable(str(e)) from e
-        if r.output_parsed is None:
-            raise ModelUnavailable("no parsed output (refusal)")
-        return r.output_parsed
-
-
-def _openai(settings: Settings) -> openai.OpenAI | None:
-    key = settings.openai_api_key
-    # Fail fast: in `fallback` mode the cache answers only after the live call gives up.
-    return (
-        openai.OpenAI(
-            api_key=key.get_secret_value(),
-            timeout=openai.Timeout(20, connect=5),
-            max_retries=1,
-        )
-        if key
-        else None
-    )
-
-
-def _responses(s: Settings) -> openai.OpenAI | None:
-    """The rewriter's and the writer's client. On Bedrock, the SDK's provider signs each request
-    with the AWS credentials (SigV4): no Bedrock API key to mint, none to expire."""
-    if s.models == "openai":
-        return _openai(s)
-    creds = _aws_credentials(s)
-    provider = bedrock(
-        endpoint="runtime",
-        region=s.aws_region,
-        access_key_id=creds.get("aws_access_key_id"),
-        secret_access_key=creds.get("aws_secret_access_key"),
-        session_token=creds.get("aws_session_token"),
-    )
-    return openai.OpenAI(
-        provider=provider, timeout=openai.Timeout(20, connect=5), max_retries=1
-    )
-
-
-class OpenAIEmbedder(_Adapter):
+class OpenAIEmbedder(Adapter):
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_openai(s), s.embedding_model)
+        return cls(openai_client(s), s.embedding_model)
 
     def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         # OpenAI embeds queries and passages alike.
@@ -175,11 +112,11 @@ class OpenAIEmbedder(_Adapter):
         return m / np.linalg.norm(m, axis=1, keepdims=True)
 
 
-class OpenAIRewriter(_Adapter):
+class OpenAIRewriter(Adapter):
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_responses(s), s.rewrite_model)
+        return cls(responses_client(s), s.rewrite_model)
 
     def rewrite_incident(self, incident: GuideIncident) -> tuple[str, str]:
         q = self._parse(PROMPT_REWRITE_INCIDENT_V1, incident_text(incident), Queries)
@@ -190,11 +127,11 @@ class OpenAIRewriter(_Adapter):
         return q.fr, q.en
 
 
-class OpenAIWriter(_Adapter):
+class OpenAIWriter(Adapter):
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_responses(s), s.writer_model)
+        return cls(responses_client(s), s.writer_model)
 
     def write(self, incident: GuideIncident, units: list[Unit]) -> GuideDraft:
         user = f"<incident>{_data(incident.summary)} (source : {_data(incident.source)})</incident>\nPassages : {_passages(units, 1500)}"
@@ -207,50 +144,14 @@ class OpenAIWriter(_Adapter):
         return self._parse(PROMPT_WHY_V1, user, GuideDraft)
 
 
-LOCAL_KEY = "local"  # the local decider ignores the key, but the SDK wants one
-
-
-def decision_auth(s: Settings) -> tuple[str, str | None] | None:
-    """(API key, base URL) for the decision model: the local Strands Decider when its URL
-    is set, otherwise Jev's API. None when neither is configured."""
-    if s.decider_url:
-        return LOCAL_KEY, s.decider_url
-    key = s.typesafe_api_key
-    return (key.get_secret_value(), None) if key else None
-
-
-def _aws_credentials(s: Settings) -> dict[str, str]:
-    """The credentials set in .env; when none are, boto3 uses its own chain."""
-    keys = {
-        "aws_access_key_id": s.aws_access_key_id,
-        "aws_secret_access_key": s.aws_secret_access_key,
-        "aws_session_token": s.aws_session_token,
-    }
-    return {name: v.get_secret_value() for name, v in keys.items() if v}
-
-
-def _aws_client(service: str, s: Settings) -> BaseClient:
-    return boto3.client(
-        service,
-        region_name=s.aws_region,
-        # Fail fast, like _openai: the cache answers only after the live call gives up.
-        config=Config(
-            connect_timeout=5,
-            read_timeout=20,
-            retries={"total_max_attempts": 2, "mode": "standard"},
-        ),
-        **_aws_credentials(s),
-    )
-
-
-class BedrockReranker(_Adapter):
+class BedrockReranker(Adapter):
     """Cohere Rerank 3.5 on Amazon Bedrock: one call scores every passage against the query."""
 
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
         arn = f"arn:aws:bedrock:{s.aws_region}::foundation-model/{s.rerank_model}"
-        return cls(_aws_client("bedrock-agent-runtime", s), arn)
+        return cls(aws_client("bedrock-agent-runtime", s), arn)
 
     def relevance(self, question: str, units: list[Unit]) -> dict[str, float]:
         if not units:
@@ -283,13 +184,13 @@ class BedrockReranker(_Adapter):
         return {units[x["index"]].id: float(x["relevanceScore"]) for x in r["results"]}
 
 
-class BedrockEmbedder(_Adapter):
+class BedrockEmbedder(Adapter):
     """Cohere Embed on Amazon Bedrock, through boto3's InvokeModel."""
 
     @classmethod
     def from_settings(cls, settings: Settings | None = None) -> Self:
         s = settings or Settings()
-        return cls(_aws_client("bedrock-runtime", s), s.embedding_model)
+        return cls(aws_client("bedrock-runtime", s), s.embedding_model)
 
     def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         rows: list[list[float]] = []
@@ -308,7 +209,7 @@ class BedrockEmbedder(_Adapter):
         return m / np.linalg.norm(m, axis=1, keepdims=True)
 
 
-class JevReranker(_Adapter):
+class JevReranker(Adapter):
     """Re-ranks over Jev's System One API, one yes/no question per passage."""
 
     @classmethod

@@ -5,16 +5,18 @@ import pytest
 from cressey.core.draft import (
     PROMPT_DRAFT_V1,
     WAY_OUT,
+    CachedDrafter,
     Draft,
     OpenAIDrafter,
+    cached_drafter,
     check_message,
     fallback,
     finish,
     stop_sentence,
 )
 from cressey.domain.runs import Mandate, Run, Secret, Step
-from cressey.guide.cache import Cached, wrap_drafter
-from cressey.guide.clients import ModelUnavailable
+from cressey.llm.cache import Cache
+from cressey.llm.clients import ModelUnavailable
 from cressey.settings import Settings
 
 RUN = Run(
@@ -175,18 +177,21 @@ def test_the_draft_is_recorded_and_replayed(tmp_path):
     mandate = Mandate(may_read_secrets=["RAILWAY_TOKEN"])
     args = ("Fix it.", mandate, "run_sql", "write")
     live = OpenAIDrafter(FakeClient("Stay inside the mandate."), "m")
-    Cached(live, "drafter", "m", "v1", "record", tmp_path).draft(*args)
-    replay = Cached(OpenAIDrafter(None, "m"), "drafter", "m", "v1", "replay", tmp_path)
+    CachedDrafter(live, "m", Cache("record", tmp_path)).draft(*args)
+    replay = CachedDrafter(OpenAIDrafter(None, "m"), "m", Cache("replay", tmp_path))
     assert replay.draft(*args) == "Stay inside the mandate."
     with pytest.raises(ModelUnavailable):
         replay.draft("Another task.", mandate, "run_sql", "write")
 
 
-def test_wrap_drafter_uses_the_rewrite_model():
-    s = Settings(_env_file=None, models="openai")
-    drafter = wrap_drafter(s)
+def test_the_cached_drafter_uses_the_rewrite_model_and_its_own_folder(tmp_path):
+    s = Settings(_env_file=None, models="openai", cache_dir=tmp_path)
+    drafter = cached_drafter(s)
     assert isinstance(drafter.inner, OpenAIDrafter)
-    assert (drafter.adapter, drafter.model) == ("drafter", s.rewrite_model)
+    assert (drafter.model, drafter.cache.folder) == (
+        s.rewrite_model,
+        tmp_path / "drafter",
+    )
 
 
 def test_the_stop_sentence_counts_the_configured_limit():
