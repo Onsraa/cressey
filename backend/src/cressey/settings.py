@@ -133,3 +133,10 @@ class Settings(BaseSettings):
     @classmethod
     def _blank_is_missing(cls, v: object) -> object:
         return None if isinstance(v, str) and not v.strip() else v
+
+    def on_demo(self, folder: Path) -> "Settings":
+        """These settings on the demo's own tools, seeded fresh in `folder`, keeping nothing:
+        what plays the demo's scripted sessions (the evals, the stage, « Rejouer ×5 », the
+        tests) must never reach the servers a profile names."""
+        update = {"demo_dir": folder, "state_dir": None, "profile": DEMO_PROFILE}
+        return self.model_copy(update=update)

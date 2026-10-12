@@ -58,10 +58,7 @@ async def _one(
 ) -> tuple[SessionResult, list[float]]:
     """Play one session on its own Cressey, so no session sees another's changes."""
     with tempfile.TemporaryDirectory() as demo:
-        app = create_app(
-            settings.model_copy(update={"demo_dir": Path(demo), "state_dir": None}),
-            judge=judge,
-        )
+        app = create_app(settings.on_demo(Path(demo)), judge=judge)
         admin = app.state.admin_token
         with serve(app) as base:
             played = await play(base, session, kind="replay", admin=admin)

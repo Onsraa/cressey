@@ -30,7 +30,7 @@ from cressey.incidents.incidents import Incidents
 from cressey.judge import JevJudge, Judge
 from cressey.replay.fixes import FixReplay
 from cressey.replay.importers import load_sessions
-from cressey.settings import DATA, DEMO_PROFILE, Settings
+from cressey.settings import DATA, Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 from cressey.tasks import Tasks
@@ -52,11 +52,9 @@ def create_app(
         runs = Runs(log, state / "runs.jsonl")
 
     def fresh(folder: Path) -> FastAPI:
-        """A Cressey of its own for one replayed session; it shares a judge passed in. It
-        keeps nothing: the replay is not part of this Cressey's record. It plays the demo's
-        sessions, so it fronts the demo's tools, never the servers this Cressey fronts."""
-        update = {"demo_dir": folder, "state_dir": None, "profile": DEMO_PROFILE}
-        return create_app(s.model_copy(update=update), make_guide, given)
+        """A Cressey of its own for one replayed session, on the demo's tools; it shares a
+        judge passed in. It keeps nothing: the replay is not part of this Cressey's record."""
+        return create_app(s.on_demo(folder), make_guide, given)
 
     given = judge
     profile = load_profile(s.profile)

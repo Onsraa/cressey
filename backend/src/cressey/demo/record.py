@@ -58,10 +58,7 @@ async def incident_flow(settings: Settings, session: Session) -> dict:
     """One incident session as on stage: held and rejected, guides written, « Rejouer ×5 »
     before any fix, with the key fix, then with every fix, and the Observer run."""
     with tempfile.TemporaryDirectory() as tmp:
-        live_settings = settings.model_copy(
-            update={"demo_dir": Path(tmp), "state_dir": None}
-        )
-        app = create_app(live_settings, make_guide=_one_at_a_time)
+        app = create_app(settings.on_demo(Path(tmp)), make_guide=_one_at_a_time)
         admin = app.state.admin_token
         auth = {"Authorization": f"Bearer {admin}"}
         with serve(app) as base:

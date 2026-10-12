@@ -18,7 +18,7 @@ from cressey.app import create_app
 from cressey.demo.server import serve
 from cressey.engine.agent_text import UNKNOWN_KEY
 from cressey.settings import DEMO_PROFILE, Settings
-from cressey.testing import ADMIN, QuietJudge, agent, api, fake_guide
+from cressey.testing import ADMIN, QuietJudge, agent, api, fake_guide, serving
 
 pytestmark = pytest.mark.anyio
 PAYROLL = "payroll://2026-10"
@@ -164,3 +164,19 @@ def test_a_replay_fronts_the_demo_tools_whatever_the_profile(tmp_path):
     app = create_app(settings, make_guide=fake_guide, judge=QuietJudge())
     replayed = app.state.replay.make_app(tmp_path / "replay")
     assert replayed.state.settings.profile == DEMO_PROFILE
+
+
+async def test_what_plays_the_demo_fronts_its_tools_whatever_the_environment_names(
+    tmp_path, monkeypatch
+):
+    """The evals, the stage and the tests play the demo's sessions (a DELETE FROM users
+    among them): a profile set for a company never sends them to its servers."""
+    profile = tmp_path / "profile.yaml"
+    servers = {"mcpServers": {"payments": {"url": "http://127.0.0.1:9/mcp"}}}
+    profile.write_text(yaml.safe_dump({"upstreams": servers}))
+    monkeypatch.setenv("CRESSEY_PROFILE", str(profile))
+    with serving(tmp_path / "demo", hold_timeout=0.3) as base:
+        run = await new_run(base)
+        async with agent(base, run["key"]) as a:
+            tools = {t.name for t in await a.list_tools()}
+    assert {"read_file", "run_sql"} <= tools

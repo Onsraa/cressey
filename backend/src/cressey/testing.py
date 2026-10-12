@@ -82,13 +82,11 @@ def serving(
         openai_api_key=None,
         typesafe_api_key=None,
         decider_url=None,
-        demo_dir=demo,
         hold_timeout=hold_timeout,
         holds=holds,
         thought_holds=thought_holds,
         admin_token=ADMIN,
-        state_dir=None,
-    )
+    ).on_demo(demo)
     with serve(create_app(settings, make_guide=fake_guide, judge=judge)) as base:
         yield base
 
