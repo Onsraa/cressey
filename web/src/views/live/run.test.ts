@@ -13,6 +13,7 @@ import {
 	rows,
 	shadowOf,
 	shownLegs,
+	thoughtDots,
 	turnEvidence,
 } from "./run";
 
@@ -195,6 +196,12 @@ describe("triangle", () => {
 		expect(y).toBeLessThan(centre[1]);
 		expect(at(0, 0.5, 0.5)[1]).toBeGreaterThan(centre[1]);
 	});
+	test("a weaker score lands nearer the centre, on the same line", () => {
+		const [, weak] = at(0.4, 0, 0);
+		const [, strong] = at(0.9, 0, 0);
+		expect(weak).toBeLessThan(centre[1]);
+		expect(weak).toBeGreaterThan(strong);
+	});
 });
 
 describe("a thought on the triangle", () => {
@@ -216,6 +223,16 @@ describe("a thought on the triangle", () => {
 				text: "Still failing. Nobody checks scripts. We can modify it! But no.",
 				role: "agent",
 				streaming: false,
+				thoughts: [
+					"Still failing.",
+					"Nobody checks scripts.",
+					"We can modify it! But no.",
+				],
+				scores: {
+					0: { P1: 0.97, O1: 0.1, R: 0.2, N1: 0.9 },
+					1: { O2: 0.95, R: 0.7, C1: 0.68 },
+					2: { O3: 0.39, R: 0.1, C1: 0.57 },
+				},
 				legs,
 			},
 		],
@@ -236,6 +253,13 @@ describe("a thought on the triangle", () => {
 			threads: [],
 			evidence: {},
 		},
+	});
+	test("each read thought is its own dot, a concealment going away counting for nothing", () => {
+		expect(thoughtDots(said)).toEqual([
+			{ id: "m0.0", at: 1.5, legs: { p: 0.97, o: 0.1, r: 0.2 } },
+			{ id: "m0.1", at: 1.5, legs: { p: 0, o: 0.95, r: 0.7 } },
+			{ id: "m0.2", at: 1.5, legs: { p: 0, o: 0.39, r: 0.1 } },
+		]);
 	});
 	test("a message's row carries the scores the case served for its thoughts", () => {
 		const row = rows(said).find((x) => x.kind === "msg");

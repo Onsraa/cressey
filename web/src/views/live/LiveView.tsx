@@ -6,9 +6,10 @@ import { Center, type CenterTab } from "./Center";
 import { useDecision } from "./decide";
 import type { Hover } from "./Field";
 import { busy, Header, phaseOf } from "./Header";
-import { Inspector, type InspectorTab } from "./Inspector";
+import { Hold } from "./Hold";
+import { Inspector } from "./Inspector";
 import type { Scene } from "./pixels";
-import { agg, type Row, rows, scored } from "./run";
+import { agg, type Row, rows, scored, thoughtDots } from "./run";
 import { Trace } from "./Trace";
 
 const ROOT = "@container flex flex-[1_0_auto] flex-col gap-4 px-7 pt-6 pb-7";
@@ -47,7 +48,8 @@ function RunView({ run }: { run?: Run }) {
 		run?.steps.find((s) => s.status === "held") ??
 		run?.steps.findLast((s) => s.held_until);
 	const pending = held?.status === "held" ? held : undefined;
-	const tabFor = (n?: number): InspectorTab | null =>
+	// The hold is shown over the triangle, or hidden ("step") to see the triangle under it.
+	const tabFor = (n?: number): "hold" | "step" | null =>
 		n === undefined
 			? null
 			: run?.steps.find((s) => s.n === n)?.held_until
@@ -69,14 +71,16 @@ function RunView({ run }: { run?: Run }) {
 			setTab(tabFor(focus.step));
 		}
 	}
-	const shownTab: InspectorTab =
-		held && (tab ?? "hold") === "hold" ? "hold" : "step";
+	const holdOpen = Boolean(held) && (tab ?? "hold") === "hold";
 	const picked = all.find((r) => r.id === sel);
 	const decision = useDecision(run?.id ?? "", pending?.n, refresh);
 
-	// The design's showInsp: on a narrow page, bring the inspector into view.
+	// The design's showInsp: on a narrow page, bring the inspector (or, for the hold, the
+	// triangle it sits over) into view.
 	const showInspector = (top: boolean) => {
-		const insp = root.current?.querySelector("[aria-label=Inspector]");
+		const insp = root.current?.querySelector(
+			top ? "[aria-label='Fraud triangle']" : "[aria-label=Inspector]",
+		);
 		const sc = root.current?.parentElement;
 		if (!insp || !sc) return;
 		if (top) {
@@ -137,7 +141,9 @@ function RunView({ run }: { run?: Run }) {
 				r: l.rationalization.score,
 			},
 			hold: Boolean(step.held_until),
+			at: step.n,
 		})),
+		thoughts: (run ? thoughtDots(run) : []).map((d) => ({ ...d, hold: false })),
 		confirmed: {
 			p: legs.pressure.confirmed,
 			o: legs.opportunity.confirmed,
@@ -177,7 +183,6 @@ function RunView({ run }: { run?: Run }) {
 					sel={sel}
 					onSelect={(r) => {
 						setSel(sel === r ? null : r);
-						setTab("step");
 						if (sel !== r) showInspector(false);
 					}}
 					onHover={setHover}
@@ -193,21 +198,31 @@ function RunView({ run }: { run?: Run }) {
 					hover={tip}
 					tab={center}
 					setTab={setCenter}
+					hold={
+						run &&
+						held && {
+							open: holdOpen,
+							pending: Boolean(pending),
+							onToggle: () => setTab(holdOpen ? "step" : "hold"),
+							pane: (
+								<Hold
+									run={run}
+									step={held}
+									incident={incidents.find(
+										(i) => i.run_id === run.id && i.step === held.n,
+									)}
+									decision={decision}
+								/>
+							),
+						}
+					}
 					className={AT.center}
 				/>
 				<Inspector
 					run={run}
-					held={held}
-					incident={
-						held &&
-						incidents.find((i) => i.run_id === run?.id && i.step === held.n)
-					}
-					tab={shownTab}
-					onTab={setTab}
 					row={picked ?? all.at(-1)}
 					pinned={Boolean(picked)}
 					watching={busy(phase)}
-					decision={decision}
 					className={AT.inspector}
 				/>
 			</div>

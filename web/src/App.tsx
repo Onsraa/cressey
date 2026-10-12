@@ -19,7 +19,6 @@ import {
 	Pause,
 	ShieldCheck,
 	SlidersHorizontal,
-	Triangle,
 	Unplug,
 	X,
 } from "@/components/icons";
@@ -112,6 +111,25 @@ function Shell() {
 	);
 }
 
+// The logo: the deck's pixel triangle (deck/index.html .mark), favicon too.
+function Logo() {
+	return (
+		<svg
+			viewBox="0 0 11 10"
+			width={22}
+			height={20}
+			aria-hidden="true"
+			className="flex-none"
+		>
+			<path
+				d="M5 0h1v1h1v2h1v2h1v2h1v3H0V7h1V5h1V3h1V1h1V0z M5 3v1H4v2H3v2h5V6H7V4H6V3z"
+				fill="currentColor"
+				fillRule="evenodd"
+			/>
+		</svg>
+	);
+}
+
 // The dashboard decides holds and changes the policy: it needs the control plane's key,
 // which agents never hold. ./connect.sh puts it in the repo's .env and prints it.
 function AdminGate() {
@@ -129,7 +147,7 @@ function AdminGate() {
 				}}
 			>
 				<div className="flex items-center gap-2.5">
-					<Triangle size={22} strokeWidth={2.25} />
+					<Logo />
 					<span className="font-semibold text-[19px] leading-none tracking-[-0.03em]">
 						Cressey
 					</span>
@@ -225,7 +243,7 @@ function Sidebar({
 			style={{ width: open ? 224 : 60 }}
 		>
 			<div className="flex h-16 flex-none items-center gap-2.5 overflow-hidden whitespace-nowrap border-line border-b px-[19px]">
-				<Triangle size={22} strokeWidth={2.25} />
+				<Logo />
 				{open && (
 					<span className="font-semibold text-[19px] leading-none tracking-[-0.03em]">
 						Cressey

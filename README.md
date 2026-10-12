@@ -2,7 +2,7 @@
 
 **The fraud triangle, applied to AI agents.** Cressey sits between an AI agent and its tools and stops a dangerous call before it runs.
 
-ESSECKATHON "Secure Horizons", Track 2 "Defenders Augmented". Demo videos in [`demo-videos/`](demo-videos/). Full docs in [`docs/`](docs/README.md).
+ESSECKATHON "Secure Horizons", Track 2 "Defenders Augmented". Full docs in [`docs/`](docs/README.md).
 
 ## Problem
 AI agents act with real rights, often limited by nothing but their prompt.

@@ -13,3 +13,6 @@ backend/data/state/
 
 # PocketOS agent run outputs may contain a token the agent used.
 lab/runs/
+
+# Demo videos stay local: too large for the repo.
+demo-videos/

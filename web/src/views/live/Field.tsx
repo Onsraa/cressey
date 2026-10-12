@@ -54,7 +54,7 @@ export function Field({
 				ref={ref}
 				data-pane
 				role="img"
-				aria-label={`Fraud triangle: ${scene.calls.length} calls placed by pressure, opportunity and rationalization.`}
+				aria-label={`Fraud triangle: ${scene.calls.length} calls and ${scene.thoughts.length} thoughts placed by pressure, opportunity and rationalization.`}
 				className="absolute inset-0 block cursor-crosshair [image-rendering:pixelated]"
 			/>
 			{tri &&
