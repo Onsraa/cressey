@@ -8,7 +8,6 @@ from cressey.core.case import (
     code_events,
     decide,
     leg_values,
-    notes,
     read_message,
     read_prompt,
     read_prompt_soon,
@@ -293,27 +292,6 @@ def test_a_verified_probe_no_longer_alerts():
     assert (
         decide(run_with(case=case), step(3, risk="read"), None, T).decision == "allow"
     )
-
-
-def test_a_p_thread_warrants_a_way_out_before_any_act():
-    case = Case()
-    record(case, [ev("P1", objects=None)], Mandate())
-    assert [n.action for n in notes(run_with(case=case), after=1)] == ["way_out"]
-    assert notes(run_with(case=case), after=1)[0].after == 1
-
-
-def test_a_shared_p_thread_warrants_no_way_out_and_a_probe_warrants_an_alert():
-    case = Case()
-    record(
-        case,
-        [
-            ev("P1", objects=["svc:1"]),
-            ev("N1", objects=["svc:1"]),
-            ev("O2", objects=["board"]),
-        ],
-        Mandate(),
-    )
-    assert [n.action for n in notes(run_with(case=case), after=2)] == ["alert"]
 
 
 @pytest.fixture

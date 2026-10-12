@@ -354,8 +354,7 @@ export interface paths {
 		put?: never;
 		/**
 		 * Message
-		 * @description What the agent says along the way. Only the run's own key may send it. The decision
-		 *     model flags the message in the background.
+		 * @description What the agent says along the way. Only the run's own key may send it.
 		 */
 		post: operations["message_api_runs__run_id__messages_post"];
 		delete?: never;
@@ -406,11 +405,6 @@ export interface components {
 			 * @default []
 			 */
 			approved: string[];
-			/**
-			 * Notes
-			 * @default []
-			 */
-			notes: components["schemas"]["Note"][];
 		};
 		/**
 		 * EvalFile
@@ -642,8 +636,6 @@ export interface components {
 			confirmed: boolean;
 			/** Facts */
 			facts: string[];
-			/** Words */
-			words?: number | null;
 		};
 		/** Legs */
 		Legs: {
@@ -730,30 +722,6 @@ export interface components {
 					[key: string]: number;
 				};
 			};
-			/** Labels */
-			labels?: {
-				[key: string]: number;
-			} | null;
-			/**
-			 * Flagged
-			 * @default []
-			 */
-			flagged: string[];
-		};
-		/**
-		 * Note
-		 * @description An intervention the spec makes before any act.
-		 */
-		Note: {
-			/** After */
-			after: number;
-			/**
-			 * Action
-			 * @enum {string}
-			 */
-			action: "way_out" | "alert";
-			/** Why */
-			why: string;
 		};
 		/** OwnerGuide */
 		OwnerGuide: {

@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx2
 import pytest
@@ -191,7 +192,6 @@ def test_a_recorded_choice_reads_as_its_most_probable_option():
     from cressey.core.judge import top
 
     assert top({"m1": 0.2, "t3": 0.7, "none": 0.1}) == "t3"
-    assert top("m1") == "m1"  # recordings before 10-10 kept the picked label alone
     assert top(0.4) is None
 
 
@@ -201,4 +201,4 @@ def test_a_noul_answer_must_be_a_number():
     with pytest.raises(TypeError):
         yes({"a": 1.0})
     with pytest.raises(TypeError):
-        yes("0.4")
+        yes(json.loads('"0.4"'))  # a string read back from a cache file

@@ -15,7 +15,7 @@ from cressey.core.models import Step
 from cressey.core.proxy import Guard
 from cressey.core.runs import Runs
 from cressey.core.trace import strings
-from cressey.core.triangle import flag_soon, report_check
+from cressey.core.triangle import report_check
 
 router = APIRouter()
 HOOK_PATH = "/hook/claude"
@@ -76,14 +76,12 @@ async def claude_hook(
         read_prompt_soon(run, prompt.text, state.judge, state.thresholds)
         return {}
     if kind == "MessageDisplay":
-        done = runs.stream(
+        runs.stream(
             run,
             str(event.get("message_id", "")),
             event.get("delta") or "",
             bool(event.get("final")),
         )
-        if done is not None:  # a message is read once it is whole, never in slices
-            flag_soon(run, done, request.app.state.judge)
         return {}
     if kind == "Stop":
         state = request.app.state

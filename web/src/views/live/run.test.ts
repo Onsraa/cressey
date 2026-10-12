@@ -33,7 +33,6 @@ const words = {
 	source: "narration" as const,
 	thoughts: [],
 	read: 0,
-	flagged: [],
 	scores: {},
 };
 
@@ -244,7 +243,6 @@ describe("a thought on the triangle", () => {
 			),
 			threads: [],
 			approved: [],
-			notes: [],
 		},
 	});
 	test("each leg is its strongest thought, each thought's score a fact", () => {
@@ -366,7 +364,7 @@ describe("the case", () => {
 		state: Thread["state"] = "open",
 	): Thread => ({ leg, state, outside: false, events });
 	const withCase = (events: CaseEvent[], threads: Thread[] = []) =>
-		run({ case: { events, threads, approved: [], notes: [] } });
+		run({ case: { events, threads, approved: [] } });
 
 	test("a leg's thread is the strongest open one, as strong as its strongest event", () => {
 		const r = withCase(

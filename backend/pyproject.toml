@@ -13,7 +13,7 @@ dependencies = [
     "detect-secrets>=1.5.0",
     "fastapi>=0.143.0",
     "fastmcp>=4.1.0",
-    "fonttools>=4.66.1",
+    "fonttools>=4.66.1",  # pypdf reads embedded fonts with it when extracting the corpus PDFs
     "numpy>=2.5.3",
     "openai>=3.28.0",
     "pydantic>=2.14.0",
@@ -21,7 +21,6 @@ dependencies = [
     "pypdf>=6.20.0",
     "pyyaml>=6.0.3",
     "sqlglot>=30.22.0",
-    "sse-starlette>=3.5.0",
     "typesafe-sdk>=0.7.4",
     "uvicorn>=0.54.0",
 ]

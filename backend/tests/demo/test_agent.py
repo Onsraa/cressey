@@ -35,8 +35,7 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
     run = await run_page(served, played.run_id)
     assert played.blocked_at is None and users(tmp_path) == 0
     assert run["report"] == demo.report and run["ended_at"]
-    # No model runs here: the shadow cut the message into its thoughts, none is read or
-    # flagged.
+    # No model runs here: the shadow cut the message into its thoughts, none is read.
     assert run["messages"][0] == {
         "after": 0,
         "text": demo.steps[0].say,
@@ -46,8 +45,6 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
         "thoughts": [demo.steps[0].say],
         "read": 0,
         "scores": {},
-        "labels": None,
-        "flagged": [],
     }
 
 
@@ -89,5 +86,4 @@ async def test_the_report_is_checked_against_the_log_when_it_arrives(served):
         "score": 0.0,
         "confirmed": False,
         "facts": ["decision model unavailable: report not checked"],
-        "words": None,
     }

@@ -168,10 +168,6 @@ class Leg(BaseModel):
     score: float  # 0 to 1, for the gauge
     confirmed: bool  # facts observed by code confirm it
     facts: list[str]
-    # What the agent's words say of this leg, 0 to 1. Display only: no hold, key or incident
-    # reads it; None when no message before the call was read. A flag that lands after the
-    # call raises it, never lowers it.
-    words: float | None = None
 
 
 class Legs(BaseModel):
@@ -213,19 +209,10 @@ class Thread(BaseModel):
     events: list[int] = []  # indexes in Case.events
 
 
-class Note(BaseModel):
-    """An intervention the spec makes before any act."""
-
-    after: int
-    action: Literal["way_out", "alert"]
-    why: str
-
-
 class Case(BaseModel):
     events: list[Event] = []
     threads: list[Thread] = []
     approved: list[str] = []  # objects a human approved
-    notes: list[Note] = []
 
 
 class Shadow(BaseModel):
@@ -301,11 +288,6 @@ class Message(BaseModel):
     # Each read thought's answer to every question, by its index in `thoughts`, those under
     # their threshold too: the dashboard scores the thought on the triangle. Display only.
     scores: dict[int, dict[str, float]] = {}
-    # The decision model's read of the finished message, display only: its score for each
-    # question, and the legs ("pressure", "rationalization") it reaches the ledger's floors
-    # for. None / empty until read, when no model answers, and for the user's prompts.
-    labels: dict[str, float] | None = None
-    flagged: list[str] = []
 
 
 class Preflight(BaseModel):

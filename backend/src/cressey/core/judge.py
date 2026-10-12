@@ -33,9 +33,8 @@ Question = Noul | Choice
 # Jev allows 80 requests/s (docs.typesafe.ai, Models). At about 0.25 s a call, 20 in flight
 # stay under it: 16 for the judge, 4 for the guides' re-ranker (guide/clients.py).
 JUDGE_IN_FLIGHT = 16
-# A Noul's probability, or a Choice's probability per option. Recordings made before 10-10
-# hold a Choice's picked option alone (str): they still replay until re-recorded.
-Answer = float | str | dict[str, float]
+# A Noul's probability, or a Choice's probability per option.
+Answer = float | dict[str, float]
 Answers = dict[str, Answer]
 Ask = Callable[
     [dict[str, JsonValue], Mapping[str, Question]], Awaitable[Answers | None]
@@ -59,7 +58,7 @@ def top(answer: Answer) -> str | None:
     """The option a Choice picked: the most probable one."""
     if isinstance(answer, dict):
         return max(answer, key=lambda k: answer[k]) if answer else None
-    return answer if isinstance(answer, str) else None
+    return None
 
 
 class NotRecorded(Exception):

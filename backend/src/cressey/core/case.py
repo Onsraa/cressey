@@ -22,7 +22,6 @@ from cressey.core.models import (
     Legs,
     Mandate,
     Message,
-    Note,
     Run,
     Shadow,
     Step,
@@ -257,20 +256,6 @@ def leg_values(case: Case) -> dict[Leg, float]:
         "opportunity": strongest("opportunity"),
         "rationalization": max(toward, default=0.0),
     }
-
-
-def notes(run: Run, after: int) -> list[Note]:
-    """What the case warrants before any act, `after` calls in: a way out for an obstacle
-    never shared, an alert for a probe, a weak control or a plan to hide a trace."""
-    case = run.case
-    out: list[Note] = []
-    if unshared := _unshared(case):
-        why = "; ".join(f'Never shared: "{_quote(case, th)}"' for th in unshared)
-        out.append(Note(after=after, action="way_out", why=why))
-    if probes := _probes(case):
-        why = "; ".join(f'{e.indicator}: "{e.quote}"' for e in probes)
-        out.append(Note(after=after, action="alert", why=why))
-    return out
 
 
 async def read_message(run: Run, m: Message, judge: Judge, t: Thresholds) -> bool:

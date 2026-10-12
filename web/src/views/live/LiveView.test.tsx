@@ -19,7 +19,6 @@ const words = {
 	source: "narration" as const,
 	thoughts: [],
 	read: 0,
-	flagged: [],
 	scores: {},
 };
 const NOW = Date.parse("2026-10-10T20:00:00Z");
@@ -392,42 +391,6 @@ const row = (out: string, id: string) => {
 	return out.slice(from, out.indexOf("</button>", from));
 };
 
-test("a leg reads its score, whatever the agent's words said of it", () => {
-	const spoken = legs({ ...leg(0.6, true), words: 0.9 }, leg(0), {
-		...leg(0),
-		words: 0.9,
-	});
-	state = live(
-		[
-			demo(
-				{},
-				{
-					steps: [
-						call(1, "read_file", '{"path": "README.md"}', { legs: spoken }),
-					],
-				},
-			),
-		],
-		{ run: "a1b2c3d4e5f6", step: 1 },
-	);
-	const out = html();
-	expect(out).not.toContain("from the agent");
-	const gauges = panel(out, "Fraud triangle");
-	expect(gauges).toContain(">0.60<");
-	expect(gauges).not.toContain(">0.90<");
-	const cells = row(out, "c1");
-	expect(cells).toContain(
-		'data-tip="Pressure 0.60\nconfirmed by facts at this step"',
-	);
-	expect(cells).toContain('data-tip="Rationalization 0.00"');
-	expect(cells).toContain(
-		'aria-label="Pressure 0.60, Opportunity 0.00, Rationalization 0.00"',
-	);
-	const inspector = panel(out, "Inspector");
-	expect(inspector).toContain(">0.60<");
-	expect(inspector).not.toContain(">0.90<");
-});
-
 const SHADOW_TIP = "Shadow mode: computed and logged, changes nothing yet.";
 
 const ev = (
@@ -453,7 +416,6 @@ const caseOf = (events: CaseEvent[], threads: Thread[] = []) => ({
 	events,
 	threads,
 	approved: [],
-	notes: [],
 });
 
 test("each leg shows the quote of its strongest open thread, and where it was said", () => {

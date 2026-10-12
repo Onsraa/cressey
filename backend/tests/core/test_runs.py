@@ -236,15 +236,14 @@ def test_a_run_serves_its_case_and_messages_their_source():
         "events": [],
         "threads": [],
         "approved": [],
-        "notes": [],
     }
     assert Message(after=0, text="hi").source == "narration"
     assert TextIn(text="x", source="reasoning").source == "reasoning"
     assert Thresholds().thoughts["R"] == 0.2 and Thresholds().thoughts["about"] == 0.5
 
 
-def test_the_log_keeps_who_said_it_not_the_flags():
-    """A message is logged with its role, never with the flags a model adds later."""
+def test_the_log_keeps_who_said_it_not_the_reading():
+    """A message is logged with its role, never with what the thought reading adds later."""
     runs = Runs(EventLog())
     run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)
     assert run is not None

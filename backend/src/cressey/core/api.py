@@ -29,7 +29,7 @@ from cressey.core.models import (
 )
 from cressey.core.proxy import MCP_PATH
 from cressey.core.runs import Runs
-from cressey.core.triangle import flag_soon, report_check
+from cressey.core.triangle import report_check
 from cressey.guide.corpus import DATA
 from cressey.guide.models import Leg as LegName
 
@@ -115,14 +115,11 @@ def require_admin(request: Request, authorization: AuthorizationHeader = "") -> 
 async def message(
     run_id: str,
     body: TextIn,
-    request: Request,
     runs: RunsDep,
     authorization: AuthorizationHeader = "",
 ) -> None:
-    """What the agent says along the way. Only the run's own key may send it. The decision
-    model flags the message in the background."""
-    run = _own_run(runs, run_id, authorization)
-    flag_soon(run, runs.say(run, body.text), request.app.state.judge)
+    """What the agent says along the way. Only the run's own key may send it."""
+    runs.say(_own_run(runs, run_id, authorization), body.text)
 
 
 @agent_router.post("/runs/{run_id}/report", status_code=204)

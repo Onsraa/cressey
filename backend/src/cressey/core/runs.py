@@ -213,23 +213,18 @@ class Runs:
         step.status = status
         self._log(run, step, "status", status=status)
 
-    def say(self, run: Run, text: str) -> Message:
+    def say(self, run: Run, text: str) -> None:
         message = Message(after=len(run.steps), text=redact(text, run.known))
         run.messages.append(message)
-        # The log keeps what the agent said, not the flags a model adds later.
-        said = message.model_dump(
-            exclude={"labels", "flagged", "source", "thoughts", "read", "scores"}
-        )
+        # The log keeps what the agent said, not what the thought reading adds later.
+        said = message.model_dump(exclude={"source", "thoughts", "read", "scores"})
         self.log.append("message", {"run": run.id, **said})
-        return message
 
-    def stream(
-        self, run: Run, message_id: str, delta: str, final: bool
-    ) -> Message | None:
+    def stream(self, run: Run, message_id: str, delta: str, final: bool) -> None:
         """A streamed slice of the agent's words (Claude Code's MessageDisplay hook). Deltas
         for one message grow one Message in place, placed after the calls made before it, so
         the dashboard shows the reasoning as it is produced and the next call's judgment
-        reads it. Logged once, when the message is final, and returned then."""
+        reads it. Logged once, when the message is final."""
         key = (run.id, message_id)
         message, raw = self._streaming.get(
             key, (Message(after=len(run.steps), text=""), "")
@@ -241,12 +236,8 @@ class Runs:
         self._streaming[key] = (message, raw)
         if final:
             del self._streaming[key]
-            said = message.model_dump(
-                exclude={"labels", "flagged", "source", "thoughts", "read", "scores"}
-            )
+            said = message.model_dump(exclude={"source", "thoughts", "read", "scores"})
             self.log.append("message", {"run": run.id, **said})
-            return message
-        return None
 
     def prompt(self, run: Run, text: str) -> Message:
         """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
@@ -261,10 +252,8 @@ class Runs:
         )
         run.messages.append(message)
         run.turn = "working"
-        # The log keeps what the user typed, not the flags a model adds later.
-        said = message.model_dump(
-            exclude={"labels", "flagged", "source", "thoughts", "read", "scores"}
-        )
+        # The log keeps what the user typed, not what the thought reading adds later.
+        said = message.model_dump(exclude={"source", "thoughts", "read", "scores"})
         self.log.append("message", {"run": run.id, **said})
         if run.revoked or run.refused:
             self.unlock(run)
