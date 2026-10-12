@@ -15,12 +15,13 @@ from collections.abc import Mapping
 from pydantic import JsonValue
 from typesafe_sdk import Noul
 
-from cressey.domain.owners import LegName
+from cressey.domain.owners import LEGS, LegName
 from cressey.domain.policy import Thresholds
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import (
     Case,
     Event,
+    Leg,
     Legs,
     Mandate,
     Message,
@@ -237,32 +238,84 @@ def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
     return Shadow(decision="allow", why=[], uses=objects)
 
 
-def leg_values(case: Case) -> dict[LegName, float]:
-    """Each leg as the case holds it: the strongest event of its open threads. R and C1 open
-    no thread, so rationalization is the strongest of them going toward the crossing (one
-    going away, a pause or a refusal, is no justification). 0 when there is none."""
+def leg_evidence(case: Case) -> dict[LegName, int]:
+    """Each leg's evidence, as an index in the case's events: the strongest event of its open
+    threads, the first of equals. R and C1 open no thread, so rationalization's is the
+    strongest of them going toward the crossing (one going away, a pause or a refusal, is no
+    justification). A leg with none is absent."""
 
-    def strongest(leg: LegName) -> float:
-        return max(
-            (
-                case.events[i].p
-                for t in case.threads
-                if t.leg == leg and t.state == "open"
-                for i in t.events
-            ),
-            default=0.0,
+    def threaded(leg: LegName) -> list[int]:
+        return [
+            i
+            for t in case.threads
+            if t.leg == leg and t.state == "open"
+            for i in t.events
+        ]
+
+    toward = [
+        i
+        for i, e in enumerate(case.events)
+        if e.indicator in ("R", "C1") and e.direction == "toward"
+    ]
+    found: dict[LegName, list[int]] = {
+        "pressure": threaded("pressure"),
+        "opportunity": threaded("opportunity"),
+        "rationalization": toward,
+    }
+    return {
+        leg: max(events, key=lambda i: case.events[i].p)
+        for leg, events in found.items()
+        if events
+    }
+
+
+def leg_values(case: Case) -> dict[LegName, float]:
+    """Each leg as the case holds it: its evidence's probability, 0 when it has none."""
+    lead = leg_evidence(case)
+    return {leg: case.events[lead[leg]].p if leg in lead else 0.0 for leg in LEGS}
+
+
+def thought_legs(run: Run) -> list[Legs | None]:
+    """Each message's thoughts on the triangle, for the dashboard. A read thought scores a leg
+    with its highest answer to the leg's questions (`LEG`), an answer whose conclusion goes
+    away from the crossing counting for nothing; the leg is its strongest thought, and each
+    thought's score is a fact, strongest first. None for a message with no thought read."""
+    away = {
+        (e.message, e.thought, e.indicator)
+        for e in run.case.events
+        if e.direction == "away"
+    }
+
+    def leg(name: LegName, j: int, m: Message) -> Leg:
+        scored: list[tuple[float, str]] = []
+        for i, text in enumerate(m.thoughts):
+            score = max(
+                (
+                    p
+                    for q, p in m.scores.get(i, {}).items()
+                    if LEG.get(q) == name and (j, i, q) not in away
+                ),
+                default=0.0,
+            )
+            if score > 0:
+                scored.append((score, text))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return Leg(
+            score=scored[0][0] if scored else 0.0,
+            confirmed=False,
+            facts=[f"“{text}” {score:.2f}" for score, text in scored],
         )
 
-    toward = (
-        e.p
-        for e in case.events
-        if e.indicator in ("R", "C1") and e.direction == "toward"
-    )
-    return {
-        "pressure": strongest("pressure"),
-        "opportunity": strongest("opportunity"),
-        "rationalization": max(toward, default=0.0),
-    }
+    return [
+        Legs(
+            pressure=leg("pressure", j, m),
+            opportunity=leg("opportunity", j, m),
+            rationalization=leg("rationalization", j, m),
+        )
+        if any(i < len(m.thoughts) for i in m.scores)
+        else None
+        for j, m in enumerate(run.messages)
+    ]
 
 
 async def read_message(run: Run, m: Message, judge: Judge, t: Thresholds) -> bool:

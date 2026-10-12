@@ -100,7 +100,11 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** Get Run */
+		/**
+		 * Get Run
+		 * @description With what the dashboard draws from the case, worked out now by the case's rules: each
+		 *     leg's evidence, and each message's thoughts on the triangle.
+		 */
 		get: operations["get_run_api_runs__run_id__get"];
 		put?: never;
 		post?: never;
@@ -421,6 +425,13 @@ export interface components {
 			 * @default []
 			 */
 			approved: string[];
+			/**
+			 * Evidence
+			 * @default {}
+			 */
+			evidence: {
+				[key: string]: number;
+			};
 		};
 		/**
 		 * EvalFile
@@ -762,6 +773,7 @@ export interface components {
 					[key: string]: number;
 				};
 			};
+			legs?: components["schemas"]["Legs"] | null;
 		};
 		/** OwnerGuide */
 		OwnerGuide: {

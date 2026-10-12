@@ -18,7 +18,7 @@ import { Chart } from "./Chart";
 import { Field, type Hover } from "./Field";
 import type { Phase } from "./Header";
 import type { Scene } from "./pixels";
-import { type Agg, fmt, legEvidence, type Scored, TRAP } from "./run";
+import { type Agg, fmt, type Scored } from "./run";
 import { Bar, type LegLook, Letter } from "./ui";
 import { Waiting } from "./Waiting";
 
@@ -63,7 +63,9 @@ type Auto = { Icon: IconType; t: string; tip: string };
 // decoy key in use on opportunity.
 function autos(run: Run | undefined, g: LegLook): Auto[] {
 	if (!run) return [];
-	const trap = run.steps.find((s) => s.reason?.startsWith(TRAP));
+	const trap = run.steps.find((s) =>
+		s.reasons.some((r) => r.check === "trap_key"),
+	);
 	if (g.k === "pressure")
 		return [
 			...(run.way_out_step
@@ -94,6 +96,12 @@ function autos(run: Run | undefined, g: LegLook): Auto[] {
 			},
 		];
 	return [];
+}
+
+// The event the case serves as a leg's evidence: what its gauge quotes.
+function evidence(run: Run | undefined, k: LegName): CaseEvent | undefined {
+	const i = run?.case?.evidence[k];
+	return i === undefined ? undefined : run?.case?.events[i];
 }
 
 export function Center({
@@ -132,7 +140,6 @@ export function Center({
 		opportunity: glide.o,
 		rationalization: glide.r,
 	};
-	const evidence = run && legEvidence(run);
 	const closed = SIDES.filter(
 		([a, b]) => agg[a].confirmed && agg[b].confirmed,
 	).length;
@@ -217,7 +224,7 @@ export function Center({
 						g={g}
 						agg={agg}
 						score={score[g.k]}
-						said={evidence?.[g.k]}
+						said={evidence(run, g.k)}
 						auto={autos(run, g)}
 					/>
 				))}

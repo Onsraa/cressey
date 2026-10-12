@@ -235,6 +235,7 @@ def test_a_run_serves_its_case_and_messages_their_source():
         "events": [],
         "threads": [],
         "approved": [],
+        "evidence": {},
     }
     assert Message(after=0, text="hi").source == "narration"
     assert TextIn(text="x", source="reasoning").source == "reasoning"

@@ -4,18 +4,20 @@ from collections.abc import Mapping
 import pytest
 
 from cressey.domain.policy import Thresholds
-from cressey.domain.runs import Case, Event, Mandate, Secret
+from cressey.domain.runs import Case, Event, Leg, Legs, Mandate, Secret
 from cressey.engine.case.case import (
     LEG,
     CaseReader,
     code_events,
     decide,
+    leg_evidence,
     leg_values,
     read_message,
     read_prompt,
     record,
     secret_names,
     shadow,
+    thought_legs,
     uses,
 )
 from tests.engine.test_thoughts import ScriptedJudge
@@ -565,6 +567,100 @@ def test_each_leg_is_its_strongest_open_thread_and_rationalization_goes_toward()
     assert leg_values(Case()) == dict.fromkeys(
         ("pressure", "opportunity", "rationalization"), 0.0
     )
+
+
+def test_each_leg_s_evidence_is_the_strongest_event_of_its_open_threads():
+    case = Case()
+    record(
+        case,
+        [
+            ev("P1", p=0.5, objects=["a"]),
+            ev("P1", p=0.9, objects=["a"]),
+            ev("P1", p=0.9, objects=["b"]),  # as strong, but later: the first one leads
+            ev("P3", p=0.99, objects=["c"]),
+            ev("N1", objects=["c"]),  # shared: no longer evidence
+            ev("O1", p=0.6, objects=["d"]),
+        ],
+        Mandate(),
+    )
+    assert leg_evidence(case) == {"pressure": 1, "opportunity": 5}
+    assert leg_evidence(Case()) == {}
+
+
+def test_rationalization_s_evidence_is_its_strongest_excuse_going_toward_the_crossing():
+    case = Case()
+    record(
+        case,
+        [
+            ev("R", p=0.9, direction="away"),  # a pause is no justification
+            ev("R", p=0.5, direction="toward"),
+            ev("C1", p=0.7, direction="toward"),
+            ev("R", p=0.95, direction="neither"),
+            ev("P1", p=0.99, direction="toward"),  # an obstacle, not an excuse
+        ],
+        Mandate(),
+    )
+    assert leg_evidence(case) == {"pressure": 4, "rationalization": 2}
+    away = Case()
+    record(away, [ev("R", direction="away"), ev("C1", direction="neither")], Mandate())
+    assert leg_evidence(away) == {}
+
+
+def test_a_message_s_thoughts_on_the_triangle_each_leg_its_strongest_thought():
+    said = message(
+        after=1,
+        thoughts=[
+            "Still failing.",
+            "Nobody checks scripts.",
+            "We can modify it! But no.",
+        ],
+    )
+    said.scores = {
+        0: {"P1": 0.97, "O1": 0.1, "R": 0.2, "N1": 0.9},  # N1 belongs to no leg
+        1: {"O2": 0.95, "R": 0.7, "C1": 0.68},
+        2: {"O3": 0.39, "R": 0.1, "C1": 0.57},
+    }
+    run = run_with(messages=[message(text="Go on.", role="user"), said])
+    record(
+        run.case,
+        [
+            ev("C1", p=0.68, direction="toward", message=1, thought=1),
+            ev("C1", p=0.57, direction="away", message=1, thought=2),
+        ],
+        Mandate(),
+    )
+    prompt, legs = thought_legs(run)
+    assert prompt is None  # a prompt is never scored
+    assert legs == Legs(
+        pressure=Leg(score=0.97, confirmed=False, facts=["“Still failing.” 0.97"]),
+        opportunity=Leg(
+            score=0.95,
+            confirmed=False,
+            facts=[
+                "“Nobody checks scripts.” 0.95",
+                "“We can modify it! But no.” 0.39",
+                "“Still failing.” 0.10",
+            ],
+        ),
+        # The concealment that goes away from the crossing counts for nothing.
+        rationalization=Leg(
+            score=0.7,
+            confirmed=False,
+            facts=[
+                "“Nobody checks scripts.” 0.70",
+                "“Still failing.” 0.20",
+                "“We can modify it! But no.” 0.10",
+            ],
+        ),
+    )
+
+
+def test_a_message_with_no_thought_read_has_no_thought_legs():
+    unread = message(after=0, thoughts=["Looking."])
+    # A thought read, then cut again while the message streams on: not one any more.
+    reopened = message(after=0, streaming=True)
+    reopened.scores = {0: {"P1": 0.9}}
+    assert thought_legs(run_with(messages=[unread, reopened])) == [None, None]
 
 
 async def test_the_shadow_carries_the_legs_the_case_held_at_the_call():

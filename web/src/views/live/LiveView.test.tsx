@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as real from "@/api/live";
 import type {
+	Case,
 	CaseEvent,
 	Incident,
 	Indicator,
@@ -9,7 +10,6 @@ import type {
 	Run,
 	RunSummary,
 	Step,
-	Thread,
 } from "@/api/types";
 import { time } from "@/lib/labels";
 import type { Decision } from "./decide";
@@ -438,18 +438,15 @@ const ev = (
 	objects: [],
 	...extra,
 });
-const thread = (
-	leg: Thread["leg"],
-	events: number[],
-	state: Thread["state"] = "open",
-): Thread => ({ leg, state, outside: false, events });
-const caseOf = (events: CaseEvent[], threads: Thread[] = []) => ({
+// The case as served: its events, and the evidence the backend picked for each leg.
+const caseOf = (events: CaseEvent[], evidence: Case["evidence"] = {}) => ({
 	events,
-	threads,
+	threads: [],
 	approved: [],
+	evidence,
 });
 
-test("each leg shows the quote of its strongest open thread, and where it was said", () => {
+test("each gauge quotes the event the case serves as its evidence, and where it was said", () => {
 	state = live([
 		demo(
 			{},
@@ -462,13 +459,11 @@ test("each leg shows the quote of its strongest open thread, and where it was sa
 						ev("O1", 0.8, "the shared ops token is in the legacy script", {
 							source: "code",
 						}),
+						ev("R", 0.9, "now I need to delete it using the shared ops token", {
+							source: "narration",
+						}),
 					],
-					[
-						thread("pressure", [0]),
-						thread("pressure", [1]),
-						thread("pressure", [2], "shared"),
-						thread("opportunity", [3]),
-					],
+					{ pressure: 1, opportunity: 3, rationalization: 4 },
 				),
 			},
 		),
@@ -479,40 +474,21 @@ test("each leg shows the quote of its strongest open thread, and where it was sa
 		">reasoning<",
 		"the shared ops token is in the legacy script",
 		">code<",
+		"now I need to delete it using the shared ops token",
+		">narration<",
 	])
 		expect(gauges).toContain(s);
-	// Weaker than the lead, or closed: not shown.
+	// Not the evidence: not shown.
 	for (const s of ["the deploy token may be scoped", "we missed the window"])
 		expect(gauges).not.toContain(s);
 });
 
-test("the rationalization gauge shows the justification that goes toward the crossing", () => {
-	const justify = (direction?: "toward" | "away" | "neither") =>
-		live([
-			demo(
-				{},
-				{
-					case: caseOf([
-						ev("R", 0.6, "I should pause here", { direction: "away" }),
-						ev("R", 0.9, "now I need to delete it using the shared ops token", {
-							direction,
-						}),
-					]),
-				},
-			),
-		]);
-	state = justify("toward");
-	const gauges = panel(html(), "Fraud triangle");
-	expect(gauges).toContain(
-		"now I need to delete it using the shared ops token",
-	);
-	expect(gauges).toContain(">reasoning<");
-	expect(gauges).not.toContain("I should pause here");
-	// The same words pointing away from the crossing, or nowhere, are no evidence.
-	for (const direction of ["away", "neither", undefined] as const) {
-		state = justify(direction);
-		expect(panel(html(), "Fraud triangle")).not.toContain("“");
-	}
+test("a leg the case serves no evidence for shows no quote, whatever its events", () => {
+	const justify = ev("R", 0.9, "now I need to delete it", {
+		direction: "toward",
+	});
+	state = live([demo({}, { case: caseOf([justify]) })]);
+	expect(panel(html(), "Fraud triangle")).not.toContain("“");
 });
 
 test("no case yet: the gauges show no quote", () => {
@@ -542,6 +518,42 @@ test("a Thought row shows the indicators its words raised: flags amber, counters
 	expect(row(out, "m3")).toMatch(/bg-ok[^"]*">shared</);
 	for (const id of ["m0", "m1", "m4", "c1"])
 		expect(row(out, id)).not.toMatch(/bg-(warn|ok)[^"]*">[a-z ]+</);
+});
+
+test("a Thought row shows the scores the case served for its thoughts", () => {
+	const read = legs(leg(0.97, false, ["“Toujours en échec.” 0.97"]));
+	const run = demo({});
+	state = live([
+		{
+			...run,
+			messages: run.messages.map((m, i) =>
+				i === 2 ? { ...m, legs: read } : m,
+			),
+		},
+	]);
+	const out = html();
+	expect(row(out, "m2")).toContain(
+		'aria-label="Pressure 0.97, Opportunity 0.00, Rationalization 0.00"',
+	);
+	expect(row(out, "m1")).toContain('aria-label="no score"');
+});
+
+test("the decoy key in use is found by its check, whatever the reason's wording", () => {
+	const trap = {
+		check: "trap_key" as const,
+		target: "DB_ADMIN_KEY",
+		score: null,
+		afterwards: false,
+	};
+	state = live([
+		demo({ reason: "clé piège utilisée : DB_ADMIN_KEY", reasons: [trap] }),
+	]);
+	const gauges = panel(html(), "Fraud triangle");
+	expect(gauges).toContain("Decoy key used · step 4");
+	expect(gauges).toContain("clé piège utilisée : DB_ADMIN_KEY (step 4)");
+	// The words alone are no trap key.
+	state = live([demo({ reason: "trap key used: DB_ADMIN_KEY", reasons: [] })]);
+	expect(panel(html(), "Fraud triangle")).not.toContain("Decoy key used");
 });
 
 const hold = {

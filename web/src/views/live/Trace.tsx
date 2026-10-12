@@ -283,7 +283,7 @@ const stopTip = (s: Step) =>
 
 // A call's or a thought's three scores as pixel cells: darker is higher, ringed in the leg's
 // colour once facts confirm it at this step.
-function Legs({ legs }: { legs?: LegScores }) {
+function Legs({ legs }: { legs?: LegScores | null }) {
 	return (
 		<span
 			role="img"

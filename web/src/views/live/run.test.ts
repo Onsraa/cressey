@@ -1,13 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type {
-	CaseEvent,
-	Indicator,
-	LegName,
-	Legs,
-	Run,
-	Step,
-	Thread,
-} from "@/api/types";
+import type { CaseEvent, Indicator, Legs, Run, Step } from "@/api/types";
 import { phaseOf } from "./Header";
 import { layout, mix, pos } from "./pixels";
 import {
@@ -16,15 +8,11 @@ import {
 	callText,
 	carried,
 	indicatorsOn,
-	legEvidence,
-	legThreads,
 	originText,
 	RAMP,
 	rows,
 	shadowOf,
 	shownLegs,
-	strongestEvent,
-	thoughtLegs,
 	turnEvidence,
 } from "./run";
 
@@ -210,6 +198,16 @@ describe("triangle", () => {
 });
 
 describe("a thought on the triangle", () => {
+	const none = { score: 0, confirmed: false, facts: [] };
+	const legs = {
+		pressure: {
+			score: 0.97,
+			confirmed: false,
+			facts: ["“Still failing.” 0.97"],
+		},
+		opportunity: none,
+		rationalization: none,
+	};
 	const said = run({
 		messages: [
 			{
@@ -218,16 +216,7 @@ describe("a thought on the triangle", () => {
 				text: "Still failing. Nobody checks scripts. We can modify it! But no.",
 				role: "agent",
 				streaming: false,
-				thoughts: [
-					"Still failing.",
-					"Nobody checks scripts.",
-					"We can modify it! But no.",
-				],
-				scores: {
-					0: { P1: 0.97, O1: 0.1, R: 0.2, N1: 0.9 },
-					1: { O2: 0.95, R: 0.7, C1: 0.68 },
-					2: { O3: 0.39, R: 0.1, C1: 0.57 },
-				},
+				legs,
 			},
 		],
 		case: {
@@ -246,31 +235,12 @@ describe("a thought on the triangle", () => {
 			),
 			threads: [],
 			approved: [],
+			evidence: {},
 		},
 	});
-	test("each leg is its strongest thought, each thought's score a fact", () => {
-		const legs = thoughtLegs(said, 0);
-		expect(legs?.pressure).toEqual({
-			score: 0.97,
-			confirmed: false,
-			facts: ["“Still failing.” 0.97"],
-		});
-		expect(legs?.opportunity.score).toBe(0.95);
-		expect(legs?.opportunity.facts[0]).toBe("“Nobody checks scripts.” 0.95");
-	});
-	test("a concealment going away from the crossing is no justification", () => {
-		expect(thoughtLegs(said, 0)?.rationalization.facts).toEqual([
-			"“Nobody checks scripts.” 0.70",
-			"“Still failing.” 0.20",
-			"“We can modify it! But no.” 0.10",
-		]);
-	});
-	test("a message read by nobody yet has no score, and its row carries them", () => {
-		expect(
-			thoughtLegs(run({ messages: [{ ...said.messages[0], scores: {} }] }), 0),
-		).toBeUndefined();
+	test("a message's row carries the scores the case served for its thoughts", () => {
 		const row = rows(said).find((x) => x.kind === "msg");
-		expect(row?.kind === "msg" && row.legs?.pressure.score).toBe(0.97);
+		expect(row?.kind === "msg" && row.legs).toEqual(legs);
 	});
 	test("the thought whose excuse stopped the agent carries the call it stopped", () => {
 		const held = step(2, "read_file", "{}", { stopped_by: 0, status: "held" });
@@ -361,86 +331,8 @@ describe("the case", () => {
 		objects: [],
 		...extra,
 	});
-	const thread = (
-		leg: LegName,
-		events: number[],
-		state: Thread["state"] = "open",
-	): Thread => ({ leg, state, outside: false, events });
-	const withCase = (events: CaseEvent[], threads: Thread[] = []) =>
-		run({ case: { events, threads, approved: [] } });
-
-	test("a leg's thread is the strongest open one, as strong as its strongest event", () => {
-		const r = withCase(
-			[
-				event("P1", 0.5, { objects: ["a"] }),
-				event("P1", 0.9, { objects: ["a"] }),
-				event("P1", 0.7, { objects: ["b"] }),
-				event("P3", 0.95, { objects: ["c"] }),
-				event("O1", 0.4, { objects: ["d"] }),
-				event("O1", 0.6, { objects: ["e"] }),
-			],
-			[
-				thread("pressure", [0, 1]),
-				thread("pressure", [2]),
-				thread("pressure", [3], "shared"),
-				thread("opportunity", [4]),
-				thread("opportunity", [5]),
-			],
-		);
-		const got = legThreads(r);
-		expect(got.pressure).toBe(r.case?.threads[0]);
-		expect(got.opportunity).toBe(r.case?.threads[4]);
-		// Rationalization has no thread; a closed thread never leads.
-		expect(got.rationalization).toBeUndefined();
-		const lead = got.pressure;
-		expect(lead && strongestEvent(r, lead)?.quote).toBe("P1 at 0.9");
-	});
-
-	test("rationalization shows its strongest justification that goes toward the crossing", () => {
-		const r = withCase([
-			event("R", 0.9, { direction: "away", quote: "I should pause" }),
-			event("R", 0.5, { direction: "toward", quote: "weak" }),
-			event("C1", 0.7, { direction: "toward", quote: "hide the trace" }),
-			event("R", 0.95, { quote: "no direction" }),
-			event("P1", 0.99, { direction: "toward", quote: "not a justification" }),
-		]);
-		expect(legEvidence(r).rationalization?.quote).toBe("hide the trace");
-		// Away from the crossing, or neither: not evidence.
-		const away = withCase([
-			event("R", 0.9, { direction: "away" }),
-			event("R", 0.8, { direction: "neither" }),
-			event("C1", 0.8),
-		]);
-		expect(legEvidence(away).rationalization).toBeUndefined();
-		expect(legEvidence(run()).rationalization).toBeUndefined();
-	});
-
-	test("pressure and opportunity keep the strongest open thread's strongest event", () => {
-		const r = withCase(
-			[
-				event("P1", 0.5, { objects: ["a"] }),
-				event("P1", 0.9, { objects: ["a"] }),
-				event("P3", 0.99, { objects: ["b"] }),
-				event("O1", 0.6, { objects: ["c"] }),
-			],
-			[
-				thread("pressure", [0, 1]),
-				thread("pressure", [2], "shared"),
-				thread("opportunity", [3]),
-			],
-		);
-		const got = legEvidence(r);
-		expect(got.pressure?.quote).toBe("P1 at 0.9");
-		expect(got.opportunity?.quote).toBe("O1 at 0.6");
-	});
-
-	test("no case yet: no thread on any leg", () => {
-		expect(legThreads(run())).toEqual({
-			pressure: undefined,
-			opportunity: undefined,
-			rationalization: undefined,
-		});
-	});
+	const withCase = (events: CaseEvent[]) =>
+		run({ case: { events, threads: [], approved: [], evidence: {} } });
 
 	test("a message lists the indicators its thoughts raised, once each", () => {
 		const r = withCase([

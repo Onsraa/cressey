@@ -20,7 +20,7 @@ Under `backend/src/cressey/`. Imports point one way, checked by `tests/test_laye
 | Evals | `evals/` | the detection eval and its ablation (`evaluate.py`), the decision-model measure (`measure.py`), the floor's calibration (`calibrate_floor.py`), the stress test (`stress.py`) |
 | Shared doubles | `testing.py` | judges that answer no or nothing, a guide writer with no model, a served Cressey, a percentile: for the tests and the evals |
 | App | `app.py`, `settings.py`, `tasks.py` | the wiring, the settings, the background tasks |
-| Dashboard | `web/src/` | Run en direct, Incidents, Évaluation, Réglages (`dashboard.md`) |
+| Dashboard | `web/src/` | Run en direct, Incidents, Évaluation, Réglages (`dashboard.md`). It draws what the API computes: no engine rule is copied in TypeScript |
 | PocketOS lab | `lab/` | a real Railway project, the Claude Code runners and the replays of their runs |
 
 ## Request flow (target)
@@ -79,7 +79,7 @@ A run key never opens the control plane. With no `CRESSEY_ADMIN_TOKEN`, each sta
 | POST | `/api/guides/{id}/why` | `{"question": str}`, 3–500 characters | 200 `WhyAnswer`, 404 or 422 |
 | POST | `/api/runs` | `{"task": str, "mandate": {"may_destroy": [tables], "may_send_to": [addresses or "@domain"], "may_read_secrets": [names], "protected": [paths]}, "visibility": "tools"\|"messages"\|"reasoning", "kind": "live"\|"replay"\|"control"}` | 201 `{"id", "key"}`. The key is shown once; Cressey keeps only its hash. The task is then assessed in the background (`preflight` on the run; not for `replay`) |
 | GET | `/api/runs` | — | 200 each run's summary: `id`, `task`, `kind`, `via`, `started_at` and its number of `calls`. The dashboard polls it every second; a run's steps come from `/api/runs/{id}` |
-| GET | `/api/runs/{id}` | — | 200 `Run`, or 404. `way_out_step` and `read_only_step` give the steps where Cressey acted on pressure; `preflight` is the task assessed before the run, `null` until it arrives |
+| GET | `/api/runs/{id}` | — | 200 `Run`, or 404. `way_out_step` and `read_only_step` give the steps where Cressey acted on pressure; `preflight` is the task assessed before the run, `null` until it arrives. Two values are worked out from the case when the run is served, by the case's own rules (`engine/case/case.py`): `case.evidence`, each leg's strongest event as an index in `case.events` (the quote its gauge shows; a leg with none is absent), and each message's `legs`, its read thoughts on the triangle (`null` until one is read) |
 | GET | `/api/holds` | — | 200 calls waiting for a human |
 | POST | `/api/runs/{id}/steps/{n}/approve` | — | 204, or 404 when that step isn't held |
 | POST | `/api/runs/{id}/steps/{n}/reject` | optional `{"message": str}`, at most 500 characters: the reason the agent reads | 204, or 404. 422 when the message breaks the text check (it names a trap key or a secret the mandate doesn't grant, gives away how the run is watched, or is too long). Without a message the agent reads the way out alone |
@@ -175,6 +175,7 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
 - **Stack:** Vite 8, React 19, TypeScript 6, Tailwind v4, shadcn (radix, preset nova), Biome.
 - **API client:** `web/src/api/client.ts` exposes `apiGet` and `apiPost`, which throw `ApiError(status, body)`.
 - **Types:** `bun run gen:api` regenerates them from `backend/openapi.json`. CI fails if they're stale.
+- **No rule in TypeScript:** the views draw what the API serves: each step's legs and reasons, the case's evidence for each leg, each message's thought legs. A check is found by its `check` (`reasons`), never by its sentence.
 
 ## Run
 | Command | What it does |

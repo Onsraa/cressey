@@ -125,6 +125,9 @@ class Case(BaseModel):
     events: list[Event] = []
     threads: list[Thread] = []
     approved: list[str] = []  # objects a human approved
+    # Served only: each leg's evidence, an index in `events` (`case.leg_evidence`), the quote
+    # its gauge shows. A leg with none is absent.
+    evidence: dict[LegName, int] = {}
 
 
 class Shadow(BaseModel):
@@ -210,6 +213,8 @@ class Message(BaseModel):
     # Each read thought's answer to every question, by its index in `thoughts`, those under
     # their threshold too: the dashboard scores the thought on the triangle. Display only.
     scores: dict[int, dict[str, float]] = {}
+    # Served only: its thoughts on the triangle (`case.thought_legs`); None until one is read.
+    legs: Legs | None = None
 
 
 class Preflight(BaseModel):

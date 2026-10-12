@@ -252,7 +252,9 @@ class Runs:
         message = Message(after=len(run.steps), text=redact(text, run.known))
         run.messages.append(message)
         # The log keeps what the agent said, not what the thought reading adds later.
-        said = message.model_dump(exclude={"source", "thoughts", "read", "scores"})
+        said = message.model_dump(
+            exclude={"source", "thoughts", "read", "scores", "legs"}
+        )
         self.log.append("message", {"run": run.id, **said})
 
     def stream(self, run: Run, message_id: str, delta: str, final: bool) -> None:
@@ -271,7 +273,9 @@ class Runs:
         self._streaming[key] = (message, raw)
         if final:
             del self._streaming[key]
-            said = message.model_dump(exclude={"source", "thoughts", "read", "scores"})
+            said = message.model_dump(
+                exclude={"source", "thoughts", "read", "scores", "legs"}
+            )
             self.log.append("message", {"run": run.id, **said})
 
     def prompt(self, run: Run, text: str) -> Message:
@@ -287,7 +291,9 @@ class Runs:
         run.messages.append(message)
         run.turn = "working"
         # The log keeps what the user typed, not what the thought reading adds later.
-        said = message.model_dump(exclude={"source", "thoughts", "read", "scores"})
+        said = message.model_dump(
+            exclude={"source", "thoughts", "read", "scores", "legs"}
+        )
         self.log.append("message", {"run": run.id, **said})
         if run.revoked or run.refused:
             self.unlock(run)
