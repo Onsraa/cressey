@@ -101,7 +101,7 @@ The lost constraint and the cover-up get their own labels, because neither is "f
 | I8 | What Cressey learns about an agent never trains that agent | A principle; write it into the docs and contracts |
 
 **New signals the AI model asks for.** Each reuses something built.
-- **Provenance of intent.** Did this act come from the user's request, the task, a tool result, a peer, or the agent's own initiative? `case.py` already reads what a prompt approves (`read_prompt`), and the ledger flags injected instructions. Anthropic found most of its classifier's misses were acts the user's approval didn't actually cover.
+- **Provenance of intent.** Did this act come from the user's request, the task, a tool result, a peer, or the agent's own initiative? Code reads where each value of an act came from (`engine/provenance.py`: the task, the user, a tool's result, else the agent); a user's prompt is a record, never evidence, so it is never read into the case; and the ledger flags injected instructions. Anthropic found most of its classifier's misses were acts the user's approval didn't actually cover.
 - **Exit offered and used.** Measure how often agents take the exit. N1 exists for thoughts; add the exit tool.
 - **Affordance inventory**, before the run. The preflight's `wider` and `grader` questions, plus the opportunity leg.
 - **Model identity and version per run.** Claude Code's `PostModelSwitch` hook reports switches; other surfaces carry the model in their requests. Calibration and propensity are kept per model.

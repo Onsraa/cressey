@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Literal, get_args
 
 import yaml
-from pydantic import BaseModel, Field, JsonValue
+from pydantic import BaseModel, Field, JsonValue, model_validator
 
 from cressey.domain.acts import Surface
 from cressey.domain.runs import Indicator
@@ -25,12 +25,19 @@ def _thought_floors() -> dict[str, float]:
 
 
 class ToolRule(BaseModel):
-    # An edit changes the workspace file at the path its `arg` holds; a write's `arg`, if
-    # any, is no path.
+    # An edit changes the workspace file at the path its `arg` holds; a write names none.
     kind: Literal["read", "write", "edit", "destructive", "sql", "egress", "shell"]
     arg: str | None = (
         None  # the argument holding the SQL, the recipients, the path or the command
     )
+
+    @model_validator(mode="after")
+    def _a_write_names_no_argument(self) -> "ToolRule":
+        """A write with an `arg` once meant a file at that path: it would load and silently
+        lose its path check, so it is refused."""
+        if self.kind == "write" and self.arg is not None:
+            raise ValueError("a write names no argument: a file at a path is kind edit")
+        return self
 
 
 class Thresholds(BaseModel):

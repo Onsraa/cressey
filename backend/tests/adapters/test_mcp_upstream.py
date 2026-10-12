@@ -87,7 +87,7 @@ def fronting(tmp_path: Path, judge: Judge | None = None) -> Generator[str]:
             "read_note": {"kind": "read"},
             "delete_note": {"kind": "destructive"},
             "whoami": {"kind": "read"},
-            "create_payment": {"kind": "write", "arg": "iban"},
+            "create_payment": {"kind": "write"},
         }
         profile.write_text(yaml.safe_dump({"upstreams": servers, "tools": tools}))
         settings = Settings(
@@ -141,9 +141,9 @@ async def test_claude_codes_catalog_never_classifies_a_tool_of_the_gateway(tmp_p
     ]
 
 
-async def test_a_write_that_names_an_argument_is_no_file_edit(tmp_path):
-    """Only an edit's argument is a path code checks, and the IBAN a payment names isn't one:
-    with Jev down the payment waits for a human, and one aimed at Cressey's API is held."""
+async def test_a_payment_is_a_write_never_a_file_edit(tmp_path):
+    """Only an edit's argument is a path code checks: with Jev down a payment waits for a
+    human, and one aimed at Cressey's API is held."""
     iban = "FR76 3000 1007 9412 3456 7890 185"
     with fronting(tmp_path, judge=DownJudge()) as base:
         run = await new_run(base)

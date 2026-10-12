@@ -27,8 +27,9 @@ class Event(BaseModel):
 
 def read_lines[T](path: Path, parse: Callable[[bytes], T]) -> tuple[list[T], bool]:
     """Each line of an append-only file, parsed, and True when its last line was cut short
-    by a crash mid-write: that line is cut from the file, so the next write starts a line of
-    its own. A line that doesn't parse anywhere else is no crash: it raises."""
+    by a crash mid-write: a line that doesn't parse is cut from the file, so the next write
+    starts a line of its own; one that parses but lost its newline gets it back. A line
+    that doesn't parse anywhere else is no crash: it raises."""
     # Bytes, cut on "\n" only: str.splitlines() would also cut on the raw U+2028 and U+0085
     # that JSON strings may hold.
     with path.open("rb") as f:
@@ -37,8 +38,6 @@ def read_lines[T](path: Path, parse: Callable[[bytes], T]) -> tuple[list[T], boo
     whole = 0  # bytes of the lines read
     for i, line in enumerate(lines):
         last = i == len(lines) - 1
-        if last and not line.endswith(b"\n"):
-            break
         try:
             read.append(parse(line))
         except ValueError:  # JSON or pydantic: what a cut line raises
@@ -46,6 +45,10 @@ def read_lines[T](path: Path, parse: Callable[[bytes], T]) -> tuple[list[T], boo
                 raise
             break
         whole += len(line)
+        if last and not line.endswith(b"\n"):
+            # Cut between the record and its newline: the record is whole, finish the line.
+            with path.open("ab") as f:
+                f.write(b"\n")
     else:
         return read, False
     with path.open("r+b") as f:
@@ -100,10 +103,17 @@ class EventLog:
             hash="",
         )
         event.hash = event_hash(event)
-        self.events.append(event)
         if self.path:
-            with self.path.open("a", encoding="utf-8") as f:
-                f.write(event.model_dump_json() + "\n")
+            with self.path.open("ab") as f:
+                end = f.tell()
+                try:
+                    f.write((event.model_dump_json() + "\n").encode())
+                except (
+                    OSError
+                ):  # a full disk: no partial line for the next event to follow
+                    f.truncate(end)
+                    raise
+        self.events.append(event)  # once on disk: a failed write leaves no event behind
         if self.anchor:
             _write_anchor(self.anchor, self.head())
         return event

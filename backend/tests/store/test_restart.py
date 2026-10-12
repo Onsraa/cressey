@@ -179,3 +179,59 @@ def test_a_run_line_cut_by_a_crash_never_stops_a_start(tmp_path):
         RunIn(task=TASK)
     )  # the next line starts a line of its own
     assert len(_cressey(tmp_path).all()) == 2
+
+
+def test_an_event_written_whole_but_for_its_newline_is_kept(tmp_path):
+    """The write stopped between the event and its newline: the record is whole, so it
+    stays, and the line is finished."""
+    _append(tmp_path, 3)
+    events = tmp_path / "events.jsonl"
+    events.write_bytes(events.read_bytes().rstrip(b"\n"))
+    log = EventLog(events, tmp_path / "anchor.json")
+    assert (len(log.events), log.intact) == (3, True)
+    assert events.read_bytes().endswith(b"\n")
+
+
+def test_a_write_that_fails_halfway_leaves_no_partial_line(tmp_path, monkeypatch):
+    """A full disk, Cressey still running: the next event never follows a partial line."""
+    _append(tmp_path, 2)
+    log = EventLog(tmp_path / "events.jsonl", tmp_path / "anchor.json")
+    real_open = Path.open
+
+    class Full:
+        def __init__(self, f):
+            self.f = f
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.f.close()
+
+        def tell(self):
+            return self.f.tell()
+
+        def truncate(self, at):
+            return self.f.truncate(at)
+
+        def write(self, data):
+            self.f.write(data[: len(data) // 2])
+            self.f.flush()
+            raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(
+        Path,
+        "open",
+        lambda p, mode="r", **kw: (
+            Full(real_open(p, mode, **kw)) if "a" in mode else real_open(p, mode, **kw)
+        ),
+    )
+    with pytest.raises(OSError):
+        log.append("x", {})
+    monkeypatch.undo()
+    log.append("y", {})
+    assert [e.kind for e in EventLog(tmp_path / "events.jsonl").events] == [
+        "call",
+        "call",
+        "y",
+    ]

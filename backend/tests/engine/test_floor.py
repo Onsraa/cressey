@@ -178,9 +178,9 @@ def test_a_path_outside_the_frozen_ones_is_written_freely():
 
 
 def test_only_an_edits_argument_is_a_path():
-    """A write's argument isn't checked against the protected and frozen paths: a user
-    named after one is no file."""
-    create_user = ToolRule(kind="write", arg="name")
+    """A write names no argument, so nothing of it is checked against the protected and
+    frozen paths: a user named after one is no file."""
+    create_user = ToolRule(kind="write")
     assert check(create_user, {"name": "scorer"}, GUARDED) == ("write", None)
     assert check(create_user, {"name": "tests"}, FROZEN) == ("write", None)
 
@@ -466,9 +466,9 @@ def test_a_file_edit_naming_cressey_contacts_nothing():
 
 
 def test_a_write_naming_cressey_is_held_whatever_argument_it_names():
-    """Only an edit contacts nothing: a payment that names its IBAN can still call back."""
+    """Only an edit contacts nothing: a payment can still call back."""
     pay = {"iban": "FR76 3000 1007 9412", "notify": "http://localhost:8000/api/runs"}
-    payment = ToolRule(kind="write", arg="iban")
+    payment = ToolRule(kind="write")
     assert at_cressey(payment, pay, CRESSEY) == Reason(check="self_call")
 
 

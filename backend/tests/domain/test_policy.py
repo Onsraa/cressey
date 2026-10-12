@@ -1,5 +1,6 @@
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from cressey.domain.policy import Profile, ToolRule, load_policy
 
@@ -32,3 +33,15 @@ def test_the_same_name_on_two_surfaces_is_two_tools(tmp_path):
         "read",
         "destructive",
     )
+
+
+def test_a_write_given_an_argument_is_refused_as_ambiguous():
+    """The old way to say "a file at this path" was a write with an arg: it would load and
+    silently lose its path check. A file edit is `edit` now."""
+    with pytest.raises(ValidationError, match="edit"):
+        Profile.model_validate(
+            {
+                "upstreams": "demo",
+                "tools": {"save_file": {"kind": "write", "arg": "path"}},
+            }
+        )

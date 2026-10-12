@@ -61,8 +61,9 @@ async def claude_hook(
     - MessageDisplay streams a slice of the agent's reasoning; it grows one message live, so
       the dashboard shows it as it is produced and the next call's judgment reads it. The
       decision model flags the message once it is final.
-    - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key. The
-      prompt is a record: it never lowers Cressey's caution (a person's word isn't evidence).
+    - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key: the
+      person takes the run back, which says nothing about whether anything was safe. The
+      prompt is a record, never read into the case (a person's word isn't evidence).
     - PreToolUse gets Cressey's decision: nothing when the call may run, a deny with the way
       out when it may not.
     - PostToolUse / PostToolUseFailure record what the call returned and read the step.
