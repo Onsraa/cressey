@@ -7,11 +7,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from cressey.core import proxy
-from cressey.core.proxy import WAY_OUT
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
 from cressey.domain.runs import Mandate, Risk
-from cressey.engine.agent_text import fallback, finish
+from cressey.engine import decide
+from cressey.engine.agent_text import WAY_OUT, fallback, finish
 from cressey.llm.clients import ModelUnavailable
 from cressey.scan.secrets import redact
 from cressey.testing import QuietJudge, agent, api, next_hold, no_to_all, serving, users
@@ -387,7 +386,7 @@ async def test_arguments_are_redacted_off_the_event_loop(served, monkeypatch):
             on_loop.append(False)
         return redact(text, known)
 
-    monkeypatch.setattr(proxy, "redact", spy)
+    monkeypatch.setattr(decide, "redact", spy)
     run = await new_run(served)
     async with agent(served, run["key"]) as a:
         await a.call_tool("write_file", {"path": "a.txt", "content": "x" * 100_000})
@@ -958,7 +957,7 @@ async def draft_of_a_held_call(tmp_path, drafter: FakeDrafter) -> str | None:
         hold_timeout=10,
     )
     app = create_app(s, make_guide=fake_guide)
-    app.state.guard.drafter = drafter  # no keys in tests: the app built none
+    app.state.engine.drafter = drafter  # no keys in tests: the app built none
     with serve(app) as base:
         run = await new_run(base)
         async with agent(base, run["key"]) as a:
@@ -967,7 +966,7 @@ async def draft_of_a_held_call(tmp_path, drafter: FakeDrafter) -> str | None:
             )
             n = (await next_hold(base))["step"]["n"]
             for _ in range(250):  # the draft is a background task: wait for it
-                if not app.state.guard._late:
+                if not app.state.engine.drafts:
                     break
                 await asyncio.sleep(0.02)
             draft = (await next_hold(base))["step"]["draft"]

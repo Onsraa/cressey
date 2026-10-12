@@ -17,7 +17,7 @@ from fastmcp.client.client import CallToolResult
 from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 
-from cressey.core.proxy import MCP_PATH
+from cressey.adapters.mcp import MCP_PATH
 from cressey.domain.runs import Mandate, RunKind, Visibility
 from cressey.engine.agent_text import PREFIX
 from cressey.settings import DATA, Settings

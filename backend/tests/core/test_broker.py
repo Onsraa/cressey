@@ -1,4 +1,4 @@
-from cressey.core.broker import scoped
+from cressey.adapters.broker import scoped
 from cressey.demo.tools import PROD_KEY, READ_KEY
 from cressey.domain.policy import Credential
 from cressey.domain.runs import Mandate

@@ -184,7 +184,7 @@ class Ledger:
 
     def __init__(self, judge: Judge) -> None:
         self.judge = judge
-        self._reading: Tasks[tuple[str, int], None] = Tasks()
+        self._reading: Tasks[None] = Tasks()
 
     def label_soon(self, run: Run, i: int) -> asyncio.Task[None]:
         """Read step i in the background, unless it is being read. The write that follows

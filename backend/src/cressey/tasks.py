@@ -6,10 +6,14 @@ from collections.abc import Callable, Coroutine, Hashable
 from typing import Any
 
 
-class Tasks[K: Hashable, T]:
+class Tasks[T]:
     def __init__(self) -> None:
         self._running: set[asyncio.Task[T]] = set()
-        self._keyed: dict[K, asyncio.Task[T]] = {}
+        self._keyed: dict[Hashable, asyncio.Task[T]] = {}
+
+    def __len__(self) -> int:
+        """How many are still running."""
+        return len(self._running)
 
     def spawn(self, work: Coroutine[Any, Any, T]) -> asyncio.Task[T]:
         task = asyncio.get_running_loop().create_task(work)
@@ -17,12 +21,12 @@ class Tasks[K: Hashable, T]:
         task.add_done_callback(self._running.discard)
         return task
 
-    def get(self, key: K) -> asyncio.Task[T] | None:
+    def get(self, key: Hashable) -> asyncio.Task[T] | None:
         """The task running under `key`, if any."""
         return self._keyed.get(key)
 
     def once(
-        self, key: K, start: Callable[[], Coroutine[Any, Any, T]]
+        self, key: Hashable, start: Callable[[], Coroutine[Any, Any, T]]
     ) -> asyncio.Task[T]:
         """The task running under `key`, or a new one `start` begins."""
         task = self._keyed.get(key)

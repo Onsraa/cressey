@@ -9,9 +9,9 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from cressey.core.hook import HOOK_PATH
+from cressey.adapters.claude_code import HOOK_PATH
+from cressey.adapters.mcp import MCP_PATH
 from cressey.core.incidents import AssessTask, Incidents
-from cressey.core.proxy import MCP_PATH
 from cressey.domain.incidents import FleetSignal, Incident, Replay
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Responses

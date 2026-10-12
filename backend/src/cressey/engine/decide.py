@@ -1,38 +1,29 @@
-"""The MCP proxy agents point at. Every tool call goes through Guard before it reaches
-the real tool."""
+"""Cressey's decision on every agent call, whatever way it came in (the MCP gateway, a Claude
+Code hook). Before it runs: the safety floor, the tripwires, Jev's floor labels and the
+triangle, then the response the policy gives. Once it ran: the secret scan and the ledger.
+It knows nothing of MCP, hooks or HTTP: an adapter turns its events into `before` and
+`after`, and a `Refused` into the answer the agent sees."""
 
 import asyncio
 import json
 import logging
-import math
 import time
-from typing import Literal
+from typing import Literal, Protocol
 
-import mcp_types
-from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
-from fastmcp.server import create_proxy
-from fastmcp.server.dependencies import get_http_headers
-from fastmcp.server.http import StarletteWithLifespan
-from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
-from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
-from cressey.core.broker import scoped
-from cressey.core.incidents import Incidents
+from cressey.domain.incidents import Incident
 from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.runs import Legs, Run, Shadow, Step
 from cressey.engine.agent_text import (
     REFUSED,
     SUSPENDED,
-    UNKNOWN_KEY,
     WAY_OUT,
     Drafter,
     check_message,
     fallback,
     finish,
     held,
-    note,
     stop_sentence,
 )
 from cressey.engine.case.case import CaseReader, closing_excuse, excuse_reason
@@ -45,6 +36,7 @@ from cressey.engine.triangle import alarm, alarm_reason, legs, read_after, read_
 from cressey.judge import Judge, NotRecorded, yes
 from cressey.scan.secrets import fingerprint, redact, scan
 from cressey.store.runs import Runs
+from cressey.tasks import Tasks
 
 log = logging.getLogger(__name__)
 
@@ -53,53 +45,26 @@ NO_ANSWER = "Jev didn't answer"
 # Jev's floor labels and the triangle can fire on one call: the strictest response applies,
 # so a check on alert never lifts another one's hold.
 STRICTNESS: tuple[Response, ...] = ("alert", "review", "stop")
-MCP_PATH = "/mcp"
 
 
-def _size(b64: str) -> str:
-    """The size of base64 data, without decoding it."""
-    n = len(b64) * 3 // 4 - b64[-2:].count("=")
-    return f"{math.ceil(n / 1024)} Ko"
+class Refused(Exception):
+    """The call may not run, or was held and not approved: the text is what the agent reads."""
 
 
-def _mirrors(texts: list[str], structured: object) -> bool:
-    """FastMCP returns a dict tool's result as JSON text too, and a str tool's as
-    {"result": text}: that structured content is already read."""
-    for text in texts:
-        if structured == {"result": text}:
-            return True
-        try:
-            if json.loads(text) == structured:
-                return True
-        except ValueError:  # not JSON: this text isn't a copy of it
-            continue
-    return False
+class IncidentDesk(Protocol):
+    """Where the engine opens an incident for a call it holds or alerts on (incidents/)."""
 
+    def open(
+        self, run: Run, step: Step, severity: Literal["critique", "haute"]
+    ) -> Incident: ...
 
-def _text(result: ToolResult) -> str:
-    """Everything the tool returned, as text the secret scan and the decision model read:
-    text, embedded text resources and structured content, each once; a line for what isn't
-    text, so it is never silently skipped."""
-    lines: list[str] = []
-    texts: list[str] = []
-    for c in result.content:
-        if isinstance(c, mcp_types.TextContent):
-            texts.append(c.text)
-            lines.append(c.text)
-        elif isinstance(c, mcp_types.EmbeddedResource):
-            res = c.resource
-            if isinstance(res, mcp_types.TextResourceContents):
-                lines.append(res.text)
-            else:
-                lines.append(f"[{res.mime_type or 'binaire'}, {_size(res.blob)}]")
-        elif isinstance(c, mcp_types.ImageContent | mcp_types.AudioContent):
-            lines.append(f"[{c.mime_type}, {_size(c.data)}]")
-        elif isinstance(c, mcp_types.ResourceLink):
-            lines.append(f"[lien : {c.uri}]")
-    structured = result.structured_content
-    if structured is not None and not _mirrors(texts, structured):
-        lines.append(json.dumps(structured, ensure_ascii=False))
-    return "\n".join(lines)
+    def has(self, run_id: str, reason: str) -> bool:
+        """Has this run an incident with this reason?"""
+        ...
+
+    def signalled(self, target: str) -> bool:
+        """Has a fleet signal gone up for this target (the tool and the floor's reason)?"""
+        ...
 
 
 def act_on_pressure(runs: Runs, run: Run, step: Step, legs: Legs) -> None:
@@ -117,11 +82,11 @@ def _ms_since(start: float) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-class Guard(Middleware):
+class Engine:
     def __init__(
         self,
         runs: Runs,
-        incidents: Incidents,
+        incidents: IncidentDesk,
         policy: Policy,
         judge: Judge,
         hold_timeout: float,
@@ -138,9 +103,8 @@ class Guard(Middleware):
         self.ledger = Ledger(judge)
         self.case = CaseReader(judge, policy.triangle)
         self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
-        self._late: set[asyncio.Task[None]] = (
-            set()
-        )  # the loop keeps weak references only
+        self.drafts: Tasks[None] = Tasks()  # the drafter's, while a call is held
+        self._late: Tasks[None] = Tasks()  # the reads of calls too long to read first
         self._kinds: dict[str, ToolRule] = {}  # Jev's labels, per tool name
 
     def _response(
@@ -171,36 +135,6 @@ class Guard(Middleware):
         if response == "review" and self.holds == "refuse":
             response = "stop"  # CRESSEY_HOLDS=refuse: nobody waits for a human
         return response
-
-    async def on_call_tool(
-        self,
-        context: MiddlewareContext[mcp_types.CallToolRequestParams],
-        call_next: CallNext[mcp_types.CallToolRequestParams, ToolResult],
-    ) -> ToolResult:
-        # A run is the key Cressey issued: session ids change on every call (S1).
-        auth = get_http_headers(include={"authorization"}).get("authorization", "")
-        run = self.runs.by_key(auth.removeprefix("Bearer ").strip())
-        if run is None:
-            raise ToolError(UNKNOWN_KEY)
-        name, args = context.message.name, context.message.arguments or {}
-        self.runs.route(run, "mcp")
-        step = await self.before(run, name, args)
-        try:
-            # The key broker: the tool gets the credential the mandate allows, never the agent's
-            # own key. The Observer measures what happens without Cressey, so it's left alone.
-            credential = self.policy.broker.get(name) if run.kind != "control" else None
-            if credential:
-                sent = scoped(args, credential, run.mandate, step.status == "approved")
-                message = context.message.model_copy(update={"arguments": dict(sent)})
-                context = context.copy(message=message)
-            result = await call_next(context)
-            told = await self.after(run, step, result.is_error, _text(result))
-            # Added after the record: the ledger labels the tool's own text, not Cressey's.
-            if told:
-                result.content.append(mcp_types.TextContent(text=note(told)))
-            return result
-        finally:
-            step.running = False  # its result is in, or the call failed
 
     async def _rule(self, name: str) -> ToolRule | None:
         """The policy's rule for a tool, else the kind Jev labels from its name, asked once
@@ -249,7 +183,7 @@ class Guard(Middleware):
 
     async def before(self, run: Run, name: str, args: dict[str, JsonValue]) -> Step:
         """Cressey's decision on a call before it runs: its step, let through or approved.
-        Raises ToolError when the call is refused, or held and not approved."""
+        Raises Refused when the call is refused, or held and not approved."""
         start = time.perf_counter()
         rule = await self._rule(name)
         risk, guarded = check(rule, args, run.mandate)
@@ -270,7 +204,7 @@ class Guard(Middleware):
         try:
             if run.revoked:
                 self.runs.mark(run, step, "denied")
-                raise ToolError(SUSPENDED)
+                raise Refused(SUSPENDED)
             # Side by side: the floor's label waits for no more than the triangle already does,
             # and with thought holds on, the agent's words before the call are read meanwhile.
             triangle, labelled, _ = await asyncio.gather(
@@ -280,7 +214,7 @@ class Guard(Middleware):
             )
             if run.revoked:  # a parallel call was held while this one was being judged
                 self.runs.mark(run, step, "denied")
-                raise ToolError(SUSPENDED)
+                raise Refused(SUSPENDED)
             triangle_hold = self.triangle_holds and alarm(triangle, risk)
             excuse = closing_excuse(run, triangle) if self.thought_holds else None
             labels = "; ".join(why for why, _ in labelled) or None
@@ -315,10 +249,10 @@ class Guard(Middleware):
             if not reason and run.read_only_step and risk == "destructive":
                 step.reason = READ_ONLY
                 self.runs.mark(run, step, "denied")
-                raise ToolError(REFUSED)
+                raise Refused(REFUSED)
             # The agent learns it was held, never why: a reason teaches it what to route around
             # (Baker et al. 2025) and would name a trap key. The reason stays with the humans.
-            held_error = ToolError(held())
+            held_error = Refused(held())
             response = self._response(
                 name,
                 reason,
@@ -337,7 +271,7 @@ class Guard(Middleware):
             elif response == "stop":
                 run.revoked = True  # the rest of the run is denied
                 self.runs.mark(run, step, "denied")
-                raise ToolError(REFUSED)
+                raise Refused(REFUSED)
             elif reason:
                 self._draft(run, step)
                 stop_after = self.policy.stuck.rejections
@@ -345,7 +279,7 @@ class Guard(Middleware):
                     told = held(step.message)
                     if run.stopped:
                         told = f"{told} {stop_sentence(stop_after)}"
-                    raise ToolError(told)
+                    raise Refused(told)
             return step
         except BaseException:
             step.running = False  # refused: no result will come
@@ -389,9 +323,7 @@ class Guard(Middleware):
         # Too long to read before it ran: read now, without holding the developer's work.
         late = step.reason is None and step.risk != "read" and not read_before(step)
         if late and run.kind != "replay":
-            task = asyncio.get_running_loop().create_task(self._read_late(run, step))
-            self._late.add(task)
-            task.add_done_callback(self._late.discard)
+            self._late.spawn(self._read_late(run, step))
         return WAY_OUT if run.way_out_step == step.n else None
 
     def _draft(self, run: Run, step: Step) -> None:
@@ -399,10 +331,7 @@ class Guard(Middleware):
         model's draft, if one comes in time and passes the check."""
         step.draft = fallback(run.mandate)
         if self.drafter is not None:
-            drafting = self._draft_late(self.drafter, run, step)
-            task = asyncio.get_running_loop().create_task(drafting)
-            self._late.add(task)
-            task.add_done_callback(self._late.discard)
+            self.drafts.spawn(self._draft_late(self.drafter, run, step))
 
     async def _draft_late(self, drafter: Drafter, run: Run, step: Step) -> None:
         # The model reads the task, the mandate, the tool and the risk class: nothing else.
@@ -434,9 +363,3 @@ class Guard(Middleware):
             return
         self.runs.mark(run, step, "alerted")
         self.incidents.open(run, step, "haute")
-
-
-def build_mcp(guard: Guard, upstream: FastMCP) -> StarletteWithLifespan:
-    proxy = create_proxy(upstream, name="cressey")
-    proxy.add_middleware(guard)
-    return proxy.http_app(path=MCP_PATH)

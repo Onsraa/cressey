@@ -438,8 +438,8 @@ class CaseReader:
         self._turns: weakref.WeakValueDictionary[str, asyncio.Lock] = (
             weakref.WeakValueDictionary()
         )
-        self._shadows: Tasks[tuple[str, int], Shadow] = Tasks()
-        self._prompts: Tasks[tuple[str, int], None] = Tasks()
+        self._shadows: Tasks[Shadow] = Tasks()
+        self._prompts: Tasks[None] = Tasks()
 
     def _turn(self, run: Run) -> asyncio.Lock:
         lock = self._turns.get(run.id)

@@ -3,9 +3,9 @@ import asyncio
 import pytest
 from pydantic import JsonValue
 
-from cressey.core.proxy import act_on_pressure
 from cressey.domain.policy import Thresholds
 from cressey.domain.runs import Leg, Legs, Message, Run, RunIn, Shadow, Step, TextIn
+from cressey.engine.decide import act_on_pressure
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 

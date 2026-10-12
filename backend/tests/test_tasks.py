@@ -15,7 +15,7 @@ def anyio_backend():
 
 
 async def test_a_key_runs_one_task_at_a_time():
-    tasks: Tasks[str, int] = Tasks()
+    tasks: Tasks[int] = Tasks()
     gate, started = asyncio.Event(), []
 
     async def work(n: int) -> int:
@@ -30,7 +30,7 @@ async def test_a_key_runs_one_task_at_a_time():
 
 
 async def test_a_key_is_free_again_once_its_task_ends():
-    tasks: Tasks[str, int] = Tasks()
+    tasks: Tasks[int] = Tasks()
 
     async def work(n: int) -> int:
         return n
@@ -42,7 +42,7 @@ async def test_a_key_is_free_again_once_its_task_ends():
 
 
 async def test_a_task_without_a_key_runs_to_its_end():
-    tasks: Tasks[str, None] = Tasks()
+    tasks: Tasks[None] = Tasks()
     ran = asyncio.Event()
 
     async def work() -> None:
@@ -50,5 +50,7 @@ async def test_a_task_without_a_key_runs_to_its_end():
         ran.set()
 
     task = tasks.spawn(work())
+    assert len(tasks) == 1
     await asyncio.wait_for(ran.wait(), 1)
-    assert task.done()
+    await asyncio.sleep(0)  # the done callback runs on the next turn of the loop
+    assert task.done() and len(tasks) == 0

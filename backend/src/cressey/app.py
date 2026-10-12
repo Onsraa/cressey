@@ -9,17 +9,18 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.routing import Route
 
+from cressey.adapters.claude_code import router as hook_router
+from cressey.adapters.mcp import MCP_PATH, build_mcp
 from cressey.core.api import agent_router, require_admin
 from cressey.core.api import router as core_router
-from cressey.core.hook import router as hook_router
 from cressey.core.incidents import Incidents
-from cressey.core.proxy import MCP_PATH, Guard, build_mcp
 from cressey.demo.agent import load_sessions
 from cressey.demo.replay import replay
 from cressey.demo.tools import demo_tools
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.policy import load_policy
 from cressey.engine.agent_text import cached_drafter
+from cressey.engine.decide import Engine
 from cressey.engine.floor.tripwires import origin
 from cressey.engine.preflight import assess_for
 from cressey.guide.api import router as guide_router
@@ -71,7 +72,7 @@ def create_app(
     guides = s.models == "bedrock" or s.openai_api_key is not None
     models_ready = guides and s.typesafe_api_key is not None
     drafter = cached_drafter(s) if models_ready else None
-    guard = Guard(
+    engine = Engine(
         runs,
         incidents,
         policy,
@@ -83,13 +84,13 @@ def create_app(
         s.thought_holds,
         frozenset({origin(s.base_url), origin(s.dashboard_url)}),
     )
-    mcp = build_mcp(guard, upstream)
+    mcp = build_mcp(engine, upstream)
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
     app.state.runs, app.state.incidents, app.state.settings = runs, incidents, s
     app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check
     app.state.policy = policy  # its responses change live
-    app.state.guard = guard  # the Claude Code hook runs its decision
-    app.state.ledger = guard.ledger  # the report check reads its labels
+    app.state.engine = engine  # the Claude Code hook runs its decision
+    app.state.ledger = engine.ledger  # the report check reads its labels
     app.state.assess_task = assess_task  # each new run's task
     # Unset, a random key per start: nobody outside knows it, the replays read it here.
     app.state.admin_token = (

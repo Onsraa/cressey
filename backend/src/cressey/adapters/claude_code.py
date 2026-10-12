@@ -7,12 +7,11 @@ and end (SessionStart, SessionEnd)."""
 from typing import Annotated
 
 from fastapi import APIRouter, Header, HTTPException, Request
-from fastmcp.exceptions import ToolError
 from pydantic import JsonValue
 
-from cressey.core.proxy import Guard
 from cressey.domain.runs import Step
 from cressey.engine.agent_text import note
+from cressey.engine.decide import Engine, Refused
 from cressey.engine.report import report_check
 from cressey.scan.trace import strings
 from cressey.store.runs import Runs
@@ -55,7 +54,7 @@ async def claude_hook(
       session start (a replay, older settings) has no other end: its Stop ends it.
     """
     runs: Runs = request.app.state.runs
-    guard: Guard = request.app.state.guard
+    engine: Engine = request.app.state.engine
     run = runs.by_key(authorization.removeprefix("Bearer ").strip())
     if run is None:
         raise HTTPException(403)
@@ -72,7 +71,7 @@ async def claude_hook(
         return {}
     if kind == "UserPromptSubmit":
         prompt = runs.prompt(run, event.get("prompt") or "")
-        guard.case.read_prompt_soon(run, prompt.text)
+        engine.case.read_prompt_soon(run, prompt.text)
         return {}
     if kind == "MessageDisplay":
         runs.stream(
@@ -89,16 +88,16 @@ async def claude_hook(
             runs.end(run, last)
         else:
             runs.answered(run, last)
-        runs.checked(run, await report_check(run, guard.ledger, state.thresholds))
+        runs.checked(run, await report_check(run, engine.ledger, state.thresholds))
         return {}
     name = event["tool_name"]
     call = (run.id, str(event.get("tool_use_id", "")))
     if kind == "PreToolUse":
         try:
-            _pending[call] = await guard.before(
+            _pending[call] = await engine.before(
                 run, name, event.get("tool_input") or {}
             )
-        except ToolError as refused:
+        except Refused as refused:
             return _deny(str(refused))
         return {}
     step = _pending.pop(call, None)
@@ -111,7 +110,7 @@ async def claude_hook(
         else "\n".join(strings(event.get("tool_response")))
     )
     # The step is read now: its reasoning streamed in before the call, its result is here.
-    told = await guard.after(run, step, failed, text)
+    told = await engine.after(run, step, failed, text)
     if told is None:
         return {}
     return {
