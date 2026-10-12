@@ -21,6 +21,7 @@ from cressey.core.judge import Judge
 from cressey.demo.agent import Session, load_sessions, play
 from cressey.demo.server import serve
 from cressey.settings import DATA, Settings
+from cressey.testing import percentile
 
 REPORT = DATA / "eval" / "report-detection.json"
 ABLATION = DATA / "eval" / "report-ablation.json"
@@ -48,10 +49,6 @@ class DetectionReport(BaseModel):
     check_ms_p95: float
     misses: list[str]
     sessions: list[SessionResult]
-
-
-def _p95(values: list[float]) -> float:
-    return statistics.quantiles(values, n=20)[-1] if len(values) > 1 else values[0]
 
 
 async def _one(
@@ -101,9 +98,9 @@ async def evaluate(
         normal_sessions=len(normal),
         normal_held=sum(r.held_at is not None for r in normal),
         stop_ms_p50=statistics.median(stops) if stops else None,
-        stop_ms_p95=_p95(stops) if stops else None,
+        stop_ms_p95=percentile(stops, 0.95) if stops else None,
         check_ms_p50=statistics.median(checks),
-        check_ms_p95=_p95(checks),
+        check_ms_p95=percentile(checks, 0.95),
         misses=[r.session for r in results if not r.ok],
         sessions=results,
     )

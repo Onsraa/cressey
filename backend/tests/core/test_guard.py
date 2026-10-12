@@ -6,9 +6,6 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastmcp import Client
-from fastmcp.client.transports import StreamableHttpTransport
-from typesafe_sdk import Choice
 
 from cressey.core import proxy
 from cressey.core.draft import fallback, finish
@@ -17,7 +14,7 @@ from cressey.core.secret_scan import redact
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
 from cressey.domain.runs import Mandate, Risk
 from cressey.llm.clients import ModelUnavailable
-from tests.server import api, next_hold, serving, users
+from cressey.testing import QuietJudge, agent, api, next_hold, no_to_all, serving, users
 
 pytestmark = pytest.mark.anyio
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -27,14 +24,6 @@ DELETE = {"query": "DELETE FROM users", "key": PROD_KEY}
 @pytest.fixture
 def anyio_backend():
     return "asyncio"
-
-
-def agent(base: str, key: str) -> Client:
-    return Client(
-        StreamableHttpTransport(
-            f"{base}/mcp", headers={"Authorization": f"Bearer {key}"}
-        )
-    )
 
 
 async def new_run(base: str, mandate: dict | None = None, **extra: str) -> dict:
@@ -476,40 +465,24 @@ async def test_a_control_run_gets_the_agents_own_key(served, tmp_path):
     assert users(tmp_path) == 0
 
 
-class CountingJudge:
+class CountingJudge(QuietJudge):
     """Answers no to everything, and records which steps it was asked to label."""
 
     def __init__(self):
+        super().__init__()
         self.labelled: list[int] = []
 
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
         if "serves_task" in questions:
             self.labelled.append(state["current_step"]["step"])
-            return dict.fromkeys(questions, 0.0)
-        if "weakens" in questions or "contradicted" in questions:
-            return dict.fromkeys(questions, 0.0)
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
+        return await super().answers(state, questions)
 
 
 async def test_each_result_is_labelled_as_it_comes_in(tmp_path):
     """The first write then waits for its own judgment only, not for every earlier step."""
-    from cressey.app import create_app
-    from cressey.demo.server import serve
-    from cressey.settings import Settings
-    from tests.server import fake_guide
 
     judge = CountingJudge()
-    s = Settings(
-        _env_file=None,
-        openai_api_key=None,
-        typesafe_api_key=None,
-        decider_url=None,
-        demo_dir=tmp_path,
-    )
-    with serve(create_app(s, make_guide=fake_guide, judge=judge)) as base:
+    with serving(tmp_path, hold_timeout=240, judge=judge) as base:
         run = await new_run(base)
         async with agent(base, run["key"]) as a:
             await a.call_tool("read_file", {"path": "README.md"})
@@ -669,26 +642,12 @@ class WeakensTestsJudge:
             return {
                 "weakens": 0.9 if "tests/" in state["current_step"]["args"] else 0.1
             }
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
+        return no_to_all(questions)
 
 
 async def test_on_alert_the_triangle_lets_the_write_through_with_its_incident(tmp_path):
-    from cressey.app import create_app
-    from cressey.demo.server import serve
-    from cressey.settings import Settings
-    from tests.server import fake_guide
 
-    s = Settings(
-        _env_file=None,
-        openai_api_key=None,
-        typesafe_api_key=None,
-        decider_url=None,
-        demo_dir=tmp_path,
-    )
-    with serve(create_app(s, make_guide=fake_guide, judge=WeakensTestsJudge())) as base:
+    with serving(tmp_path, hold_timeout=240, judge=WeakensTestsJudge()) as base:
         await responses(base, triangle="alert")
         run = await new_run(base)
         async with agent(base, run["key"]) as a:
@@ -714,7 +673,7 @@ class WeakensInProductionJudge(WeakensTestsJudge):
 
 async def test_a_check_on_alert_never_lifts_the_triangles_hold(tmp_path):
     """Jev's production label and the triangle fire on one write: the stricter response."""
-    from tests.server import serving
+    from cressey.testing import serving
 
     with serving(tmp_path, hold_timeout=0.3, judge=WeakensInProductionJudge()) as base:
         await responses(base, production="alert")
@@ -746,10 +705,7 @@ class GatedJudge:
             return dict.fromkeys(questions, 0.0)
         if "contradicted" in questions:
             return dict.fromkeys(questions, 0.0)
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
+        return no_to_all(questions)
 
 
 async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_path):
@@ -757,7 +713,7 @@ async def test_a_call_judged_while_another_is_held_never_reaches_the_tool(tmp_pa
     from cressey.app import create_app
     from cressey.demo.server import serve
     from cressey.settings import Settings
-    from tests.server import fake_guide
+    from cressey.testing import fake_guide
 
     s = Settings(
         _env_file=None,
@@ -795,10 +751,7 @@ class WritesWeakenJudge:
         if "weakens" in questions:
             write = state["current_step"]["tool"] == "write_file"
             return {"weakens": 0.9 if write else 0.1}
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
+        return no_to_all(questions)
 
 
 class DownOnWritesJudge:
@@ -808,10 +761,7 @@ class DownOnWritesJudge:
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
         if "weakens" in questions:
             return None
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
+        return no_to_all(questions)
 
 
 async def test_a_late_read_that_doesnt_alarm_still_shows_what_it_found(
@@ -819,22 +769,11 @@ async def test_a_late_read_that_doesnt_alarm_still_shows_what_it_found(
 ):
     """Read afterwards and not held: the step shows the late judgment, here that the decision
     model didn't answer, never the « read afterwards » placeholder."""
-    from cressey.app import create_app
     from cressey.core import triangle
-    from cressey.demo.server import serve
-    from cressey.settings import Settings
-    from tests.server import fake_guide
 
     monkeypatch.setattr(triangle, "PARTS_BEFORE", 1)
     monkeypatch.setattr(triangle, "CHUNK", 1_000)
-    s = Settings(
-        _env_file=None,
-        openai_api_key=None,
-        typesafe_api_key=None,
-        decider_url=None,
-        demo_dir=tmp_path,
-    )
-    with serve(create_app(s, make_guide=fake_guide, judge=DownOnWritesJudge())) as base:
+    with serving(tmp_path, hold_timeout=240, judge=DownOnWritesJudge()) as base:
         run = await new_run(base)
         async with agent(base, run["key"]) as a:
             big = {"path": "big.md", "content": "b" * 3_000}
@@ -855,23 +794,11 @@ async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(
     tmp_path, monkeypatch
 ):
     """No hold for a technical reason (Teddy, 10-10): it runs, is read, and alerts."""
-    from cressey.app import create_app
     from cressey.core import triangle
-    from cressey.demo.server import serve
-    from cressey.settings import Settings
-    from tests.server import fake_guide
 
     monkeypatch.setattr(triangle, "PARTS_BEFORE", 1)
     monkeypatch.setattr(triangle, "CHUNK", 1_000)
-    s = Settings(
-        _env_file=None,
-        openai_api_key=None,
-        typesafe_api_key=None,
-        decider_url=None,
-        demo_dir=tmp_path,
-        hold_timeout=10,
-    )
-    with serve(create_app(s, make_guide=fake_guide, judge=WritesWeakenJudge())) as base:
+    with serving(tmp_path, hold_timeout=10, judge=WritesWeakenJudge()) as base:
         run = await new_run(base)
         async with agent(base, run["key"]) as a:
             for _ in range(2):  # two failed runs: pressure
@@ -1020,7 +947,7 @@ async def draft_of_a_held_call(tmp_path, drafter: FakeDrafter) -> str | None:
     from cressey.app import create_app
     from cressey.demo.server import serve
     from cressey.settings import Settings
-    from tests.server import fake_guide
+    from cressey.testing import fake_guide
 
     s = Settings(
         _env_file=None,

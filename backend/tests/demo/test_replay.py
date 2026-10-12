@@ -8,7 +8,7 @@ from cressey.demo.agent import load_sessions, play
 from cressey.demo.replay import family, replay
 from cressey.domain.incidents import Fix
 from cressey.settings import Settings
-from tests.server import ADMIN, api, fake_guide
+from cressey.testing import ADMIN, api, fake_guide
 
 pytestmark = pytest.mark.anyio
 

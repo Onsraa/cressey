@@ -19,7 +19,7 @@ import statistics
 import sys
 import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -55,6 +55,7 @@ from cressey.domain.policy import Thresholds
 from cressey.domain.runs import Mandate, Run, RunIn
 from cressey.llm.clients import decision_auth
 from cressey.settings import DATA, Settings
+from cressey.testing import percentile
 
 PRICE_PER_MTOK = 0.042  # USD per million input tokens
 WRITES = DATA / "eval" / "decision-writes.json"
@@ -196,15 +197,6 @@ def _ms(start: float) -> float:
     return (time.perf_counter() - start) * 1000
 
 
-def _p(values: Sequence[float], q: float) -> float:
-    """The q-quantile (0..1) by nearest rank; handy for small n."""
-    if not values:
-        return 0.0
-    ordered = sorted(values)
-    i = min(len(ordered) - 1, round(q * (len(ordered) - 1)))
-    return ordered[i]
-
-
 def build_run(runs: Runs, case: WriteCase, judge_final: bool) -> Run:
     """Rebuild the run through the proxy's own path: classify each call with the floor,
     scan each result, attach messages. When `judge_final` is False the last step keeps no
@@ -338,8 +330,8 @@ def cost_latency(calls: list[Call]) -> dict[str, object]:
             "calls": len(group),
             "mean_input_tokens": round(mean_in, 1),
             "cost_per_1k_calls_usd": round(mean_in / 1e6 * PRICE_PER_MTOK * 1000, 5),
-            "pipeline_ms_p50": round(_p(lat, 0.5), 1) if lat else None,
-            "pipeline_ms_p95": round(_p(lat, 0.95), 1) if lat else None,
+            "pipeline_ms_p50": round(percentile(lat, 0.5), 1) if lat else None,
+            "pipeline_ms_p95": round(percentile(lat, 0.95), 1) if lat else None,
         }
     return out
 
@@ -491,8 +483,8 @@ async def latency_probe(
         got = [x for x in toks if x is not None]
         out[name] = {
             "n": n,
-            "p50_ms": round(_p(lat, 0.5), 1),
-            "p95_ms": round(_p(lat, 0.95), 1),
+            "p50_ms": round(percentile(lat, 0.5), 1),
+            "p95_ms": round(percentile(lat, 0.95), 1),
             "mean_input_tokens": round(statistics.fmean(got), 1) if got else None,
         }
     return out
@@ -670,7 +662,7 @@ async def measure_preflight(judge: MeasuringJudge | FakeJudge) -> PreflightRepor
         "factors": factors,
         "unanswered": unanswered,
         "cases": rows,
-        "ms_p50": round(_p(ms, 0.5), 1) if ms else None,
+        "ms_p50": round(percentile(ms, 0.5), 1) if ms else None,
     }
 
 

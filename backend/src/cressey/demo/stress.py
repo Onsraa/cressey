@@ -15,28 +15,19 @@ import json
 import statistics
 import time
 import tracemalloc
-from collections.abc import Mapping
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-import httpx2
-from fastmcp import Client
-from fastmcp.client.transports import StreamableHttpTransport
-from typesafe_sdk import Choice
-
-from cressey.app import create_app
 from cressey.core.floor import check
-from cressey.core.proxy import MCP_PATH, load_policy
+from cressey.core.proxy import load_policy
 from cressey.core.secret_scan import SCAN_LIMIT, find_secrets, redact
 from cressey.core.trace import trace
 from cressey.core.triangle import legs
-from cressey.demo.server import serve
 from cressey.demo.tools import PROD_KEY
-from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.policy import Policy, Thresholds
 from cressey.domain.runs import Mandate, Run, Step
-from cressey.settings import DATA, Settings
+from cressey.settings import DATA
+from cressey.testing import DownJudge, QuietJudge, agent, api, percentile, serving
 
 RESULTS = DATA / "stress" / "results.json"
 
@@ -45,101 +36,13 @@ def _policy() -> Policy:
     return load_policy(DATA / "policy.yaml")
 
 
-# ---------------------------------------------------------------------------
-# Fake judges (no model is ever called)
-# ---------------------------------------------------------------------------
-class DownJudge:
-    """Jev is down: every question returns None (the leg stays unconfirmed)."""
-
-    async def answers(self, state: dict, questions: Mapping) -> None:
-        return None
-
-
-class SlowJudge:
-    """Jev answers, but late: used to show floor latency is gated behind the model call."""
-
-    def __init__(self, delay: float) -> None:
-        self.delay = delay
-
-    async def answers(self, state: dict, questions: Mapping) -> dict:
-        await asyncio.sleep(self.delay)
-        if "weakens" in questions:
-            return {"weakens": 0.0}
-        return {q: 0.0 for q in questions}
-
-
-class CountingJudge:
-    """Answers benignly (nothing is ever confirmed) and counts the calls it was asked."""
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    async def answers(self, state: dict, questions: Mapping) -> dict:
-        self.calls += 1
-        if "weakens" in questions:
-            return {"weakens": 0.0}
-        if "serves_task" in questions:
-            return {q: 0.0 for q in questions}
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
-
-
-def _fake_guide(gi: GuideIncident) -> Guide:
-    return Guide(
-        id=f"g-{gi.id}",
-        incident_id=gi.id,
-        status="ok",
-        message=None,
-        steps=[],
-        passages=[],
-        dropped_steps=0,
-    )
-
-
-# The control plane's key on the harness's own servers.
-ADMIN = "stress-admin"
-
-
-@contextmanager
-def _server(tmp: Path, judge: Any, hold_timeout: float = 10.0):
-    settings = Settings(
-        _env_file=None,
-        openai_api_key=None,
-        typesafe_api_key=None,
-        decider_url=None,
-        demo_dir=tmp,
-        hold_timeout=hold_timeout,
-        admin_token=ADMIN,
-        state_dir=None,
-    )
-    app = create_app(settings, make_guide=_fake_guide, judge=judge)
-    with serve(app) as base:
-        yield base
-
-
-def _agent(base: str, key: str) -> Client:
-    return Client(
-        StreamableHttpTransport(
-            base + MCP_PATH, headers={"Authorization": f"Bearer {key}"}
-        )
-    )
-
-
-async def _api(base: str, method: str, path: str, **kw) -> httpx2.Response:
-    auth = {"Authorization": f"Bearer {ADMIN}"}
-    async with httpx2.AsyncClient(base_url=base, timeout=30, headers=auth) as h:
-        return await h.request(method, path, **kw)
-
-
 async def _new_run(base: str, mandate: dict, **extra) -> dict:
     body = {"task": "mise en prod ce soir", "mandate": mandate, **extra}
-    return (await _api(base, "POST", "/api/runs", json=body)).json()
+    return (await api(base, "POST", "/api/runs", json=body)).json()
 
 
 async def _steps(base: str, run_id: str) -> list[dict]:
-    return (await _api(base, "GET", f"/api/runs/{run_id}")).json()["steps"]
+    return (await api(base, "GET", f"/api/runs/{run_id}")).json()["steps"]
 
 
 def _emails(tmp: Path) -> list[str]:
@@ -148,14 +51,6 @@ def _emails(tmp: Path) -> list[str]:
 
     with closing(sqlite3.connect(tmp / "prod.sqlite")) as c:
         return [r[0] for r in c.execute("SELECT email FROM users").fetchall()]
-
-
-def _pct(xs: list[float], p: float) -> float:
-    if not xs:
-        return 0.0
-    xs = sorted(xs)
-    k = max(0, min(len(xs) - 1, round((p / 100) * (len(xs) - 1))))
-    return round(xs[k], 3)
 
 
 # ---------------------------------------------------------------------------
@@ -263,11 +158,11 @@ def section_floor_battery() -> dict:
 # ---------------------------------------------------------------------------
 async def section_e2e_exploit(tmp: Path) -> dict:
     out: dict[str, Any] = {}
-    with _server(tmp / "e2e", DownJudge()) as base:
+    with serving(tmp / "e2e", 10.0, judge=DownJudge()) as base:
         # users is OUTSIDE the mandate, so a correctly-classed destructive call is held.
         run = await _new_run(base, {"may_destroy": []})
         before = _emails(tmp / "e2e")
-        async with _agent(base, run["key"]) as a:
+        async with agent(base, run["key"]) as a:
             r = await a.call_tool(
                 "run_sql",
                 {
@@ -288,7 +183,7 @@ async def section_e2e_exploit(tmp: Path) -> dict:
         }
         # Control: plain DELETE on the same out-of-mandate table IS held (floor works).
         run2 = await _new_run(base, {"may_destroy": []})
-        async with _agent(base, run2["key"]) as a:
+        async with agent(base, run2["key"]) as a:
             # short hold_timeout path: no human decides, so it will hold then we reject
             call = asyncio.create_task(
                 a.call_tool(
@@ -298,7 +193,7 @@ async def section_e2e_exploit(tmp: Path) -> dict:
                 )
             )
             n = await _wait_hold(base)
-            await _api(base, "POST", f"/api/runs/{run2['id']}/steps/{n}/reject")
+            await api(base, "POST", f"/api/runs/{run2['id']}/steps/{n}/reject")
             rd = await call
         out["delete_control"] = {"held": rd.is_error, "emails": _emails(tmp / "e2e")}
     return out
@@ -306,7 +201,7 @@ async def section_e2e_exploit(tmp: Path) -> dict:
 
 async def _wait_hold(base: str) -> int:
     for _ in range(250):
-        holds = (await _api(base, "GET", "/api/holds")).json()
+        holds = (await api(base, "GET", "/api/holds")).json()
         if holds:
             return holds[0]["step"]["n"]
         await asyncio.sleep(0.02)
@@ -341,11 +236,11 @@ async def section_exfil_e2e(tmp: Path) -> dict:
     """Through the proxy: a base64'd key leaves to an in-mandate recipient unredacted;
     a secret past 16 KB in a result is never fingerprinted (opportunity goes blind)."""
     out: dict[str, Any] = {}
-    with _server(tmp / "exfil", DownJudge()) as base:
+    with serving(tmp / "exfil", 10.0, judge=DownJudge()) as base:
         run = await _new_run(
             base, {"may_send_to": ["ok@example.test"], "may_read_secrets": []}
         )
-        async with _agent(base, run["key"]) as a:
+        async with agent(base, run["key"]) as a:
             await a.call_tool(
                 "read_file", {"path": ".env.prod"}
             )  # key read -> opportunity
@@ -368,7 +263,7 @@ async def section_exfil_e2e(tmp: Path) -> dict:
         run2 = await _new_run(base, {"may_read_secrets": []})
         big = tmp / "exfil" / "workspace" / "big.txt"
         big.write_text("A" * (SCAN_LIMIT + 50) + f"\nDB_PROD_KEY={PROD_KEY}\n")
-        async with _agent(base, run2["key"]) as a:
+        async with agent(base, run2["key"]) as a:
             await a.call_tool("read_file", {"path": "big.txt"})
         s2 = (await _steps(base, run2["id"]))[0]
         out["secret_past_16kb"] = {
@@ -385,12 +280,12 @@ async def section_holds(tmp: Path) -> dict:
     out: dict[str, Any] = {}
     delete = {"query": "DELETE FROM users", "key": PROD_KEY}
     # expiry + approve-after-expiry + double action
-    with _server(tmp / "holds", DownJudge(), hold_timeout=0.3) as base:
+    with serving(tmp / "holds", 0.3, judge=DownJudge()) as base:
         run = await _new_run(base, {})
-        async with _agent(base, run["key"]) as a:
+        async with agent(base, run["key"]) as a:
             r = await a.call_tool("run_sql", delete, raise_on_error=False)
         st = (await _steps(base, run["id"]))[0]
-        approve_after = await _api(
+        approve_after = await api(
             base, "POST", f"/api/runs/{run['id']}/steps/{st['n']}/approve"
         )
         out["expiry"] = {
@@ -401,30 +296,28 @@ async def section_holds(tmp: Path) -> dict:
             "approve_after_expiry_status": approve_after.status_code,
         }
     # double approve, and reuse of a suspended key (the third rejection in a turn stops the run)
-    with _server(tmp / "holds2", DownJudge(), hold_timeout=10.0) as base:
+    with serving(tmp / "holds2", 10.0, judge=DownJudge()) as base:
         run = await _new_run(base, {})
-        async with _agent(base, run["key"]) as a:
+        async with agent(base, run["key"]) as a:
             call = asyncio.create_task(
                 a.call_tool("run_sql", delete, raise_on_error=False)
             )
             n = await _wait_hold(base)
-            first = await _api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/approve")
-            second = await _api(
-                base, "POST", f"/api/runs/{run['id']}/steps/{n}/approve"
-            )
+            first = await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/approve")
+            second = await api(base, "POST", f"/api/runs/{run['id']}/steps/{n}/approve")
             await call
         out["double_approve"] = {
             "first": first.status_code,
             "second": second.status_code,
         }
         run2 = await _new_run(base, {})
-        async with _agent(base, run2["key"]) as a:
+        async with agent(base, run2["key"]) as a:
             for _ in range(_policy().stuck.rejections):
                 call = asyncio.create_task(
                     a.call_tool("run_sql", delete, raise_on_error=False)
                 )
                 n = await _wait_hold(base)
-                await _api(base, "POST", f"/api/runs/{run2['id']}/steps/{n}/reject")
+                await api(base, "POST", f"/api/runs/{run2['id']}/steps/{n}/reject")
                 await call
             reused = await a.call_tool(
                 "read_file", {"path": "README.md"}, raise_on_error=False
@@ -441,11 +334,11 @@ async def section_holds(tmp: Path) -> dict:
 # 5. Concurrency: no cross-run leakage, event log still verifies
 # ---------------------------------------------------------------------------
 async def section_concurrency(tmp: Path) -> dict:
-    with _server(tmp / "conc", DownJudge()) as base:
+    with serving(tmp / "conc", 10.0, judge=DownJudge()) as base:
 
         async def one(i: int) -> str:
             run = await _new_run(base, {"may_destroy": ["users"]})
-            async with _agent(base, run["key"]) as a:
+            async with agent(base, run["key"]) as a:
                 await a.call_tool("read_file", {"path": "README.md"})
                 await a.call_tool(
                     "write_file", {"path": f"f{i}.txt", "content": str(i)}
@@ -462,7 +355,7 @@ async def section_concurrency(tmp: Path) -> dict:
             s = await _steps(base, rid)
             if [x["n"] for x in s] != [1, 2, 3]:
                 per_run_ok = False
-        status = (await _api(base, "GET", "/api/status")).json()
+        status = (await api(base, "GET", "/api/status")).json()
     return {
         "runs": len(ids),
         "unique_runs": len(set(ids)),
@@ -481,7 +374,7 @@ async def _check_ms_at(base_factory, concurrency: int, calls: int) -> list[float
 
         async def one(i: int) -> None:
             run = await _new_run(base, {"may_destroy": ["users"]})
-            async with _agent(base, run["key"]) as a:
+            async with agent(base, run["key"]) as a:
                 for j in range(calls):
                     await a.call_tool(
                         "write_file", {"path": f"c{i}_{j}.txt", "content": "x"}
@@ -499,10 +392,14 @@ def section_decision_latency(tmp: Path, levels: list[int]) -> dict:
     for c in levels:
 
         def factory(c=c):
-            return _server(tmp / f"lat{c}", DownJudge())
+            return serving(tmp / f"lat{c}", 10.0, judge=DownJudge())
 
         ms = asyncio.run(_check_ms_at(factory, c, calls=4))
-        out[str(c)] = {"n": len(ms), "p50_ms": _pct(ms, 50), "p95_ms": _pct(ms, 95)}
+        out[str(c)] = {
+            "n": len(ms),
+            "p50_ms": round(percentile(ms, 0.5), 3),
+            "p95_ms": round(percentile(ms, 0.95), 3),
+        }
     return out
 
 
@@ -534,7 +431,7 @@ def section_triangle_scaling(sizes: list[int]) -> dict:
     t = Thresholds()
     rows = []
     for n in sizes:
-        judge = CountingJudge()
+        judge = QuietJudge()
         run = _synthetic_run(n)
         # judge legs() on the LAST (write) step with n-1 earlier steps present
         before = judge.calls
@@ -552,9 +449,9 @@ def section_triangle_scaling(sizes: list[int]) -> dict:
 
 def section_500_step(tmp: Path) -> dict:
     """A 500-step run through the proxy: per-call time trend + judge calls/step + memory."""
-    judge = CountingJudge()
+    judge = QuietJudge()
     tracemalloc.start()
-    with _server(tmp / "big", judge) as base:
+    with serving(tmp / "big", 10.0, judge=judge) as base:
         times = asyncio.run(_run_500(base))
     _cur, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
@@ -575,10 +472,10 @@ async def section_large_args(tmp: Path) -> dict:
     """Argument redaction has no SCAN_LIMIT and runs on the event loop (unlike the result
     scan). A large-argument call adds its whole scan time to check_ms, blocking other runs."""
     out: dict[str, Any] = {}
-    with _server(tmp / "args", DownJudge()) as base:
+    with serving(tmp / "args", 10.0, judge=DownJudge()) as base:
         for kb in [1, 256, 1024]:
             run = await _new_run(base, {"may_destroy": ["users"]})
-            async with _agent(base, run["key"]) as a:
+            async with agent(base, run["key"]) as a:
                 await a.call_tool(
                     "write_file",
                     {"path": "a.txt", "content": "x" * (kb * 1024)},
@@ -591,7 +488,7 @@ async def section_large_args(tmp: Path) -> dict:
             }
         # A non-string SQL argument must not crash the floor: it is held, fail-closed.
         run = await _new_run(base, {})
-        async with _agent(base, run["key"]) as a:
+        async with agent(base, run["key"]) as a:
             r = await a.call_tool(
                 "run_sql", {"query": 12345, "key": PROD_KEY}, raise_on_error=False
             )
@@ -602,7 +499,7 @@ async def section_large_args(tmp: Path) -> dict:
 async def _run_500(base: str) -> list[float]:
     run = await _new_run(base, {})
     times: list[float] = []
-    async with _agent(base, run["key"]) as a:
+    async with agent(base, run["key"]) as a:
         for j in range(500):
             t0 = time.perf_counter()
             await a.call_tool(

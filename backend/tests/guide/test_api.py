@@ -7,8 +7,8 @@ from cressey.guide.api import get_pipeline, get_store
 from cressey.guide.pipeline import GuidePipeline
 from cressey.guide.store import GuideStore
 from cressey.settings import Settings
+from cressey.testing import ADMIN_AUTH
 from tests.guide.test_pipeline import GOOD, R9, Rer, Retr, Rew, Wri
-from tests.server import ADMIN_AUTH
 
 INC = {
     "id": "i1",

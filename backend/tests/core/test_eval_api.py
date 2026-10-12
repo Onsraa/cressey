@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from cressey.app import create_app
 from cressey.settings import DATA, Settings
-from tests.server import ADMIN_AUTH
+from cressey.testing import ADMIN_AUTH
 
 
 def test_the_eval_reports_are_served_with_their_file_and_date():

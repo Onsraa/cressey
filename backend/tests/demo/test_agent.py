@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from cressey.demo.agent import Session, load_sessions, play
-from tests.server import ADMIN, api, next_hold, users
+from cressey.testing import ADMIN, api, next_hold, users
 
 pytestmark = pytest.mark.anyio
 

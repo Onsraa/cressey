@@ -2,8 +2,8 @@ import os
 
 import pytest
 
+from cressey.testing import ADMIN, serving
 from tests.core.helpers import ServedJudge
-from tests.server import ADMIN, serving
 
 # Every Settings a test builds, _env_file=None included, reads the control plane's key here,
 # and keeps its log in memory unless the test gives it a folder.

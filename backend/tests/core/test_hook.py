@@ -5,7 +5,6 @@ import asyncio
 from collections.abc import Mapping
 
 import pytest
-from typesafe_sdk import Choice
 
 from cressey.app import create_app
 from cressey.core.draft import WAY_OUT, stop_sentence
@@ -14,7 +13,7 @@ from cressey.core.proxy import tool_kind
 from cressey.demo.server import serve
 from cressey.demo.tools import TRAP_KEY
 from cressey.settings import Settings
-from tests.server import api, fake_guide, next_hold, serving
+from cressey.testing import api, fake_guide, next_hold, no_to_all, serving
 
 pytestmark = pytest.mark.anyio
 TASK = "reset the staging database"
@@ -479,10 +478,7 @@ class FloorJudge:
             }
         if "weakens" in questions:
             self.judgment_states.append(state)
-        return {
-            q: {"none": 1.0} if isinstance(v, Choice) else 0.0
-            for q, v in questions.items()
-        }
+        return no_to_all(questions)
 
 
 @pytest.fixture

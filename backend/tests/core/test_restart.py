@@ -12,7 +12,7 @@ from cressey.core.eventlog import EventLog
 from cressey.core.runs import Runs
 from cressey.domain.runs import RunIn
 from cressey.settings import Settings
-from tests.server import ADMIN_AUTH
+from cressey.testing import ADMIN_AUTH
 
 pytestmark = pytest.mark.anyio
 TASK = "Fix the failing test"

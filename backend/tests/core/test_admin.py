@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from cressey.app import create_app
 from cressey.settings import Settings
-from tests.server import ADMIN, ADMIN_AUTH
+from cressey.testing import ADMIN, ADMIN_AUTH
 
 CONTROL = [
     ("GET", "/api/runs"),
