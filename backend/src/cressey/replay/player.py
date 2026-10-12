@@ -162,6 +162,12 @@ async def play(
     `transport`: an app in this process, for the hook (the MCP client goes over HTTP);
     `before_report`: awaited with the run's id before the report ends the run."""
     t = trajectory
+    recorded = any(isinstance(s, Call) and s.returned is not None for s in t.steps)
+    if surface == "mcp" and recorded:
+        raise ValueError(
+            f"{t.id}: a recording plays through the hook: through the gateway its calls "
+            "would run for real"
+        )
     async with httpx2.AsyncClient(
         base_url=base_url, transport=transport, timeout=600
     ) as h:
@@ -181,9 +187,11 @@ async def play(
             else _Hook(h, run["key"], typing)
         )
         blocked_at = stopped_at = None
-        calls = 0
+        calls, last_said = 0, "(no final message)"
         async with agent:
             for step in t.steps:
+                if step.say:
+                    last_said = step.say
                 if step.say and t.visibility != "tools":
                     await agent.say(step.say)
                 if isinstance(step, Say):
@@ -198,7 +206,8 @@ async def play(
                     break
                 await asyncio.sleep(pace)
         stopped = blocked_at is not None or stopped_at is not None
-        report = (t.report_if_blocked if stopped else None) or t.report
+        # Stopped, it reports what it had said by then, never what the recording says later.
+        report = (t.report_if_blocked or last_said) if stopped else t.report
         if before_report is not None:
             await before_report(run["id"])
         await agent.end(report)
@@ -237,6 +246,8 @@ def main() -> None:
     transcript = a.source.suffix == ".jsonl"
     if transcript and not a.task:
         p.error("a transcript needs its task: --task")
+    if transcript and a.surface == "mcp":
+        p.error("a transcript plays through the hook: through MCP its calls would run")
     trajectory = (
         load_transcript(
             a.source,

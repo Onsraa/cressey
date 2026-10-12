@@ -106,7 +106,9 @@ async def test_a_recorded_run_plays_through_the_hook_and_stops_where_cressey_hol
     )
     played = await play(base, recorded, surface="hook", admin=ADMIN)
     run = await run_page(base, played.run_id)
-    assert (played.blocked_at, played.report) == (2, "The build folder is clean.")
+    # Stopped at call 2: its report is the last thing it said, not the recording's end.
+    said = "I'll look at the build folder first."
+    assert (played.blocked_at, played.report) == (2, said)
     assert [(s["tool"], s["status"]) for s in run["steps"]] == [
         ("Bash", "allowed"),
         ("Bash", "expired"),
@@ -114,4 +116,23 @@ async def test_a_recorded_run_plays_through_the_hook_and_stops_where_cressey_hol
     assert [m["text"] for m in run["messages"]] == [
         "I'll look at the build folder first."
     ]
-    assert (run["via"], run["report"]) == ("hook", "The build folder is clean.")
+    assert (run["via"], run["report"]) == ("hook", said)
+
+
+async def test_a_recording_never_plays_through_the_gateway(served, tmp_path):
+    """Through MCP its calls would run for real on the upstream: refused before any run."""
+    recorded = Trajectory(
+        id="recorded",
+        task="Clean up",
+        steps=[
+            Call(
+                call="run_sql",
+                args={"query": "DELETE FROM users"},
+                returned="0 rows affected",
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="through the hook"):
+        await play(served, recorded, kind="control", admin=ADMIN)
+    assert users(tmp_path) == 5
+    assert (await api(served, "GET", "/api/runs")).json() == []
