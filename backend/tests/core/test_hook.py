@@ -820,3 +820,20 @@ async def test_a_prompt_that_approves_extends_the_mandate_for_that_object(
         await asyncio.sleep(0.02)
     [secret] = (await run_of(base, run))["steps"][0]["secrets"]
     assert approved == [f"secret:{secret['fingerprint']}"]
+
+
+async def test_a_command_aimed_at_cressey_waits_for_a_human(served):
+    """The guard's own API, reached from the agent's shell: held whatever the mandate, and
+    the policy is unchanged (the call never had the admin key anyway)."""
+    run = await new_run(served)
+    before = (await api(served, "GET", "/api/policy/responses")).json()
+    put = {"command": "curl -X PUT http://127.0.0.1:8000/api/policy/responses -d '{}'"}
+    call = asyncio.create_task(
+        hook(served, run["key"], event("PreToolUse", "Bash", tool_input=put))
+    )
+    hold = await next_hold(served)
+    assert hold["step"]["reason"] == "call to Cressey itself"
+    await api(served, "POST", f"/api/runs/{run['id']}/steps/{hold['step']['n']}/reject")
+    out = (await call).json()["hookSpecificOutput"]
+    assert out["permissionDecision"] == "deny"
+    assert (await api(served, "GET", "/api/policy/responses")).json() == before

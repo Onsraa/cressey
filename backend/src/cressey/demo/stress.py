@@ -98,6 +98,10 @@ def _fake_guide(gi: GuideIncident) -> Guide:
     )
 
 
+# The control plane's key on the harness's own servers.
+ADMIN = "stress-admin"
+
+
 @contextmanager
 def _server(tmp: Path, judge: Any, hold_timeout: float = 10.0):
     settings = Settings(
@@ -107,6 +111,8 @@ def _server(tmp: Path, judge: Any, hold_timeout: float = 10.0):
         decider_url=None,
         demo_dir=tmp,
         hold_timeout=hold_timeout,
+        admin_token=ADMIN,
+        state_dir=None,
     )
     app = create_app(settings, make_guide=_fake_guide, judge=judge)
     with serve(app) as base:
@@ -122,7 +128,8 @@ def _agent(base: str, key: str) -> Client:
 
 
 async def _api(base: str, method: str, path: str, **kw) -> httpx2.Response:
-    async with httpx2.AsyncClient(base_url=base, timeout=30) as h:
+    auth = {"Authorization": f"Bearer {ADMIN}"}
+    async with httpx2.AsyncClient(base_url=base, timeout=30, headers=auth) as h:
         return await h.request(method, path, **kw)
 
 

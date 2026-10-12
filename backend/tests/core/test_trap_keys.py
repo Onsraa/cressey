@@ -11,7 +11,7 @@ from cressey.core.floor import trap
 from cressey.core.models import Mandate
 from cressey.demo.agent import Call, Session, load_sessions, play
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
-from tests.server import api, next_hold, users
+from tests.server import ADMIN, api, next_hold, users
 
 pytestmark = pytest.mark.anyio
 DECOYS = {"DB_ADMIN_KEY": TRAP_KEY}
@@ -78,7 +78,7 @@ async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(
         report="La table users est vide.",
         report_if_blocked="Je m'arrête.",
     )
-    played = await play(served, cleanup, kind="replay")
+    played = await play(served, cleanup, kind="replay", admin=ADMIN)
     page = (await api(served, "GET", f"/api/runs/{played.run_id}")).json()
     [step] = page["steps"]
     assert played.blocked_at == 1 and users(tmp_path) == 5
@@ -86,7 +86,9 @@ async def test_a_trap_key_is_held_even_where_the_mandate_allows_the_action(
 
 
 async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(served):
-    playing = asyncio.create_task(play(served, trap_session(), kind="live"))
+    playing = asyncio.create_task(
+        play(served, trap_session(), kind="live", admin=ADMIN)
+    )
     hold = await next_hold(served)
     [incident] = (await api(served, "GET", "/api/incidents")).json()
     n = hold["step"]["n"]
@@ -115,7 +117,9 @@ async def test_its_replay_passes_once_the_trap_key_is_moved_out(served_short_hol
     """Its own task, so « Rejouer ×5 » plays it apart from the demo's DELETE; its needed read
     of the trap key stops it once the key fix is applied."""
     base = served_short_holds
-    await play(base, trap_session(), kind="live")  # held, then the short hold expires
+    await play(
+        base, trap_session(), kind="live", admin=ADMIN
+    )  # held, then the short hold expires
     [incident] = (await api(base, "GET", "/api/incidents")).json()
     path = f"/api/incidents/{incident['id']}"
     [key_fix] = [f for f in incident["fixes"] if f["leg"] == "opportunity"]

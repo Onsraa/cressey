@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, JsonValue, TypeAdapter
 from cressey.core.models import Mandate, RunKind, Visibility
 from cressey.core.proxy import MCP_PATH
 from cressey.guide.corpus import DATA
+from cressey.settings import Settings
 
 SESSIONS = DATA / "sessions"
 REFUSED = "Cressey:"  # how Cressey's own answers start
@@ -71,9 +72,15 @@ def _text(result: CallToolResult) -> str:
 
 
 async def play(
-    base_url: str, session: Session, kind: RunKind = "live", pace: float = 0.0
+    base_url: str,
+    session: Session,
+    kind: RunKind = "live",
+    pace: float = 0.0,
+    *,
+    admin: str,
 ) -> Played:
-    """Play `session` through Cressey: register the run, make the calls, report."""
+    """Play `session` through Cressey: register the run with the control plane's key
+    (`admin`), make the calls with the run's own key, report."""
     async with httpx2.AsyncClient(base_url=base_url) as h:
         body = {
             "task": session.task,
@@ -81,7 +88,10 @@ async def play(
             "visibility": session.visibility,
             "kind": kind,
         }
-        run = (await h.post("/api/runs", json=body)).raise_for_status().json()
+        registered = await h.post(
+            "/api/runs", json=body, headers={"Authorization": f"Bearer {admin}"}
+        )
+        run = registered.raise_for_status().json()
         auth = {"Authorization": f"Bearer {run['key']}"}
         blocked_at = stopped_at = None
         transport = StreamableHttpTransport(base_url + MCP_PATH, headers=auth)
@@ -124,9 +134,15 @@ def main() -> None:
     p.add_argument("--url", default="http://localhost:8000")
     p.add_argument("--pace", type=float, default=1.5, help="seconds between calls")
     a = p.parse_args()
+    admin = Settings().admin_token
+    if admin is None:
+        p.error(
+            "set CRESSEY_ADMIN_TOKEN in .env: registering a run needs the admin key"
+        )
     session = Session.model_validate(yaml.safe_load(a.session.read_text()))
     kind = TypeAdapter(RunKind).validate_python(a.kind)
-    print(asyncio.run(play(a.url, session, kind, a.pace)).model_dump_json(indent=1))
+    played = play(a.url, session, kind, a.pace, admin=admin.get_secret_value())
+    print(asyncio.run(played).model_dump_json(indent=1))
 
 
 if __name__ == "__main__":

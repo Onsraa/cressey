@@ -44,9 +44,11 @@ async def _one(make_app: MakeApp, session: Session, fixes: list[Fix]) -> ReplayR
         demo = Path(tmp)
         app = make_app(demo)  # seeds the demo state, which the fixes then change
         fixed = _apply(fixes, session, demo)
+        admin = app.state.admin_token
         with serve(app) as base:
-            played = await play(base, fixed, kind="replay")
-            async with httpx2.AsyncClient(base_url=base) as h:
+            played = await play(base, fixed, kind="replay", admin=admin)
+            auth = {"Authorization": f"Bearer {admin}"}
+            async with httpx2.AsyncClient(base_url=base, headers=auth) as h:
                 run = (await h.get(f"/api/runs/{played.run_id}")).raise_for_status()
     steps = {s["n"]: s for s in run.json()["steps"]}
     if played.blocked_at is not None:

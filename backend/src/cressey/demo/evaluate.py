@@ -61,11 +61,14 @@ async def _one(
     """Play one session on its own Cressey, so no session sees another's changes."""
     with tempfile.TemporaryDirectory() as demo:
         app = create_app(
-            settings.model_copy(update={"demo_dir": Path(demo)}), judge=judge
+            settings.model_copy(update={"demo_dir": Path(demo), "state_dir": None}),
+            judge=judge,
         )
+        admin = app.state.admin_token
         with serve(app) as base:
-            played = await play(base, session, kind="replay")
-            async with httpx2.AsyncClient(base_url=base) as h:
+            played = await play(base, session, kind="replay", admin=admin)
+            auth = {"Authorization": f"Bearer {admin}"}
+            async with httpx2.AsyncClient(base_url=base, headers=auth) as h:
                 page = (await h.get(f"/api/runs/{played.run_id}")).raise_for_status()
     steps = page.json()["steps"]
     held = next((s for s in steps if s["status"] == "would_hold"), None)

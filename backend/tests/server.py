@@ -15,6 +15,11 @@ from cressey.demo.server import serve
 from cressey.guide.models import Guide, GuideIncident
 from cressey.settings import Settings
 
+# The control plane's key in every test app: conftest.py puts it in the environment too,
+# for the tests that build their own Settings.
+ADMIN = "test-admin"
+ADMIN_AUTH = {"Authorization": f"Bearer {ADMIN}"}
+
 
 def fake_guide(gi: GuideIncident) -> Guide:
     """No model is called in these tests."""
@@ -46,14 +51,17 @@ def serving(
         hold_timeout=hold_timeout,
         holds=holds,
         thought_holds=thought_holds,
+        admin_token=ADMIN,
     )
     with serve(create_app(settings, make_guide=fake_guide, judge=judge)) as base:
         yield base
 
 
 async def api(base: str, method: str, path: str, **kw) -> httpx2.Response:
+    """A call with the admin key, unless the test passes its own Authorization (a run key)."""
+    headers = {**ADMIN_AUTH, **kw.pop("headers", {})}
     async with httpx2.AsyncClient(base_url=base) as h:
-        return await h.request(method, path, **kw)
+        return await h.request(method, path, headers=headers, **kw)
 
 
 async def next_hold(base: str) -> dict:

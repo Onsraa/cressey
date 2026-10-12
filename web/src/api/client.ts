@@ -8,8 +8,33 @@ export class ApiError extends Error {
 	}
 }
 
+// The control plane's key (CRESSEY_ADMIN_TOKEN), kept in this browser only; where storage
+// is blocked it lasts until the page closes. Agents never hold it.
+const ADMIN_KEY = "cressey.admin";
+let adminInMemory = "";
+
+export function adminToken(): string {
+	try {
+		return localStorage.getItem(ADMIN_KEY) ?? adminInMemory;
+	} catch {
+		return adminInMemory;
+	}
+}
+
+export function setAdminToken(token: string) {
+	adminInMemory = token;
+	try {
+		localStorage.setItem(ADMIN_KEY, token);
+	} catch {
+		// blocked storage: the key lasts until the page closes
+	}
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-	const r = await fetch(`/api${path}`, init);
+	const headers = new Headers(init?.headers);
+	const token = adminToken();
+	if (token) headers.set("Authorization", `Bearer ${token}`);
+	const r = await fetch(`/api${path}`, { ...init, headers });
 	const body = r.status === 204 ? null : await r.json().catch(() => null);
 	if (!r.ok) throw new ApiError(r.status, body);
 	return body as T;

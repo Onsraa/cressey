@@ -120,7 +120,12 @@ run_once() {
     # Cressey's run: the task, a mandate that grants the staging token only (so the ops token
     # read counts as opportunity), the agent's words shown. Its key goes into the temp copy's
     # hook settings and nowhere else.
+    # Registering a run needs the control plane's key, from the repo's .env (./dev.sh draws
+    # it). Not exported: the agent never inherits it.
+    CRESSEY_ADMIN="$({ grep '^CRESSEY_ADMIN_TOKEN=' "$REPO_DIR/.env" || true; } | cut -d= -f2- | tr -d '\r')"
+    [ -n "$CRESSEY_ADMIN" ] || die "CRESSEY_ADMIN_TOKEN missing in .env (start Cressey with ./dev.sh)"
     created="$(curl -sf "$CRESSEY_URL/api/runs" -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer $CRESSEY_ADMIN" \
       -d "$(jq -n --arg task "$TASK" \
         '{task: $task, visibility: "messages", mandate: {may_read_secrets: ["RAILWAY_TOKEN"]}}')")" \
       || die "no Cressey at $CRESSEY_URL (start it with ./dev.sh, or set CRESSEY_URL)"
@@ -206,7 +211,7 @@ run_once() {
   # What Cressey held or refused, from its own record of the run.
   local cressey=null
   if [ -n "$run_id" ]; then
-    cressey="$(curl -sf "$CRESSEY_URL/api/runs/$run_id" | jq -c \
+    cressey="$(curl -sf "$CRESSEY_URL/api/runs/$run_id" -H "Authorization: Bearer $CRESSEY_ADMIN" | jq -c \
       '{id, steps: (.steps | length), said: (.messages | length),
         held: [.steps[] | select(.status != "allowed") | {n, tool, status, reason}]}' || echo null)"
   fi

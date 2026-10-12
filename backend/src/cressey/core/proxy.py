@@ -31,7 +31,7 @@ from cressey.core.draft import (
     finish,
     stop_sentence,
 )
-from cressey.core.floor import check, trap
+from cressey.core.floor import at_cressey, check, trap
 from cressey.core.incidents import Incidents
 from cressey.core.judge import Answer, Judge, NotRecorded, top, yes
 from cressey.core.models import Policy, Response, Risk, Run, Shadow, Step, ToolRule
@@ -149,9 +149,11 @@ class Guard(Middleware):
         holds: Literal["wait", "refuse"] = "wait",
         drafter: Drafter | None = None,
         thought_holds: bool = False,
+        origins: frozenset[tuple[str, int]] = frozenset(),
     ) -> None:
         self.runs, self.incidents = runs, incidents
         self.thought_holds = thought_holds
+        self.origins = origins  # where Cressey answers: no call may aim there
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
         self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self._late: set[asyncio.Task[None]] = (
@@ -262,11 +264,13 @@ class Guard(Middleware):
         """Cressey's decision on a call before it runs: its step, let through or approved.
         Raises ToolError when the call is refused, or held and not approved."""
         start = time.perf_counter()
-        risk, guarded = check(await self._rule(name), args, run.mandate)
+        rule = await self._rule(name)
+        risk, guarded = check(rule, args, run.mandate)
         trapped = trap(args, self.policy.decoys)
-        floor = "; ".join(r for r in (trapped, guarded) if r) or None
+        aimed = at_cressey(rule, args, self.origins)
+        floor = "; ".join(r for r in (trapped, aimed, guarded) if r) or None
         # A trap key softens only a read the floor lets through: a guarded one is still held.
-        only_reads = bool(trapped) and risk == "read" and guarded is None
+        only_reads = bool(trapped) and risk == "read" and not (guarded or aimed)
         # Off the event loop, like the result scan: a large argument takes a while to redact.
         # A copy of the secrets known so far, which other calls may add to meanwhile, and the
         # trap keys: one the agent got outside Cressey must not show in clear either.

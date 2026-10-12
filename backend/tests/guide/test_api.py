@@ -8,6 +8,7 @@ from cressey.guide.pipeline import GuidePipeline
 from cressey.guide.store import GuideStore
 from cressey.settings import Settings
 from tests.guide.test_pipeline import GOOD, R9, Rer, Retr, Rew, Wri
+from tests.server import ADMIN_AUTH
 
 INC = {
     "id": "i1",
@@ -26,7 +27,7 @@ def client(tmp_path, writer=None) -> TestClient:
     store = GuideStore(tmp_path / "g.sqlite")
     app.dependency_overrides[get_pipeline] = lambda: pipe
     app.dependency_overrides[get_store] = lambda: store
-    return TestClient(app)
+    return TestClient(app, headers=ADMIN_AUTH)
 
 
 def test_post_guide_then_get_it(tmp_path):

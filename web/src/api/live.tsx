@@ -7,7 +7,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { apiGet } from "./client";
+import { ApiError, apiGet } from "./client";
 import type {
 	FleetSignal,
 	Hold,
@@ -33,6 +33,7 @@ type Polled = {
 export type Live = Polled & {
 	now: number; // ticks with each poll, for the countdowns
 	offline: boolean; // the backend didn't answer the last poll
+	locked: boolean; // the backend refused the dashboard's admin key (or it has none)
 	refresh: () => void; // poll now, after a decision or a change
 	view: View;
 	focus: Focus;
@@ -64,6 +65,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 	const [data, setData] = useState<Polled>(EMPTY);
 	const [now, setNow] = useState(() => Date.now());
 	const [offline, setOffline] = useState(false);
+	const [locked, setLocked] = useState(false);
 	const [view, setView] = useState<View>("live");
 	const [focus, setFocus] = useState<Focus>({});
 	const busy = useRef(false);
@@ -76,8 +78,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 			.then((d) => {
 				setData(d);
 				setOffline(false);
+				setLocked(false);
 			})
-			.catch(() => setOffline(true))
+			.catch((e: unknown) => {
+				if (e instanceof ApiError && e.status === 401) setLocked(true);
+				else setOffline(true);
+			})
 			.finally(() => {
 				busy.current = false;
 			});
@@ -117,6 +123,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 				...data,
 				now,
 				offline,
+				locked,
 				refresh,
 				view,
 				focus,

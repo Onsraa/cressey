@@ -13,5 +13,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY backend/ ./
 RUN uv sync --frozen --no-dev
 COPY --from=web /web/dist ./web
+# The event log and the runs' keys: a volume keeps them across restarts (compose.yaml).
+ENV CRESSEY_STATE_DIR=/app/data/state
 EXPOSE 8000
 CMD ["uv", "run", "--no-dev", "uvicorn", "cressey.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

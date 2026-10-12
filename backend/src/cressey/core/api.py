@@ -3,13 +3,13 @@ holds."""
 
 import asyncio
 import json
+import secrets
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from cressey.core.draft import check_message, finish
-from cressey.core.eventlog import verify
 from cressey.core.hook import HOOK_PATH
 from cressey.core.incidents import AssessTask, Incidents
 from cressey.core.models import (
@@ -33,7 +33,10 @@ from cressey.core.triangle import flag_soon, report_check
 from cressey.guide.corpus import DATA
 from cressey.guide.models import Leg as LegName
 
+# The human control plane: app.py puts all of it behind require_admin.
 router = APIRouter()
+# What the agent itself calls, with its run key.
+agent_router = APIRouter()
 
 
 def get_runs(request: Request) -> Runs:
@@ -96,7 +99,19 @@ def _own_run(runs: Runs, run_id: str, authorization: str) -> Run:
 AuthorizationHeader = Annotated[str, Header()]
 
 
-@router.post("/runs/{run_id}/messages", status_code=204)
+def require_admin(request: Request, authorization: AuthorizationHeader = "") -> None:
+    """The admin key, never a run key: an agent that reaches Cressey can't decide its own
+    holds, unlock itself or switch a check to alert."""
+    given = authorization.removeprefix("Bearer ").strip().encode()
+    if not secrets.compare_digest(given, request.app.state.admin_token.encode()):
+        raise HTTPException(
+            401,
+            "admin token required (CRESSEY_ADMIN_TOKEN)",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@agent_router.post("/runs/{run_id}/messages", status_code=204)
 async def message(
     run_id: str,
     body: TextIn,
@@ -110,7 +125,7 @@ async def message(
     flag_soon(run, runs.say(run, body.text), request.app.state.judge)
 
 
-@router.post("/runs/{run_id}/report", status_code=204)
+@agent_router.post("/runs/{run_id}/report", status_code=204)
 async def report(
     run_id: str,
     body: TextIn,
@@ -135,7 +150,7 @@ async def status(request: Request, runs: RunsDep) -> Status:
         mcp_path=MCP_PATH,
         hook_path=HOOK_PATH,
         stop_after=request.app.state.policy.stuck.rejections,
-        log=LogHead(hash=head, count=count, intact=verify(runs.log.events) is None),
+        log=LogHead(hash=head, count=count, intact=runs.log.intact),
     )
 
 

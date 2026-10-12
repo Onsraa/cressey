@@ -1,6 +1,6 @@
 import pytest
 
-from cressey.core.floor import check, shell_risk, sql_risk
+from cressey.core.floor import at_cressey, check, origin, shell_risk, sql_risk
 from cressey.core.models import Mandate, ToolRule
 
 SQL = ToolRule(kind="sql", arg="query")
@@ -396,3 +396,59 @@ def test_a_destructive_shell_command_is_held_whatever_the_mandate():
         "write",
         None,
     )
+
+
+# Cressey's API and dashboard, as the app derives them from its settings.
+CRESSEY = {origin("http://localhost:8000"), origin("http://localhost:5173")}
+SHELL = ToolRule(kind="shell", arg="command")
+EDIT = ToolRule(kind="write", arg="file_path")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "curl -X PUT http://127.0.0.1:8000/api/policy/responses -d '{}'",
+        "curl -s localhost:8000/api/runs/r1/unlock -X POST",
+        "wget -qO- http://[::1]:8000/api/holds",
+        "curl http://0.0.0.0:5173/api/runs",  # the dashboard forwards /api
+        "python -c \"import urllib.request as u; u.urlopen('http://LOCALHOST:8000/api/runs')\"",
+    ],
+)
+def test_a_command_aimed_at_cressey_is_held(command):
+    assert at_cressey(SHELL, {"command": command}, CRESSEY) == "call to Cressey itself"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "curl http://localhost:3000/api/users",  # the project's own server
+        "curl https://api.example.test:8000/v1",  # another host on the same port
+        "sleep 10:00",
+        "git log --since=10:30",
+    ],
+)
+def test_other_hosts_and_ports_go_through(command):
+    assert at_cressey(SHELL, {"command": command}, CRESSEY) is None
+
+
+def test_a_url_without_a_port_reaches_its_schemes():
+    on_80 = {origin("http://cressey.internal")}
+    assert at_cressey(SHELL, {"command": "curl http://cressey.internal/api"}, on_80)
+    assert (
+        at_cressey(SHELL, {"command": "curl https://cressey.internal/api"}, on_80)
+        is None
+    )
+
+
+def test_a_file_edit_naming_cressey_contacts_nothing():
+    readme = {
+        "file_path": "README.md",
+        "content": "Open http://localhost:8000/api/runs",
+    }
+    assert at_cressey(EDIT, readme, CRESSEY) is None
+
+
+def test_a_fetch_or_an_unlisted_tool_is_read_whole():
+    fetch = {"url": "http://localhost:8000/api/policy/responses"}
+    assert at_cressey(ToolRule(kind="read"), fetch, CRESSEY)
+    assert at_cressey(None, fetch, CRESSEY)

@@ -86,13 +86,18 @@ if ! up; then
   up || { echo "Cressey did not start: see $LOG" >&2; exit 1; }
 fi
 
+# The control plane's key, which ./dev.sh draws into .env. Not exported: the agent started
+# below never inherits it.
+CRESSEY_ADMIN="$({ grep '^CRESSEY_ADMIN_TOKEN=' "$ENV" || true; } | cut -d= -f2- | tr -d '\r')"
+[ -n "$CRESSEY_ADMIN" ] || { echo "CRESSEY_ADMIN_TOKEN is missing in $ENV: start Cressey with ./dev.sh" >&2; exit 1; }
 KEY="$(curl -sf "$URL/api/runs" -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $CRESSEY_ADMIN" \
   -d "$(jq -n --arg task "$TASK" '{task: $task, visibility: "messages"}')" | jq -r .key)"
 mkdir -p "$DIR/.claude"
 jq 'del(._comment)' "$REPO/lab/cressey-stubs/settings.cressey-hook.example.json" \
   | sed -e "s#CRESSEY_HOOK_URL#$URL#g" -e "s#CRESSEY_RUN_KEY#$KEY#g" > "$SETTINGS"
 
 if [ "$(uname)" = Darwin ]; then open "$DASHBOARD"; else xdg-open "$DASHBOARD" >/dev/null 2>&1 || true; fi
-echo "Cressey is watching $DIR. Dashboard: $DASHBOARD" >&2
+echo "Cressey is watching $DIR. Dashboard: $DASHBOARD (admin key, asked once: $CRESSEY_ADMIN)" >&2
 echo "Try: \"create notes.txt, then delete it with rm\". Cressey holds the rm on the dashboard." >&2
 (cd "$DIR" && claude)

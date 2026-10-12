@@ -358,7 +358,7 @@ async def play(src: Source, client: httpx.AsyncClient, app, scores: list[dict]) 
 
 
 async def run_all(a) -> None:
-    s = Settings(model_mode=a.mode, cache_dir=Path(a.cache))
+    s = Settings(model_mode=a.mode, cache_dir=Path(a.cache), state_dir=None)
     scores: list[dict] = []
     judge = Recording(JevJudge.from_settings(s), scores)
     app = create_app(s, judge=judge)
@@ -372,8 +372,10 @@ async def run_all(a) -> None:
     ]
     transport = httpx.ASGITransport(app=app)
     Path(a.out).write_text("")
+    # The control plane's key by default; the agent's calls pass their run key instead.
+    admin = {"Authorization": f"Bearer {app.state.admin_token}"}
     async with httpx.AsyncClient(
-        transport=transport, base_url="http://cressey", timeout=600
+        transport=transport, base_url="http://cressey", timeout=600, headers=admin
     ) as client:
         for src in sources:
             if a.only and not src.id.startswith(a.only):

@@ -9,6 +9,7 @@ backend/data/embeddings.npy
 .superpowers/
 backend/data/embeddings.meta.json
 backend/data/cache.recording/
+backend/data/state/
 
 # PocketOS agent run outputs may contain a token the agent used.
 lab/runs/

@@ -1,15 +1,18 @@
+import secrets
 import tempfile
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.routing import Route
 
+from cressey.core.api import agent_router, require_admin
 from cressey.core.api import router as core_router
 from cressey.core.eventlog import EventLog
+from cressey.core.floor import origin
 from cressey.core.hook import router as hook_router
 from cressey.core.incidents import Incidents
 from cressey.core.judge import JevJudge, Judge
@@ -34,12 +37,20 @@ def create_app(
 ) -> FastAPI:
     s = settings or Settings()
     load_corpus(DATA / "corpus.json")  # refuse to start on an edited corpus
-    runs = Runs(EventLog())
+    state = s.state_dir
+    if state is None:
+        runs = Runs(EventLog())
+    else:
+        state.mkdir(parents=True, exist_ok=True)
+        log = EventLog(state / "events.jsonl", state / "anchor.json")
+        runs = Runs(log, state / "runs.jsonl")
     demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
 
     def fresh(folder: Path) -> FastAPI:
-        """A Cressey of its own for one replayed session; it shares a judge passed in."""
-        return create_app(s.model_copy(update={"demo_dir": folder}), make_guide, given)
+        """A Cressey of its own for one replayed session; it shares a judge passed in. It
+        keeps nothing: the replay is not part of this Cressey's record."""
+        update = {"demo_dir": folder, "state_dir": None}
+        return create_app(s.model_copy(update=update), make_guide, given)
 
     given = judge
     policy = load_policy(DATA / "policy.yaml")
@@ -69,6 +80,7 @@ def create_app(
         s.holds,
         drafter,
         s.thought_holds,
+        frozenset({origin(s.base_url), origin(s.dashboard_url)}),
     )
     mcp = build_mcp(guard, upstream)
     app = FastAPI(title="Cressey", lifespan=mcp.lifespan)
@@ -77,6 +89,10 @@ def create_app(
     app.state.policy = policy  # its responses change live
     app.state.guard = guard  # the Claude Code hook runs its decision
     app.state.assess_task = assess_task  # each new run's task
+    # Unset, a random key per start: nobody outside knows it, the replays read it here.
+    app.state.admin_token = (
+        s.admin_token.get_secret_value() if s.admin_token else secrets.token_urlsafe(24)
+    )
     api = APIRouter(prefix="/api")
 
     @api.get("/health")
@@ -84,8 +100,10 @@ def create_app(
         models = "configured" if models_ready else "missing-keys"
         return {"status": "ok", "models": models}
 
-    api.include_router(guide_router)
-    api.include_router(core_router)
+    admin = [Depends(require_admin)]
+    api.include_router(guide_router, dependencies=admin)
+    api.include_router(core_router, dependencies=admin)
+    api.include_router(agent_router)
 
     # Must stay the last /api route: keeps API typos from falling through to the SPA.
     @api.get("", include_in_schema=False)

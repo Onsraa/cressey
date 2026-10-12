@@ -28,6 +28,7 @@ agent ──▶ Cressey (MCP proxy or Claude Code hook) ──▶ real tools
 - **Fraud triangle.** Jev, a fast decision model, labels pressure and rationalization in the agent's words. Opportunity comes from code (a secret the agent read). A hold needs Jev's judgment plus confirmed pressure or opportunity. No model can release a hold.
 - **Response per check.** Hold for a human (default), refuse at once, or only alert. Switch it in Settings. After 3 rejected calls in a turn, Cressey tells the agent to stop and report.
 - **After a hold.** Cressey traces the misused secret back to where the agent read it and writes a fix guide per owner. Every step quotes a verified source (ANSSI, MITRE ATLAS, OWASP).
+- **The guard has its own lock.** Deciding holds, unlocking a run, changing the responses and reading runs or incidents need the admin key (`CRESSEY_ADMIN_TOKEN`, which `./dev.sh` draws into `.env`). An agent only ever holds its run key, which opens none of these. A call an agent aims at Cressey itself (its API or its dashboard) is held by the safety floor.
 - **Stack.** Python 3.12, FastAPI and FastMCP in `backend/`. React and Vite in `web/`. Rules in `backend/data/policy.yaml`. Models: Jev (TypeSafe) for the triangle and re-ranking, OpenAI or AWS Bedrock for the guides.
 
 **Measured on the dev set:** 7/7 incident sessions held, 0/6 normal sessions held by mistake, 236 ms to stop at stage pace with live Jev. Method in [`docs/evaluation.md`](docs/evaluation.md).
@@ -40,7 +41,7 @@ git clone https://github.com/Onsraa/secure-horizon-2026.git
 cd secure-horizon-2026
 ./connect.sh
 ```
-The first run asks for your Jev key, checks it and saves it in `.env`. Then it starts Cressey, opens the dashboard and opens Claude Code in a scratch folder. Ask the agent to create a file and delete it with `rm`: the dashboard shows each step and holds the `rm`. Quit Claude Code, then press Enter to stop Cressey.
+The first run asks for your Jev key, checks it and saves it in `.env`. Then it starts Cressey, opens the dashboard and opens Claude Code in a scratch folder. The dashboard asks once for the admin key, which `./connect.sh` prints. Ask the agent to create a file and delete it with `rm`: the dashboard shows each step and holds the `rm`. Quit Claude Code, then press Enter to stop Cressey.
 
 - **Your own project:** `./connect.sh ~/my-project`. To disconnect, delete its `.claude/settings.local.json`.
 - **Fix guides:** add an `OPENAI_API_KEY` to `.env` (or AWS credentials with `CRESSEY_MODELS=bedrock`).
@@ -53,8 +54,18 @@ The first run asks for your Jev key, checks it and saves it in `.env`. Then it s
 - **Cressey sees only what goes through it.** The hook covers Claude Code only. An agent with another way out (its own network, another tool) is not stopped. To be the only way out, Cressey has to run outside the agent's container behind a default-deny network. That deployment is not done, so as it stands Cressey would not have stopped the Hugging Face incident.
 - **Small eval, written by the team.** 13 synthetic sessions. The held-out set from outside the team is not written yet.
 - **The reasoning shown is the agent's narration.** No provider exposes the raw chain of thought.
-- **Runs live in memory.** A backend restart drops them, and a hooked Claude Code then has every call refused until you run `./connect.sh` again.
+- **What a restart keeps.** With `CRESSEY_STATE_DIR` (set by `./dev.sh` and the Docker image), the event log, its anchor and the runs' keys are kept on disk. After a restart a hooked agent carries on, its earlier steps come back from the log, and a call held at that moment is logged expired. What a run had only in memory (results, secrets read, the triangle's evidence, a suspension) starts afresh. The anchor sits next to the log: it catches a log cut short, by a crash or by hand, not someone who rewrites both. Shipping it off the machine is next.
+- **On one machine, the agent could read the admin key.** It runs as the same user as Cressey: without the key it can't decide a hold or change a response, but `.env` is readable. Cressey's own URL in a call is held, a tripwire, not the lock. For real isolation, run Cressey off the agent's machine, or sandbox the agent's files and network.
+- **When Jev doesn't answer,** the code rules and trap keys still hold, and a tool missing from the policy is held. But a write that only Jev's floor label would hold goes through unjudged. Holding it until a human decides is next.
 - **Local only.** Nothing is deployed. Before Claude Code 2.1.295, a hook that can't reach Cressey lets calls through.
+
+What happens when a part is down:
+
+| Down | Reads | Writes Cressey's code lets through | Calls the code rules hold |
+|---|---|---|---|
+| Cressey, Claude Code 2.1.295+ (`onFailure: block`) | refused | refused | refused |
+| Cressey, older Claude Code | go through | go through | go through |
+| Jev | go through | go through, unjudged | held |
 
 ## Tests
 ```bash

@@ -5,3 +5,7 @@ services:
       - path: .env
         required: false
     ports: ["8000:8000"]
+    volumes: ["state:/app/data/state"]
+
+volumes:
+  state:

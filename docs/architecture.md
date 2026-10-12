@@ -62,6 +62,12 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `holds` | `CRESSEY_HOLDS` | `wait`: a held call waits for a human. `refuse`, for a fleet: it is refused at once with its reason and the way out (status `denied`); its incident opens and the key stays revoked until Unlock or the user's next prompt |
 
 ## API
+**Who may call what.** Every `/api` route needs the admin key (`Authorization: Bearer <CRESSEY_ADMIN_TOKEN>`; 401 otherwise), except three:
+- `/api/health`;
+- the agent's own `/api/runs/{id}/messages` and `/api/runs/{id}/report`, which take its run key, as `/hook/claude` and `/mcp` do.
+
+A run key never opens the control plane. With no `CRESSEY_ADMIN_TOKEN`, each start draws a random key no client knows. In-process callers (the replays, the evaluation) read it from `app.state.admin_token`. The safety floor holds any call an agent aims at `CRESSEY_URL` or `CRESSEY_DASHBOARD_URL` ("call to Cressey itself"), with loopback spellings counted as one host.
+
 | Method | Path | Body | Response |
 |---|---|---|---|
 | GET | `/api/health` | — | `{"status":"ok","models":"configured"|"missing-keys"}` |
@@ -80,12 +86,12 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | GET | `/api/incidents` | — | 200 incidents, « critique » first, then the oldest |
 | GET | `/api/incidents/{id}` | — | 200 `Incident`, or 404 |
 | GET | `/api/policy/responses` | — | 200 what Cressey does when each check fires: `floor`, `trap_key` (a trap key in a call that changes something), `trap_key_read` (one in a call that only reads: `alert` by default), `irreversible` (Jev's label: a write that can't be undone beyond the mandate), `production` (Jev's label: a write that changes production; it alone can also be `off`), `triangle` (`alert`, `review` or `stop`) and `fleet` (`alert` or `stop`) |
-| PUT | `/api/policy/responses` | the same five fields | 200 the new responses, applied to the next call and logged; 422 on an unknown value. No authentication: localhost only |
+| PUT | `/api/policy/responses` | the same fields | 200 the new responses, applied to the next call and logged; 422 on an unknown value |
 | GET | `/api/fleet` | — | 200 the signals across runs, latest first: `target` (the tool and the floor's reason), `runs`, `first_at`, `last_at` |
 | POST | `/api/incidents/{id}/fixes/{leg}/approve` | — | 204, or 404 when that leg has no fix |
 | POST | `/api/incidents/{id}/replay` | — | 200 `Replay`, also kept on the incident; 404. Takes a few seconds: each session runs on its own Cressey |
 | GET | `/api/eval` | — | 200 the reports in `backend/data/eval/`, each with `kind` (`guides` or `detection`), `split`, `file`, `date` and the report as written |
-| GET | `/api/status` | — | 200 `{"mode": "guard", "model_mode", "mcp_path", "log": {"hash", "count", "intact"}}` |
+| GET | `/api/status` | — | 200 `{"mode": "guard", "model_mode", "mcp_path", "log": {"hash", "count", "intact"}}`. `intact`: the log checked at start against the head the last start anchored, then extended by its own appends |
 | any | `/mcp` | MCP over streamable HTTP, `Authorization: Bearer <run key>` | the proxied tools |
 
 Types are in `backend/src/cressey/guide/models.py`. The web app uses the generated `web/src/api/schema.d.ts`.
@@ -157,7 +163,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
     - Before a fix, the 5 variants are refused. With the key moved out, each stops at its key read and the 5 normal sessions finish.
     - It's a regression test of the policy and the fixes on scripted sessions, not proof of how a real agent behaves.
 - **Event log:** every run, call, status change, result, report, approved fix and replay is appended to the hash-chained log (`core/eventlog.py`). `GET /api/status` serves its head and whether the chain verifies.
-- **State:** runs, holds and the log live in memory for the life of the process.
+- **State:** with `CRESSEY_STATE_DIR` (set by `./dev.sh` and the Docker image), the event log (`events.jsonl`), its anchor (`anchor.json`, the head after each append) and each run's spec and key digest (`runs.jsonl`) are kept on disk. At start the runs come back, their steps rebuilt from the log so numbering goes on, and a call still held is logged `expired` (`after: restart`). Results, secrets read, the case and incidents stay in memory. Unset (tests, replays, the evaluation), everything lives in memory.
 
 ## Web
 - **Stack:** Vite 8, React 19, TypeScript 6, Tailwind v4, shadcn (radix, preset nova), Biome.
@@ -180,7 +186,7 @@ Types are in `backend/src/cressey/guide/models.py`. The web app uses the generat
 - **secrets:** ggshield. It needs the `GITGUARDIAN_API_KEY` repo secret, and warns when the key is missing.
 
 ## Deployment
-- **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The API has no authentication.
+- **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The control plane needs the admin key (see API); on one machine the agent could still read it from `.env`.
 - **After the event: AWS** (the Bedrock partnership covers hosting and models).
 - **Built:** Bedrock runs the guides' rewriter, writer and embedder by default (`CRESSEY_MODELS=bedrock`). Bedrock for the re-ranker (`CRESSEY_RERANKER=bedrock`, Rerank 3.5) is off by default. **Not built yet:** the container deploy.
 - **`CRESSEY_MODELS=bedrock`** (adapters in `clients.py`; measured in `evaluation.md`, « Bedrock models »):

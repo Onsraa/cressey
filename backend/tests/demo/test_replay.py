@@ -8,7 +8,7 @@ from cressey.core.models import Fix
 from cressey.demo.agent import load_sessions, play
 from cressey.demo.replay import family, replay
 from cressey.settings import Settings
-from tests.server import api, fake_guide
+from tests.server import ADMIN, api, fake_guide
 
 pytestmark = pytest.mark.anyio
 
@@ -98,7 +98,9 @@ async def test_approving_the_key_fix_through_the_api_validates_the_replay(
     served_short_holds,
 ):
     base = served_short_holds
-    await play(base, some(SOME[0])[0], kind="live")  # held, then the short hold expires
+    await play(
+        base, some(SOME[0])[0], kind="live", admin=ADMIN
+    )  # held, then the short hold expires
     [incident] = (await api(base, "GET", "/api/incidents")).json()
     path = f"/api/incidents/{incident['id']}"
     assert [f["leg"] for f in incident["fixes"]] == ["pressure", "opportunity"]

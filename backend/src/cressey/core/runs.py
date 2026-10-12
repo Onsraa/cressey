@@ -1,11 +1,14 @@
 """Runs in memory: the key Cressey issued for each one, its steps, and the holds
-waiting for a human."""
+waiting for a human. With a store, each run's spec and key digest are written there and
+restored at start, its steps as the event log recorded them."""
 
 import asyncio
 import hashlib
+import json
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Literal
 
 from pydantic import JsonValue
@@ -26,6 +29,9 @@ from cressey.core.models import (
 from cressey.core.secret_scan import Secret, redact
 from cressey.core.triangle import confirmed, read_only
 
+# The step field each later event of a step sets, as the log records it.
+FROM_LOG = {"status": "status", "legs": "reason", "result": "is_error"}
+
 
 def _digest(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
@@ -35,9 +41,16 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _spec(run: Run) -> JsonValue:
+    """What a run is registered with: enough to know its key and mandate after a restart."""
+    keep = {"id", "task", "mandate", "visibility", "kind", "started_at"}
+    return run.model_dump(mode="json", include=keep)
+
+
 class Runs:
-    def __init__(self, log: EventLog) -> None:
+    def __init__(self, log: EventLog, store: Path | None = None) -> None:
         self.log = log
+        self.store = store  # one JSON line per run (its spec and key digest) or session
         self._runs: dict[str, Run] = {}
         self._keys: dict[str, str] = {}  # sha256 of the key -> run id
         self._waiting: dict[tuple[str, int], asyncio.Future[bool]] = {}
@@ -45,11 +58,58 @@ class Runs:
         self._streaming: dict[tuple[str, str], tuple[Message, str]] = {}
         # A later Claude Code session on a run's key: (that run, session id) -> its own run.
         self._sessions: dict[tuple[str, str], str] = {}
+        if store is not None and store.exists():
+            self._restore(store)
+
+    def _keep(self, entry: dict[str, JsonValue]) -> None:
+        if self.store is not None:
+            with self.store.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+
+    def _restore(self, store: Path) -> None:
+        """The runs a previous start registered: their keys work again. Their steps come back
+        as the log recorded them, so numbering goes on; a call that was still held when
+        Cressey stopped is logged expired. A restart ends a suspension: what the run had
+        in memory (results, secrets read, the case) is gone."""
+        with store.open(encoding="utf-8") as f:
+            for line in f:
+                e = json.loads(line)
+                if e["kind"] == "session":
+                    self._runs[e["id"]].session = e["session"]
+                    continue
+                run = Run.model_validate(e["run"])
+                self._runs[run.id] = run
+                if e["kind"] == "run":
+                    self._keys[e["digest"]] = run.id
+                else:  # a later session's run on that key
+                    run.session = e["session"]
+                    self._sessions[(e["of"], e["session"])] = run.id
+        # Each step as the log last recorded it, in the order its call came in.
+        recorded: dict[tuple[str, int], dict[str, JsonValue]] = {}
+        for event in self.log.events:
+            run_id, n = event.data.get("run"), event.data.get("n")
+            if not (isinstance(run_id, str) and run_id in self._runs):
+                continue
+            if not isinstance(n, int):
+                continue
+            fields = recorded.setdefault((run_id, n), {"n": n})
+            if event.kind == "call":
+                fields |= {k: event.data[k] for k in ("tool", "args", "risk", "reason")}
+            elif field := FROM_LOG.get(event.kind):
+                fields[field] = event.data[field]
+        for (run_id, _), fields in recorded.items():
+            run = self._runs[run_id]
+            step = Step.model_validate(fields)
+            run.steps.append(step)
+            if step.status == "held":
+                step.status = "expired"
+                self._log(run, step, "status", status="expired", after="restart")
 
     def create(self, spec: RunIn) -> RunCreated:
         run = self._new(spec)
         key = "csy_" + secrets.token_urlsafe(24)
         self._keys[_digest(key)] = run.id
+        self._keep({"kind": "run", "run": _spec(run), "digest": _digest(key)})
         return RunCreated(id=run.id, key=key)
 
     def _new(self, spec: RunIn) -> Run:
@@ -70,6 +130,8 @@ class Runs:
         first session; each later one (after /clear, or from a second window) gets a run of
         its own, with the same task and mandate, so their traces never mix."""
         if run.session in (None, session):
+            if run.session is None:
+                self._keep({"kind": "session", "id": run.id, "session": session})
             run.session = session
             return run
         pair = (run.id, session)
@@ -83,6 +145,8 @@ class Runs:
             new = self._new(spec)
             new.session, new.preflight = session, run.preflight
             self._sessions[pair] = new.id
+            entry = {"kind": "sub", "run": _spec(new), "of": run.id, "session": session}
+            self._keep(entry)
         return self._runs[self._sessions[pair]]
 
     def get(self, run_id: str) -> Run | None:

@@ -105,7 +105,10 @@ def main():
     p.add_argument("--task", default=TASK)
     p.add_argument("--pace", type=float, default=0, help="seconds before each event")
     p.add_argument("--typing", type=float, default=0, help="seconds between streamed chunks; 0 posts each message whole")
+    p.add_argument("--admin", default=os.environ.get("CRESSEY_ADMIN_TOKEN"), help="the control plane's key (CRESSEY_ADMIN_TOKEN in the repo's .env)")
     a = p.parse_args()
+    if not a.admin:
+        raise SystemExit("registering a run needs the admin key: --admin, or CRESSEY_ADMIN_TOKEN")
 
     transcript = a.transcript
     if not transcript:
@@ -115,7 +118,7 @@ def main():
         transcript = runs[-1]
     print(f"replaying {transcript}")
 
-    run = _post(a.url + "/api/runs", {"task": a.task, "mandate": MANDATE, "visibility": "messages", "kind": "live"})
+    run = _post(a.url + "/api/runs", {"task": a.task, "mandate": MANDATE, "visibility": "messages", "kind": "live"}, a.admin)
     run_id, key = run["id"], run["key"]
     print(f"run {run_id} created")
 

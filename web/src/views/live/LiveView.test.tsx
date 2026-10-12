@@ -163,6 +163,7 @@ const live = (
 	fleet: [],
 	now: NOW,
 	offline: false,
+	locked: false,
 	refresh: () => {},
 	view: "live",
 	focus,

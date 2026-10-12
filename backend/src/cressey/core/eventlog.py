@@ -3,7 +3,8 @@ edited or deleted record breaks the chain.
 
 A truncated end leaves a chain that is still consistent, so head() exposes the last
 hash and the count to anchor outside the log, and verify() checks a log against such
-an anchor. Not thread-safe: append from one thread (the event loop).
+an anchor. With an anchor file, each append writes the head there, and the next start
+checks the log against it. Not thread-safe: append from one thread (the event loop).
 """
 
 import hashlib
@@ -35,14 +36,24 @@ def _hash(event: Event) -> str:
 
 
 class EventLog:
-    def __init__(self, path: Path | None = None) -> None:
-        self.path = path
+    def __init__(self, path: Path | None = None, anchor: Path | None = None) -> None:
+        self.path, self.anchor = path, anchor
         self.events: list[Event] = []
         if path and path.exists():
             # Iterate the file: str.splitlines() would also cut on the raw U+2028 and
             # U+0085 that JSON strings may hold.
             with path.open(encoding="utf-8") as f:
                 self.events = [Event.model_validate_json(line) for line in f]
+        # Checked once, at start: appends then extend a chain they build themselves. A log
+        # cut short or rewritten no longer matches the head the last process anchored, and a
+        # log whose anchor is gone can't be vouched for.
+        if anchor is None:
+            self.intact = verify(self.events) is None
+        else:
+            head = _read_anchor(anchor)
+            self.intact = (head is not None or not self.events) and verify(
+                self.events, head
+            ) is None
 
     def head(self) -> tuple[str, int]:
         return (self.events[-1].hash if self.events else "", len(self.events))
@@ -61,7 +72,23 @@ class EventLog:
         if self.path:
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(event.model_dump_json() + "\n")
+        if self.anchor:
+            _write_anchor(self.anchor, self.head())
         return event
+
+
+def _read_anchor(path: Path) -> tuple[str, int] | None:
+    if not path.exists():
+        return None
+    a = json.loads(path.read_text())
+    return str(a["hash"]), int(a["count"])
+
+
+def _write_anchor(path: Path, head: tuple[str, int]) -> None:
+    """Replaced whole: a crash mid-write leaves the old head, never half of one."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps({"hash": head[0], "count": head[1]}))
+    tmp.replace(path)
 
 
 def verify(

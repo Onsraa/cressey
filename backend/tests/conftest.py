@@ -1,7 +1,14 @@
+import os
+
 import pytest
 
 from tests.core.helpers import ServedJudge
-from tests.server import serving
+from tests.server import ADMIN, serving
+
+# Every Settings a test builds, _env_file=None included, reads the control plane's key here,
+# and keeps its log in memory unless the test gives it a folder.
+os.environ["CRESSEY_ADMIN_TOKEN"] = ADMIN
+os.environ["CRESSEY_STATE_DIR"] = ""
 
 
 @pytest.fixture

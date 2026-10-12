@@ -62,6 +62,19 @@ class Settings(BaseSettings):
     thought_holds: bool = Field(False, validation_alias="CRESSEY_THOUGHT_HOLDS")
     # At fleet scale nobody waits on each hold: `refuse` refuses it at once, with the way out.
     holds: Literal["wait", "refuse"] = Field("wait", validation_alias="CRESSEY_HOLDS")
+    # The control plane's key (Authorization: Bearer): deciding holds, unlocking, the policy
+    # and every read of runs and incidents. The agent only ever holds its run key. Unset, each
+    # start draws a random key no client knows, so the control plane stays locked.
+    admin_token: SecretStr | None = Field(None, validation_alias="CRESSEY_ADMIN_TOKEN")
+    # Where the event log, its anchor and the runs' keys are kept, so a restart keeps them.
+    # Unset, they live in memory (tests, replays, the evaluation's throwaway Cresseys).
+    state_dir: Path | None = Field(None, validation_alias="CRESSEY_STATE_DIR")
+    # Where Cressey itself answers, its API and its dashboard: the safety floor holds a call
+    # an agent aims at either.
+    base_url: str = Field("http://localhost:8000", validation_alias="CRESSEY_URL")
+    dashboard_url: str = Field(
+        "http://localhost:5173", validation_alias="CRESSEY_DASHBOARD_URL"
+    )
 
     @property
     def relevance_min(self) -> float:
@@ -106,6 +119,8 @@ class Settings(BaseSettings):
         "openai_api_key",
         "typesafe_api_key",
         "decider_url",
+        "admin_token",
+        "state_dir",
         mode="before",
     )
     @classmethod

@@ -7,7 +7,8 @@ import fnmatch
 import json
 import posixpath
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from urllib.parse import urlsplit
 
 import sqlglot
 from pydantic import JsonValue
@@ -61,6 +62,12 @@ BARE_WRITES = set("O:")
 HARMLESS_REDIRECT = re.compile(
     r"(?:&|\d*)>>?\s*/dev/null(?![^\s;&|()])|\d*>&\d+(?![^\s;&|()])"
 )
+# A host and port a call names: in a URL (its port, else its scheme's), or bare, host:port.
+ORIGIN = re.compile(
+    r"(?P<scheme>https?|wss?)://(?P<host>\[[0-9A-Fa-f:.]+\]|[\w.-]+)(?::(?P<port>\d{1,5}))?"
+    r"|(?P<bare>\[[0-9A-Fa-f:.]+\]|[\w.-]+):(?P<bare_port>\d{1,5})\b"
+)
+DEFAULT_PORTS = {"http": 80, "ws": 80, "https": 443, "wss": 443}
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
 REPLACE_INTO = re.compile(r"(^|;)(\s*)REPLACE\s+INTO\b", re.IGNORECASE)
 
@@ -374,3 +381,39 @@ def trap(args: Mapping[str, JsonValue], decoys: Mapping[str, str]) -> str | None
         name for name, key in decoys.items() if any(key.lower() in f for f in forms)
     ]
     return f"trap key used: {', '.join(used)}" if used else None
+
+
+def _host(host: str) -> str:
+    """One name for this machine, however it is spelled: localhost, 127.0.0.0/8, ::1, and
+    the any-address, which connects here too."""
+    h = host.strip("[]").lower()
+    if h in ("localhost", "::1", "0.0.0.0", "::") or h.startswith("127."):
+        return "localhost"
+    return h
+
+
+def origin(url: str) -> tuple[str, int]:
+    """The host and port a URL reaches."""
+    u = urlsplit(url)
+    return _host(u.hostname or ""), u.port or DEFAULT_PORTS.get(u.scheme, 80)
+
+
+def at_cressey(
+    rule: ToolRule | None,
+    args: Mapping[str, JsonValue],
+    guarded: Iterable[tuple[str, int]],
+) -> str | None:
+    """Why the safety floor holds a call that would reach Cressey itself, its API or its
+    dashboard, whatever the mandate: an agent has no business with its guard. What a file
+    edit writes contacts nothing, so it isn't read. A tripwire, not the lock: the admin key
+    is that (a host spelled another way, or a URL built at run time, goes unseen)."""
+    if rule is not None and rule.kind == "write" and rule.arg:
+        return None
+    targets = set(guarded)
+    text = " ".join(s for value in args.values() for s in strings(value))
+    for m in ORIGIN.finditer(text):
+        host, port = m["host"] or m["bare"], m["port"] or m["bare_port"]
+        reached = _host(host), int(port) if port else DEFAULT_PORTS[m["scheme"]]
+        if reached in targets:
+            return "call to Cressey itself"
+    return None
