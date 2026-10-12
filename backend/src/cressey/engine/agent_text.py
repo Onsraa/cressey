@@ -26,6 +26,8 @@ TASK_WAY_OUT = (
 # Every answer Cressey gives the agent starts so: a client tells them from the tool's own.
 PREFIX = "Cressey:"
 UNKNOWN_KEY = f"{PREFIX} unknown key."
+# Resources and prompts would be acts Cressey neither decides nor records.
+TOOLS_ONLY = f"{PREFIX} only tool calls go through, not resources or prompts."
 SUSPENDED = f"{PREFIX} key suspended. {WAY_OUT}"
 REFUSED = f"{PREFIX} action refused. {WAY_OUT}"
 # What the check allows, way out included; a draft is at most 400 characters before it.

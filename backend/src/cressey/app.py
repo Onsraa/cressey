@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastmcp.server import create_proxy
+from fastmcp.server.providers.proxy import ProxyClient
 from starlette.routing import Route
 
 from cressey.adapters.claude_code import router as hook_router
@@ -66,7 +67,9 @@ def create_app(
         demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
         upstream = demo_tools(demo)
     else:
-        upstream = create_proxy(profile.upstreams, name="upstreams")
+        # The agent's headers stay here: its run key never reaches a company's server.
+        servers = ProxyClient(profile.upstreams, forward_incoming_headers=False)
+        upstream = create_proxy(servers, name="upstreams")
     # The task assessed before the run, against the tools as the agent sees them.
     assess_task = partial(assess_for, upstream, judge)
     incidents = Incidents(runs, make_guide, policy.fleet, assess_task)

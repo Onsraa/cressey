@@ -3,19 +3,27 @@ the real tool, and the tool gets the credential the key broker hands it, never t
 
 import json
 import math
+from collections.abc import Sequence
+from typing import Any
 
 import mcp_types
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from fastmcp.prompts.base import Prompt, PromptResult
+from fastmcp.resources.base import Resource, ResourceResult
+from fastmcp.resources.template import ResourceTemplate
 from fastmcp.server import create_proxy
 from fastmcp.server.dependencies import get_http_headers
 from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
+from mcp.shared.exceptions import MCPError
+from mcp_types.jsonrpc import INVALID_REQUEST
 
 from cressey.adapters.broker import scoped
 from cressey.domain.acts import Act, Agent
-from cressey.engine.agent_text import UNKNOWN_KEY, note
+from cressey.domain.runs import Run
+from cressey.engine.agent_text import TOOLS_ONLY, UNKNOWN_KEY, note
 from cressey.engine.decide import Engine, Refused
 
 MCP_PATH = "/mcp"
@@ -78,19 +86,78 @@ def _client(context: MiddlewareContext[mcp_types.CallToolRequestParams]) -> Agen
     )
 
 
+# Before a client can name its run: the handshake.
+HANDSHAKE = ("initialize", "ping", "server/discover")
+
+
 class Gateway(Middleware):
+    """The upstreams' tools, each call decided by the engine. Nothing else passes: no
+    request without a run's key, and no resource or prompt, which would be acts Cressey
+    neither decides nor records."""
+
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
+
+    def _run(self) -> Run | None:
+        # A run is the key Cressey issued: session ids change on every call (S1).
+        auth = get_http_headers(include={"authorization"}).get("authorization", "")
+        return self.engine.runs.by_key(auth.removeprefix("Bearer ").strip())
+
+    async def on_request(
+        self,
+        context: MiddlewareContext[mcp_types.Request[Any, Any]],
+        call_next: CallNext[mcp_types.Request[Any, Any], Any],
+    ) -> Any:
+        # A tool call checks its key itself, to tell the agent why it is refused.
+        open_ = context.method in HANDSHAKE or context.method == "tools/call"
+        if not open_ and self._run() is None:
+            raise MCPError(INVALID_REQUEST, UNKNOWN_KEY)
+        return await call_next(context)
+
+    async def on_list_resources(
+        self,
+        context: MiddlewareContext[mcp_types.ListResourcesRequest],
+        call_next: CallNext[mcp_types.ListResourcesRequest, Sequence[Resource]],
+    ) -> Sequence[Resource]:
+        return []
+
+    async def on_list_resource_templates(
+        self,
+        context: MiddlewareContext[mcp_types.ListResourceTemplatesRequest],
+        call_next: CallNext[
+            mcp_types.ListResourceTemplatesRequest, Sequence[ResourceTemplate]
+        ],
+    ) -> Sequence[ResourceTemplate]:
+        return []
+
+    async def on_list_prompts(
+        self,
+        context: MiddlewareContext[mcp_types.ListPromptsRequest],
+        call_next: CallNext[mcp_types.ListPromptsRequest, Sequence[Prompt]],
+    ) -> Sequence[Prompt]:
+        return []
+
+    async def on_read_resource(
+        self,
+        context: MiddlewareContext[mcp_types.ReadResourceRequestParams],
+        call_next: CallNext[mcp_types.ReadResourceRequestParams, ResourceResult],
+    ) -> ResourceResult:
+        raise MCPError(INVALID_REQUEST, TOOLS_ONLY)
+
+    async def on_get_prompt(
+        self,
+        context: MiddlewareContext[mcp_types.GetPromptRequestParams],
+        call_next: CallNext[mcp_types.GetPromptRequestParams, PromptResult],
+    ) -> PromptResult:
+        raise MCPError(INVALID_REQUEST, TOOLS_ONLY)
 
     async def on_call_tool(
         self,
         context: MiddlewareContext[mcp_types.CallToolRequestParams],
         call_next: CallNext[mcp_types.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
-        # A run is the key Cressey issued: session ids change on every call (S1).
-        auth = get_http_headers(include={"authorization"}).get("authorization", "")
         engine, runs = self.engine, self.engine.runs
-        run = runs.by_key(auth.removeprefix("Bearer ").strip())
+        run = self._run()
         if run is None:
             raise ToolError(UNKNOWN_KEY)
         name, args = context.message.name, context.message.arguments or {}
