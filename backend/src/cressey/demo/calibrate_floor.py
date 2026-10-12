@@ -14,11 +14,11 @@ from typing import Literal
 
 from pydantic import BaseModel, JsonValue
 
-from cressey.core.floor import check
 from cressey.core.proxy import ask_tool_kind
 from cressey.core.triangle import floor_labels
 from cressey.domain.policy import Policy, ToolRule, load_policy
 from cressey.domain.runs import Mandate, Run, Step
+from cressey.engine.floor.rules import check
 from cressey.judge import JevJudge, Judge, top, yes
 from cressey.settings import DATA, Settings
 

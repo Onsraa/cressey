@@ -29,7 +29,6 @@ from cressey.core.draft import (
     finish,
     stop_sentence,
 )
-from cressey.core.floor import at_cressey, check, edits_a_file, trap
 from cressey.core.incidents import Incidents
 from cressey.core.triangle import (
     alarm,
@@ -43,6 +42,8 @@ from cressey.core.triangle import (
 )
 from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.runs import Legs, Risk, Run, Shadow, Step
+from cressey.engine.floor.rules import check, edits_a_file
+from cressey.engine.floor.tripwires import at_cressey, trap
 from cressey.judge import Answer, Judge, NotRecorded, top, yes
 from cressey.scan.secrets import fingerprint, redact, scan
 from cressey.store.runs import Runs

@@ -18,11 +18,11 @@ import tracemalloc
 from pathlib import Path
 from typing import Any
 
-from cressey.core.floor import check
 from cressey.core.triangle import legs
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.policy import Policy, Thresholds, load_policy
 from cressey.domain.runs import Mandate, Run, Step
+from cressey.engine.floor.rules import check
 from cressey.scan.secrets import SCAN_LIMIT, find_secrets, redact
 from cressey.scan.trace import trace
 from cressey.settings import DATA

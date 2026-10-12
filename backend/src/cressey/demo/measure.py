@@ -35,7 +35,6 @@ from typesafe_sdk import (
     RetryPolicy,
 )
 
-from cressey.core.floor import check
 from cressey.core.preflight import CUT, QUESTIONS, assess_for
 from cressey.core.triangle import (
     JUDGMENT,
@@ -48,6 +47,7 @@ from cressey.core.triangle import (
 from cressey.demo.tools import demo_tools
 from cressey.domain.policy import Thresholds, load_policy
 from cressey.domain.runs import Mandate, Run, RunIn
+from cressey.engine.floor.rules import check
 from cressey.judge import Answers, Question
 from cressey.llm.clients import decision_auth
 from cressey.scan.secrets import redact, scan
