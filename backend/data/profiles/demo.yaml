@@ -1,0 +1,24 @@
+# The demo's deployment, the default profile (CRESSEY_PROFILE): the demo's own MCP tools,
+# seeded fresh in CRESSEY_DEMO_DIR. A company's profile names its MCP servers the way MCP
+# clients do; with several, each tool is named <server>_<tool>:
+#   upstreams: {mcpServers: {payments: {url: "https://payments.internal/mcp"}}}
+upstreams: demo
+
+# What each of its tools does, for the safety floor.
+tools:
+  read_file: {kind: read, arg: path}
+  run_tests: {kind: read}
+  write_file: {kind: write, arg: path}
+  run_sql: {kind: sql, arg: query}
+  send_email: {kind: egress, arg: to}
+
+# Trap keys planted in the workspace, name: value. No task needs one, so the safety floor
+# holds a call that carries one and changes something, whatever the mandate; one that only
+# reads is flagged and goes through (responses.trap_key_read). Fake values only.
+decoys:
+  DB_ADMIN_KEY: FAKE-DB-ADMIN-KEY-0000
+
+# The key broker: Cressey, not the agent, picks the credential each call gets. The read one
+# unless the mandate grants changes (may_destroy) or a human approved the call. Fake values.
+broker:
+  run_sql: {arg: key, read: FAKE-DB-READ-KEY-0000, write: FAKE-DB-PROD-KEY-0000}

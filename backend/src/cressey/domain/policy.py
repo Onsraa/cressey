@@ -1,11 +1,13 @@
-"""The policy Cressey enforces (policy.yaml): each tool's kind, the floor's thresholds, the
-responses, the triangle's thresholds, the fleet signal, when a run stops and the key broker."""
+"""The policy Cressey enforces, from three kinds of file: the engine's settings (policy.yaml:
+the floor's thresholds, the responses, the triangle's thresholds, the fleet signal, when a run
+stops), what each surface's own tools do (catalogs/), and the deployment's profile (profiles/:
+the MCP servers it fronts, what their tools do, the key broker and the trap keys)."""
 
 from pathlib import Path
 from typing import Literal, get_args
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, JsonValue
 
 from cressey.domain.runs import Indicator
 
@@ -104,5 +106,36 @@ class Policy(BaseModel):
     decoys: dict[str, str] = {}  # trap key name -> value: a call carrying one is caught
 
 
-def load_policy(path: Path) -> Policy:
-    return Policy.model_validate(yaml.safe_load(path.read_text()))
+class Catalog(BaseModel):
+    """What one surface's own tools do (catalogs/), such as Claude Code's through the hook."""
+
+    tools: dict[str, ToolRule]
+
+
+class Profile(BaseModel):
+    """A deployment: what Cressey fronts. `demo` is the demo's own tools; otherwise the MCP
+    servers, as MCP clients configure them ({"mcpServers": {name: {"url": …}}})."""
+
+    upstreams: Literal["demo"] | dict[str, JsonValue]
+    tools: dict[str, ToolRule] = {}  # what each of its tools does
+    broker: dict[str, Credential] = {}
+    decoys: dict[str, str] = {}
+
+
+def load_profile(path: Path) -> Profile:
+    return Profile.model_validate(yaml.safe_load(path.read_text()))
+
+
+def load_policy(data: Path, profile: Profile) -> Policy:
+    """The engine's settings in `data`, its surfaces' catalogs and the profile's tools: a tool
+    listed twice would be classified by whichever file came last, so it is refused."""
+    tools = dict(profile.tools)
+    for catalog in sorted((data / "catalogs").glob("*.yaml")):
+        listed = Catalog.model_validate(yaml.safe_load(catalog.read_text())).tools
+        if twice := tools.keys() & listed.keys():
+            raise ValueError(f"{catalog.name} lists {sorted(twice)} again")
+        tools |= listed
+    settings = yaml.safe_load((data / "policy.yaml").read_text())
+    return Policy.model_validate(
+        {**settings, "tools": tools, "broker": profile.broker, "decoys": profile.decoys}
+    )

@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastmcp.server import create_proxy
 from starlette.routing import Route
 
 from cressey.adapters.claude_code import router as hook_router
@@ -17,7 +18,7 @@ from cressey.api.control import router as control_router
 from cressey.demo.agent import load_sessions
 from cressey.demo.tools import demo_tools
 from cressey.domain.guides import Guide, GuideIncident
-from cressey.domain.policy import load_policy
+from cressey.domain.policy import load_policy, load_profile
 from cressey.engine.agent_text import cached_drafter
 from cressey.engine.decide import Engine
 from cressey.engine.floor.tripwires import origin
@@ -28,7 +29,7 @@ from cressey.guide.corpus import load_corpus
 from cressey.incidents.incidents import Incidents
 from cressey.judge import JevJudge, Judge
 from cressey.replay.fixes import FixReplay
-from cressey.settings import DATA, Settings
+from cressey.settings import DATA, DEMO_PROFILE, Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 from cressey.tasks import Tasks
@@ -48,19 +49,24 @@ def create_app(
         state.mkdir(parents=True, exist_ok=True)
         log = EventLog(state / "events.jsonl", state / "anchor.json")
         runs = Runs(log, state / "runs.jsonl")
-    demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
 
     def fresh(folder: Path) -> FastAPI:
         """A Cressey of its own for one replayed session; it shares a judge passed in. It
-        keeps nothing: the replay is not part of this Cressey's record."""
-        update = {"demo_dir": folder, "state_dir": None}
+        keeps nothing: the replay is not part of this Cressey's record. It plays the demo's
+        sessions, so it fronts the demo's tools, never the servers this Cressey fronts."""
+        update = {"demo_dir": folder, "state_dir": None, "profile": DEMO_PROFILE}
         return create_app(s.model_copy(update=update), make_guide, given)
 
     given = judge
-    policy = load_policy(DATA / "policy.yaml")
+    profile = load_profile(s.profile)
+    policy = load_policy(DATA, profile)
     policy.decoys |= s.decoys
     judge = judge or JevJudge.from_settings(s)
-    upstream = demo_tools(demo)
+    if profile.upstreams == "demo":
+        demo = s.demo_dir or Path(tempfile.mkdtemp(prefix="cressey-demo-"))
+        upstream = demo_tools(demo)
+    else:
+        upstream = create_proxy(profile.upstreams, name="upstreams")
     # The task assessed before the run, against the tools as the agent sees them.
     assess_task = partial(assess_for, upstream, judge)
     incidents = Incidents(runs, make_guide, policy.fleet, assess_task)

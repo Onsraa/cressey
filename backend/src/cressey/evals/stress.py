@@ -19,21 +19,21 @@ from pathlib import Path
 from typing import Any
 
 from cressey.demo.tools import PROD_KEY
-from cressey.domain.policy import Policy, Thresholds, load_policy
+from cressey.domain.policy import Policy, Thresholds, load_policy, load_profile
 from cressey.domain.runs import Mandate, Run, Step
 from cressey.engine.floor.rules import check
 from cressey.engine.ledger import Ledger
 from cressey.engine.triangle import legs
 from cressey.scan.secrets import SCAN_LIMIT, find_secrets, redact
 from cressey.scan.trace import trace
-from cressey.settings import DATA
+from cressey.settings import DATA, DEMO_PROFILE
 from cressey.testing import DownJudge, QuietJudge, agent, api, percentile, serving
 
 RESULTS = DATA / "stress" / "results.json"
 
 
 def _policy() -> Policy:
-    return load_policy(DATA / "policy.yaml")
+    return load_policy(DATA, load_profile(DEMO_PROFILE))
 
 
 async def _new_run(base: str, mandate: dict, **extra) -> dict:

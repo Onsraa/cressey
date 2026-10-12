@@ -14,12 +14,12 @@ from typing import Literal
 
 from pydantic import BaseModel, JsonValue
 
-from cressey.domain.policy import Policy, ToolRule, load_policy
+from cressey.domain.policy import Policy, ToolRule, load_policy, load_profile
 from cressey.domain.runs import Mandate, Run, Step
 from cressey.engine.floor.labels import ask_tool_kind, floor_labels
 from cressey.engine.floor.rules import check
 from cressey.judge import JevJudge, Judge, top, yes
-from cressey.settings import DATA, Settings
+from cressey.settings import DATA, DEMO_PROFILE, Settings
 
 LABELS = DATA / "eval" / "floor-labels.json"
 OUT = DATA / "eval" / "floor-calibration.json"
@@ -241,7 +241,7 @@ def main() -> None:
     judge = JevJudge.from_settings(Settings(model_mode="live"))
     if judge.ask is None:
         raise SystemExit("calibration needs the decision model: set TYPESAFE_API_KEY")
-    policy = load_policy(DATA / "policy.yaml")
+    policy = load_policy(DATA, load_profile(DEMO_PROFILE))
     labels = Labels.model_validate_json(LABELS.read_text())
     report = asyncio.run(calibrate(judge, judge.model, policy, labels))
     OUT.write_text(report.model_dump_json(indent=1) + "\n")

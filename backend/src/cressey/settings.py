@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # The backend's data: the policy, the corpus, the sessions, the recorded model answers.
 DATA = Path(__file__).parents[2] / "data"
+DEMO_PROFILE = DATA / "profiles" / "demo.yaml"  # the demo's own tools
 
 
 class Settings(BaseSettings):
@@ -52,8 +53,11 @@ class Settings(BaseSettings):
     aws_session_token: SecretStr | None = Field(
         None, validation_alias="AWS_SESSION_TOKEN"
     )
-    # Trap keys planted outside the demo workspace, name: value as JSON, added to
-    # policy.yaml's. A real token an agent can find goes here, never in the policy file.
+    # What this Cressey fronts: its MCP servers, what their tools do, the key broker and the
+    # trap keys (domain/policy.py, Profile). The demo's own tools by default.
+    profile: Path = Field(DEMO_PROFILE, validation_alias="CRESSEY_PROFILE")
+    # Trap keys planted outside the demo workspace, name: value as JSON, added to the
+    # profile's. A real token an agent can find goes here, never in a profile.
     decoys: dict[str, str] = Field(
         default_factory=dict, validation_alias="CRESSEY_DECOYS"
     )

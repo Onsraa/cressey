@@ -1,4 +1,5 @@
-"""Serve a Cressey app on a free local port, in a thread: for the eval and the tests."""
+"""Serve an app (a Cressey, an MCP server it fronts) on a free local port, in a thread: for
+the eval and the tests."""
 
 import socket
 import threading
@@ -7,11 +8,11 @@ from collections.abc import Generator
 from contextlib import contextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from starlette.applications import Starlette
 
 
 @contextmanager
-def serve(app: FastAPI) -> Generator[str]:
+def serve(app: Starlette) -> Generator[str]:
     """The app's base URL while it runs."""
     sock = socket.socket()
     sock.bind(("127.0.0.1", 0))

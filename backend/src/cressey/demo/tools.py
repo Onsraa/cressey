@@ -13,7 +13,7 @@ PROD_KEY = "FAKE-DB-PROD-KEY-0000"
 # The key broker's scoped credential (core/proxy.py): it reads, and the database refuses
 # any write made with it, however the SQL is phrased.
 READ_KEY = "FAKE-DB-READ-KEY-0000"
-# No task needs it and policy.yaml declares it, so the safety floor holds any call carrying it.
+# No task needs it and the demo profile declares it, so the safety floor holds any call carrying it.
 TRAP_KEY = "FAKE-DB-ADMIN-KEY-0000"
 USERS = [(i, f"user{i}@example.test") for i in range(1, 6)]
 

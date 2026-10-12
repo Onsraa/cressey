@@ -37,7 +37,7 @@ from typesafe_sdk import (
 
 from cressey.demo.tools import demo_tools
 from cressey.domain.acts import Act, Agent
-from cressey.domain.policy import Thresholds, load_policy
+from cressey.domain.policy import Thresholds, load_policy, load_profile
 from cressey.domain.runs import Mandate, Run, RunIn, Step
 from cressey.engine.floor.rules import check
 from cressey.engine.ledger import LABELS, Ledger
@@ -49,7 +49,7 @@ from cressey.engine.triangle import JUDGMENT, judgment, legs
 from cressey.judge import Answers, NotRecorded, Question
 from cressey.llm.clients import decision_auth
 from cressey.scan.secrets import redact, scan
-from cressey.settings import DATA, Settings
+from cressey.settings import DATA, DEMO_PROFILE, Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 from cressey.testing import percentile
@@ -220,7 +220,7 @@ def build_run(runs: Runs, case: WriteCase, judge_final: bool) -> Run:
 
 
 # One policy for the whole run, loaded at import so build_run can classify calls.
-runs_policy = load_policy(DATA / "policy.yaml")
+runs_policy = load_policy(DATA, load_profile(DEMO_PROFILE))
 
 
 async def judge_write(

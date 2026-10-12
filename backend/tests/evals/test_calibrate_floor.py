@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 import pytest
 
-from cressey.domain.policy import load_policy
+from cressey.domain.policy import load_policy, load_profile
 from cressey.evals.calibrate_floor import (
     LABELS,
     ActionCase,
@@ -11,10 +11,10 @@ from cressey.evals.calibrate_floor import (
     calibrate,
     summary,
 )
-from cressey.settings import DATA
+from cressey.settings import DATA, DEMO_PROFILE
 
 pytestmark = pytest.mark.anyio
-POLICY = load_policy(DATA / "policy.yaml")
+POLICY = load_policy(DATA, load_profile(DEMO_PROFILE))
 
 
 @pytest.fixture
