@@ -92,7 +92,7 @@ The lost constraint and the cover-up get their own labels, because neither is "f
 | # | Invariant | Status |
 |---|---|---|
 | I1 | No model output lifts a hold or widens a mandate | Holds today; pin it with a test across checks |
-| I2 | Every act of consequence passes a code rule or a human, never Jev alone. If Jev can't answer, the act waits | Code rules hold; the "Jev down" gap is open (README) and fixed after the production-label work lands |
+| I2 | Every act of consequence passes a code rule or a human, never Jev alone. If Jev can't answer, the act waits | Code rules hold. A write Jev can't label waits for a human, except a file edit (its path is checked by code) and a write too long to read before it runs, which runs and alerts afterwards, with or without an answer (no hold for a technical reason, 10-10) |
 | I3 | The agent can't reach, configure or silence its guard | P0: admin key and tripwire. Locally, the agent could still read `.env`; real isolation means running Cressey off the agent's machine |
 | I4 | Every act carries who asked for it: the user, the task, content it read, a peer, or the agent itself | New |
 | I5 | Same act, same policy, same model versions: same decision | New (label cache, versions in each event) |

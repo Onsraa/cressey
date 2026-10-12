@@ -35,7 +35,7 @@ from cressey.engine.ledger import Ledger
 from cressey.engine.provenance import asked_by
 from cressey.engine.reading import read_before
 from cressey.engine.triangle import alarm, alarm_reason, legs, read_after, read_only
-from cressey.judge import Judge, NotRecorded, yes
+from cressey.judge import Answers, Judge, NotRecorded, yes
 from cressey.scan.secrets import fingerprint, redact, scan
 from cressey.store.runs import Runs
 from cressey.tasks import Tasks
@@ -178,10 +178,18 @@ class Engine:
             labels = await floor_labels(run, step, self.judge, self.policy.triangle)
         except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []
-        f, r = self.policy.floor, self.policy.responses
         if labels is None:
             no_answer = Reason(check="no_answer")
-            return [] if edits_a_file(rule) else [(no_answer, r.irreversible)]
+            return (
+                []
+                if edits_a_file(rule)
+                else [(no_answer, self.policy.responses.irreversible)]
+            )
+        return self._flagged(labels)
+
+    def _flagged(self, labels: Answers) -> list[tuple[Reason, Response]]:
+        """What Jev's floor labels flag, each with its response."""
+        f, r = self.policy.floor, self.policy.responses
         fired: list[tuple[Reason, Response]] = []
         if (p := yes(labels["irreversible"])) >= f.irreversible:
             fired.append((Reason(check="irreversible", score=p), r.irreversible))
@@ -354,6 +362,22 @@ class Engine:
         if run.ended_at is not None:
             self.runs.forget_results(steps)
 
+    async def _labelled_late(self, run: Run, step: Step) -> list[Reason]:
+        """The floor's labels for a write that ran before it could be read, as `_labelled`
+        asks them before: a file edit, whose path code checked, isn't asked."""
+        assert step.surface is not None  # a live call's act named it
+        if step.risk != "write" or edits_a_file(
+            await self._rule(step.surface, step.tool)
+        ):
+            return []
+        try:
+            labels = await floor_labels(run, step, self.judge, self.policy.triangle)
+        except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
+            return []
+        if labels is None:
+            return [Reason(check="no_answer")]
+        return [reason for reason, _ in self._flagged(labels)]
+
     def _draft(self, run: Run, step: Step) -> None:
         """What the human can send if they reject this hold: the fallback at once, then a
         model's draft, if one comes in time and passes the check."""
@@ -376,22 +400,21 @@ class Engine:
             step.draft = draft
 
     async def _read_late(self, run: Run, step: Step) -> None:
-        """A call that ran before it could be read: if the triangle would have held it,
-        it alerts now, with its incident open."""
+        """A call that ran before it could be read: if the triangle would have held it, or
+        the floor's labels flag it, or no model answers them, it alerts now, with its
+        incident open. It never waited: no hold for a technical reason (the user, 10-10)."""
         try:
             late = await read_after(run, step, self.ledger, self.policy.triangle)
+            labelled = await self._labelled_late(run, step)
         except Exception:  # a background task has no caller to raise to: report it
             log.exception("late read of step %d of run %s failed", step.n, run.id)
             return
         alarmed = self.triangle_holds and alarm(late, step.risk)
-        reasons = (
-            [alarm_reason(late).model_copy(update={"afterwards": True})]
-            if alarmed
-            else []
-        )
+        found = [alarm_reason(late)] if alarmed else []
+        reasons = [r.model_copy(update={"afterwards": True}) for r in found + labelled]
         # Alarm or not, the step shows what the late read found, an unanswered model too.
         self.runs.score(run, step, late, reasons)
-        if not alarmed:
+        if not reasons:
             return
         self.runs.mark(run, step, "alerted")
         self.incidents.open(run, step, "haute")
