@@ -4,9 +4,10 @@ import pytest
 from fastapi import FastAPI
 
 from cressey.app import create_app
-from cressey.demo.agent import load_sessions, play
 from cressey.domain.incidents import Fix
 from cressey.replay.fixes import family, replay
+from cressey.replay.importers import load_sessions
+from cressey.replay.player import play
 from cressey.settings import Settings
 from cressey.testing import ADMIN, api, fake_guide
 

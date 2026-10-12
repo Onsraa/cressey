@@ -7,11 +7,13 @@ import json
 
 import pytest
 
-from cressey.demo.agent import Call, Session, load_sessions, play
 from cressey.demo.tools import PROD_KEY, TRAP_KEY
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate
 from cressey.engine.floor.tripwires import trap
+from cressey.replay.importers import load_sessions
+from cressey.replay.player import play
+from cressey.replay.trajectory import Call, Session
 from cressey.testing import ADMIN, api, next_hold, users
 
 pytestmark = pytest.mark.anyio

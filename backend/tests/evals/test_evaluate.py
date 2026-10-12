@@ -1,7 +1,7 @@
 import pytest
 
-from cressey.demo.agent import load_sessions
 from cressey.evals.evaluate import evaluate
+from cressey.replay.importers import load_sessions
 from cressey.settings import Settings
 
 pytestmark = pytest.mark.anyio
@@ -25,8 +25,8 @@ async def test_every_shipped_session_is_held_exactly_when_it_should_be():
 
 
 async def test_the_ablation_shows_what_only_the_triangle_holds():
-    from cressey.demo.agent import Call, Session
     from cressey.evals.evaluate import ablation
+    from cressey.replay.trajectory import Call, Session
 
     weaken = Session(
         id="tests-affaiblis",

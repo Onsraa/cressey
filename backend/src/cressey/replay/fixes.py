@@ -11,10 +11,11 @@ from pathlib import Path
 import httpx2
 from fastapi import FastAPI
 
-from cressey.demo.agent import Session, play
 from cressey.demo.server import serve
 from cressey.domain.incidents import Fix, Replay, ReplayResult
 from cressey.incidents.incidents import Incidents
+from cressey.replay.player import play
+from cressey.replay.trajectory import Session
 from cressey.store.runs import Runs
 
 # A fresh Cressey whose demo state lives in that folder.

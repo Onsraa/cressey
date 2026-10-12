@@ -24,7 +24,7 @@ The demo agent replays these files through Cressey: `backend/data/sessions/*.yam
 ## Play
 ```
 cd backend
-uv run python -m cressey.demo.agent data/sessions/<id>.yaml --kind live --pace 1.5
+uv run python -m cressey.replay.player data/sessions/<id>.yaml --kind live --pace 1.5
 ```
 - `live`: a held call waits for a decision on the dashboard.
 - `control` (« Observateur »): nothing is held, so the record can show the lie.

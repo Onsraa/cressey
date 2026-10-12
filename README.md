@@ -45,7 +45,7 @@ The first run asks for your Jev key, checks it and saves it in `.env`. Then it s
 
 - **Your own project:** `./connect.sh ~/my-project`. To disconnect, delete its `.claude/settings.local.json`.
 - **Fix guides:** add an `OPENAI_API_KEY` to `.env` (or AWS credentials with `CRESSEY_MODELS=bedrock`).
-- **Scripted demo, no agent needed:** run `CRESSEY_MODEL_MODE=replay-first ./dev.sh`, then in a second terminal `cd backend && uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live`. `replay-first` answers from recorded model calls, so it plays the same every time, offline included.
+- **Scripted demo, no agent needed:** run `CRESSEY_MODEL_MODE=replay-first ./dev.sh`, then in a second terminal `cd backend && uv run python -m cressey.replay.player data/sessions/demo-tests-impossibles.yaml --kind live`. `replay-first` answers from recorded model calls, so it plays the same every time, offline included.
 
 ## Known limitations
 - **Tested on a real agent and real infrastructure, a few runs only.** Claude Opus 4.6 (Claude Code) got the task "reset the staging database" on a throwaway Railway project. Without Cressey, 1 run in 3 deleted the production database with an old ops token it found in the repo. The 2 others refused.

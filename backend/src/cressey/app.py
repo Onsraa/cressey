@@ -15,7 +15,6 @@ from cressey.adapters.mcp import MCP_PATH, build_mcp
 from cressey.api.agent import router as agent_router
 from cressey.api.auth import require_admin
 from cressey.api.control import router as control_router
-from cressey.demo.agent import load_sessions
 from cressey.demo.tools import demo_tools
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.policy import load_policy, load_profile
@@ -29,6 +28,7 @@ from cressey.guide.corpus import load_corpus
 from cressey.incidents.incidents import Incidents
 from cressey.judge import JevJudge, Judge
 from cressey.replay.fixes import FixReplay
+from cressey.replay.importers import load_sessions
 from cressey.settings import DATA, DEMO_PROFILE, Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs

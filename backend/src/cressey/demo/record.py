@@ -23,11 +23,13 @@ from pathlib import Path
 import httpx2
 
 from cressey.app import create_app
-from cressey.demo.agent import Session, load_sessions, play
 from cressey.demo.server import serve
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.evals.evaluate import ABLATION, REPORT, ablation, evaluate
 from cressey.guide.api import write_guide
+from cressey.replay.importers import load_sessions
+from cressey.replay.player import play
+from cressey.replay.trajectory import Session
 from cressey.settings import DATA, Settings
 
 FLOWS = (

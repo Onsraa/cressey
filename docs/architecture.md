@@ -13,9 +13,10 @@ Under `backend/src/cressey/`. Imports point one way, checked by `tests/test_laye
 | Adapters | `adapters/` | the MCP gateway (`mcp.py`), the key broker (`broker.py`), the Claude Code hook (`claude_code.py`) |
 | Incidents | `incidents/` | one incident per held call, its sources and guides (`incidents.py`); the signal across runs (`fleet.py`); the fixes per leg (`fixes.py`) |
 | API | `api/` | the control plane (`control.py`), the agent's own routes (`agent.py`), who may call what (`auth.py`) |
+| Replay | `replay/` | one recorded-session format (`trajectory.py`: what the agent said, each call and what it returned when recorded), read from the scripted sessions and Claude Code transcripts (`importers.py`), and one player (`player.py`) that plays it through the MCP gateway or the Claude Code hook: the detection eval, the stage recorder, « Rejouer ×5 » and the lab all play through it |
 | « Rejouer ×5 » | `replay/fixes.py` | an incident's variants and the normal sessions replayed on a fresh Cressey with the approved fixes |
 | Guides | `guide/` | the fix guides: corpus, retrieval, adapters, pipeline, store, API, eval |
-| Demo | `demo/` | the demo tools (a workspace with a fake production key and a trap key, a SQLite database of 5 fake users), the scripted sessions and their player (`agent.py`, format in `sessions.md`), the stage recorder (`record.py`) |
+| Demo | `demo/` | the demo tools (a workspace with a fake production key and a trap key, a SQLite database of 5 fake users), the scripted sessions (`data/sessions`, format in `sessions.md`), the stage recorder (`record.py`) |
 | Evals | `evals/` | the detection eval and its ablation (`evaluate.py`), the decision-model measure (`measure.py`), the floor's calibration (`calibrate_floor.py`), the stress test (`stress.py`) |
 | Shared doubles | `testing.py` | judges that answer no or nothing, a guide writer with no model, a served Cressey, a percentile: for the tests and the evals |
 | App | `app.py`, `settings.py`, `tasks.py` | the wiring, the settings, the background tasks |
@@ -183,7 +184,8 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
 | `cd backend && uv run python -m cressey.guide.corpus build` | Rebuilds `data/corpus.json` |
 | `cd backend && uv run python -m cressey.guide.eval --split dev` | Writes `data/eval/report-dev.json` |
 | `cd backend && uv run python -m cressey.evals.evaluate` | Plays every session on a fresh Cressey and writes `data/eval/report-detection.json` |
-| `cd backend && uv run python -m cressey.demo.agent data/sessions/demo-tests-impossibles.yaml --kind live` | Plays the demo session through the running server (`--kind control` for the control run) |
+| `cd backend && uv run python -m cressey.replay.player data/sessions/demo-tests-impossibles.yaml --kind live` | Plays the demo session through the running server (`--kind control` for the control run) |
+| `cd backend && uv run python -m cressey.replay.player ../lab/runs/<stamp>/transcript.jsonl --task "…" --pace 2.5 --typing 0.07` | Replays a recorded Claude Code run through the hook: its words as they display, each call before it runs, then what it returned; paced and typed out, to film |
 
 ## CI (`.github/workflows/ci.yml`)
 - **backend:** ruff, ruff format, ty, pytest, then the OpenAPI export.
