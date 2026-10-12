@@ -89,6 +89,7 @@ def create_app(
     app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check
     app.state.policy = policy  # its responses change live
     app.state.guard = guard  # the Claude Code hook runs its decision
+    app.state.ledger = guard.ledger  # the report check reads its labels
     app.state.assess_task = assess_task  # each new run's task
     # Unset, a random key per start: nobody outside knows it, the replays read it here.
     app.state.admin_token = (

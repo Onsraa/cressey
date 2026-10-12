@@ -769,10 +769,10 @@ async def test_a_late_read_that_doesnt_alarm_still_shows_what_it_found(
 ):
     """Read afterwards and not held: the step shows the late judgment, here that the decision
     model didn't answer, never the « read afterwards » placeholder."""
-    from cressey.core import triangle
+    from cressey.engine import reading
 
-    monkeypatch.setattr(triangle, "PARTS_BEFORE", 1)
-    monkeypatch.setattr(triangle, "CHUNK", 1_000)
+    monkeypatch.setattr(reading, "PARTS_BEFORE", 1)
+    monkeypatch.setattr(reading, "CHUNK", 1_000)
     with serving(tmp_path, hold_timeout=240, judge=DownOnWritesJudge()) as base:
         run = await new_run(base)
         async with agent(base, run["key"]) as a:
@@ -794,10 +794,10 @@ async def test_a_call_too_big_to_read_first_runs_at_once_and_alerts_afterwards(
     tmp_path, monkeypatch
 ):
     """No hold for a technical reason (Teddy, 10-10): it runs, is read, and alerts."""
-    from cressey.core import triangle
+    from cressey.engine import reading
 
-    monkeypatch.setattr(triangle, "PARTS_BEFORE", 1)
-    monkeypatch.setattr(triangle, "CHUNK", 1_000)
+    monkeypatch.setattr(reading, "PARTS_BEFORE", 1)
+    monkeypatch.setattr(reading, "CHUNK", 1_000)
     with serving(tmp_path, hold_timeout=10, judge=WritesWeakenJudge()) as base:
         run = await new_run(base)
         async with agent(base, run["key"]) as a:

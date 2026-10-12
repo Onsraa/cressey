@@ -8,9 +8,9 @@ import pytest
 
 from cressey.app import create_app
 from cressey.core.draft import WAY_OUT, stop_sentence
-from cressey.core.proxy import tool_kind
 from cressey.demo.server import serve
 from cressey.demo.tools import TRAP_KEY
+from cressey.engine.floor.labels import tool_kind
 from cressey.judge import NotRecorded
 from cressey.settings import Settings
 from cressey.testing import api, fake_guide, next_hold, no_to_all, serving

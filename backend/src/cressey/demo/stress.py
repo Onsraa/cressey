@@ -18,11 +18,12 @@ import tracemalloc
 from pathlib import Path
 from typing import Any
 
-from cressey.core.triangle import legs
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.policy import Policy, Thresholds, load_policy
 from cressey.domain.runs import Mandate, Run, Step
 from cressey.engine.floor.rules import check
+from cressey.engine.ledger import Ledger
+from cressey.engine.triangle import legs
 from cressey.scan.secrets import SCAN_LIMIT, find_secrets, redact
 from cressey.scan.trace import trace
 from cressey.settings import DATA
@@ -435,7 +436,7 @@ def section_triangle_scaling(sizes: list[int]) -> dict:
         # judge legs() on the LAST (write) step with n-1 earlier steps present
         before = judge.calls
         t0 = time.perf_counter()
-        asyncio.run(legs(run, run.steps[-1], judge, t))
+        asyncio.run(legs(run, run.steps[-1], Ledger(judge), t))
         dt = (time.perf_counter() - t0) * 1000
         rows.append(
             {"run_len": n, "legs_ms": round(dt, 2), "judge_calls": judge.calls - before}

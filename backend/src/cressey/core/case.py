@@ -16,7 +16,6 @@ from pydantic import JsonValue
 from typesafe_sdk import Noul
 
 from cressey.core.thoughts import CASE_QUOTE, _label, read_thought, thoughts_of
-from cressey.core.triangle import _max_over_parts, _pieces
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Thresholds
 from cressey.domain.runs import (
@@ -30,6 +29,7 @@ from cressey.domain.runs import (
     Step,
     Thread,
 )
+from cressey.engine.reading import in_parts, max_over_parts
 from cressey.judge import Judge, NotRecorded, Question, yes
 
 # An indicator that belongs to no leg (plan, the N counters) is absent.
@@ -401,7 +401,7 @@ async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
         }
 
     try:
-        got = await _max_over_parts(judge, state_for, _pieces(text), asked)
+        got = await max_over_parts(judge, state_for, in_parts(text), asked)
     except NotRecorded:  # the judge logged it; the prompt stays unread
         return
     if got is None:

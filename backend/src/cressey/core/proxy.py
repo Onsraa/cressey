@@ -17,7 +17,6 @@ from fastmcp.server.http import StarletteWithLifespan
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
-from typesafe_sdk import Choice
 
 from cressey.core.broker import scoped
 from cressey.core.case import catch_up, closing_excuse, excuse_reason, shadow_soon
@@ -30,21 +29,15 @@ from cressey.core.draft import (
     stop_sentence,
 )
 from cressey.core.incidents import Incidents
-from cressey.core.triangle import (
-    alarm,
-    alarm_reason,
-    floor_labels,
-    label_soon,
-    legs,
-    read_after,
-    read_before,
-    read_only,
-)
 from cressey.domain.policy import Policy, Response, ToolRule
-from cressey.domain.runs import Legs, Risk, Run, Shadow, Step
+from cressey.domain.runs import Legs, Run, Shadow, Step
+from cressey.engine.floor.labels import ask_tool_kind, floor_labels, tool_kind
 from cressey.engine.floor.rules import check, edits_a_file
 from cressey.engine.floor.tripwires import at_cressey, trap
-from cressey.judge import Answer, Judge, NotRecorded, top, yes
+from cressey.engine.ledger import Ledger
+from cressey.engine.reading import read_before
+from cressey.engine.triangle import alarm, alarm_reason, legs, read_after, read_only
+from cressey.judge import Judge, NotRecorded, yes
 from cressey.scan.secrets import fingerprint, redact, scan
 from cressey.store.runs import Runs
 
@@ -56,33 +49,6 @@ NO_ANSWER = "Jev didn't answer"
 # so a check on alert never lifts another one's hold.
 STRICTNESS: tuple[Response, ...] = ("alert", "review", "stop")
 MCP_PATH = "/mcp"
-# Asked once for each tool the policy doesn't list, on its name alone: names come from the
-# installed tools, never from the agent, so no call can argue a tool into a read.
-TOOL_KIND = Choice(
-    instructions="An AI agent can call a tool with this name. What can a call to it do?",
-    criteria={
-        "read": "every call only reads, lists or searches: it changes nothing, sends nothing out and runs no code, query or command it is given",
-        "write": "a call can create or change something, send something out, or run code, a query or a command it is given",
-        "destructive": "a call deletes or destroys something, or changes production or a database for good",
-    },
-)
-
-
-async def ask_tool_kind(judge: Judge, name: str) -> Answer | None:
-    """Jev's probabilities for what a call to this tool can do, from its name alone; None
-    when no model answers. Raises NotRecorded on a replay with no recorded answer."""
-    got = await judge.answers({"tool": name}, {"kind": TOOL_KIND})
-    return None if got is None else got["kind"]
-
-
-def tool_kind(answer: Answer, read: float) -> Risk | None:
-    """A tool's kind from Jev's probabilities: a read only from `read`, since a read is never
-    judged again. None for an answer that names no kind."""
-    if not isinstance(answer, dict) or top(answer) not in TOOL_KIND.criteria:
-        return None
-    if answer.get("read", 0.0) >= read:
-        return "read"
-    return "destructive" if top(answer) == "destructive" else "write"
 
 
 def _size(b64: str) -> str:
@@ -164,6 +130,7 @@ class Guard(Middleware):
         self.thought_holds = thought_holds
         self.origins = origins  # where Cressey answers: no call may aim there
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
+        self.ledger = Ledger(judge)
         self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self._late: set[asyncio.Task[None]] = (
             set()
@@ -301,7 +268,7 @@ class Guard(Middleware):
             # Side by side: the floor's label waits for no more than the triangle already does,
             # and with thought holds on, the agent's words before the call are read meanwhile.
             triangle, labelled, _ = await asyncio.gather(
-                legs(run, step, self.judge, self.policy.triangle),
+                legs(run, step, self.ledger, self.policy.triangle),
                 self._labelled(run, step, rule, floor),
                 self._read_words(run, step),
             )
@@ -411,9 +378,8 @@ class Guard(Middleware):
         step.scan_ms = _ms_since(scanned)
         self.runs.record(run, step, is_error, text, found)
         if label:
-            label_soon(
-                run, step.n - 1, self.judge
-            )  # read now: the next write won't wait for it
+            # Read now: the next write won't wait for it.
+            self.ledger.label_soon(run, step.n - 1)
         # Too long to read before it ran: read now, without holding the developer's work.
         late = step.reason is None and step.risk != "read" and not read_before(step)
         if late and run.kind != "replay":
@@ -450,7 +416,7 @@ class Guard(Middleware):
         """A call that ran before it could be read: if the triangle would have held it,
         it alerts now, with its incident open."""
         try:
-            late = await read_after(run, step, self.judge, self.policy.triangle)
+            late = await read_after(run, step, self.ledger, self.policy.triangle)
         except Exception:  # a background task has no caller to raise to: report it
             log.exception("late read of step %d of run %s failed", step.n, run.id)
             return

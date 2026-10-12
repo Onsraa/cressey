@@ -180,7 +180,7 @@ async def test_a_choice_answer_keeps_its_probabilities(monkeypatch):
 
 @pytest.mark.live
 async def test_live_decision_model_finds_a_drop_table_outside_a_typo_fix():
-    from cressey.core.triangle import JUDGMENT
+    from cressey.engine.triangle import JUDGMENT
     from cressey.settings import Settings
 
     judge = JevJudge.from_settings(Settings(model_mode="live"))

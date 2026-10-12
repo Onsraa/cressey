@@ -12,9 +12,9 @@ from cressey.core.thoughts import (
     read_thought,
     segment,
 )
-from cressey.core.triangle import LAST_RESULT, PREVIOUS
 from cressey.domain.policy import Thresholds
 from cressey.domain.runs import Case, Direction, Event, Kind, Secret, Thread
+from cressey.engine.reading import LAST_RESULT, PREVIOUS
 from tests.core.helpers import message, run_with, step
 
 pytestmark = pytest.mark.anyio

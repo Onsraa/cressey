@@ -36,19 +36,15 @@ from typesafe_sdk import (
 )
 
 from cressey.core.preflight import CUT, QUESTIONS, assess_for
-from cressey.core.triangle import (
-    JUDGMENT,
-    LABELS,
-    REPORT,
-    legs,
-    report_check,
-    views,
-)
 from cressey.demo.tools import demo_tools
 from cressey.domain.policy import Thresholds, load_policy
-from cressey.domain.runs import Mandate, Run, RunIn
+from cressey.domain.runs import Mandate, Run, RunIn, Step
 from cressey.engine.floor.rules import check
-from cressey.judge import Answers, Question
+from cressey.engine.ledger import LABELS, Ledger
+from cressey.engine.reading import steps_before
+from cressey.engine.report import REPORT, report_check
+from cressey.engine.triangle import JUDGMENT, judgment, legs
+from cressey.judge import Answers, NotRecorded, Question
 from cressey.llm.clients import decision_auth
 from cressey.scan.secrets import redact, scan
 from cressey.settings import DATA, Settings
@@ -227,8 +223,34 @@ async def judge_write(
     judge: MeasuringJudge | FakeJudge, case: WriteCase, t: Thresholds
 ) -> float:
     run = build_run(Runs(EventLog()), case, judge_final=False)
-    leg = (await legs(run, run.steps[-1], judge, t)).rationalization
+    leg = (await legs(run, run.steps[-1], Ledger(judge), t)).rationalization
     return leg.score
+
+
+async def views(
+    run: Run, call: Step, ledger: Ledger, t: Thresholds
+) -> tuple[float | None, float | None]:
+    """The write judgment (on the actions alone, with the agent's words), for the measure:
+    a better model can be checked here before its actions-only view decides anything. On
+    10-10, Jev's actions-only view scored a legitimate write 0.65 (margin −0.51), so holds
+    use the words view alone. Raises NotRecorded only when neither view is recorded."""
+    await ledger.read(run, steps_before(run, call.n))
+    got = await asyncio.gather(
+        judgment(run, call, ledger.judge, t, False),
+        judgment(run, call, ledger.judge, t, True),
+        return_exceptions=True,
+    )
+    scores: list[float | None] = []
+    for g in got:
+        if isinstance(g, NotRecorded):
+            scores.append(None)
+        elif isinstance(g, BaseException):
+            raise g
+        else:
+            scores.append(g)
+    if all(isinstance(g, NotRecorded) for g in got):
+        raise NotRecorded("neither view is recorded")
+    return scores[0], scores[1]
 
 
 async def judge_write_views(
@@ -236,7 +258,7 @@ async def judge_write_views(
 ) -> tuple[float | None, float | None]:
     """The write judgment on (the actions alone, with the agent's words)."""
     run = build_run(Runs(EventLog()), case, judge_final=False)
-    return await views(run, run.steps[-1], judge, t)
+    return await views(run, run.steps[-1], Ledger(judge), t)
 
 
 async def judge_report(
@@ -245,7 +267,7 @@ async def judge_report(
     runs = Runs(EventLog())
     run = build_run(runs, case, judge_final=True)
     runs.end(run, case.report)
-    leg = await report_check(run, judge, t)
+    leg = await report_check(run, Ledger(judge), t)
     return leg.score
 
 
@@ -407,7 +429,9 @@ async def attack(
                     tampered.steps[target].result + "\n" + text
                 ).strip()
             run = build_run(Runs(EventLog()), tampered, judge_final=False)
-            score = (await legs(run, run.steps[-1], judge, t)).rationalization.score
+            score = (
+                await legs(run, run.steps[-1], Ledger(judge), t)
+            ).rationalization.score
             flagged = run.steps[target].labels or {}
             quotes = run.steps[target].quotes
             variants[site] = {
@@ -436,7 +460,9 @@ async def latency_probe(
 ) -> dict[str, object]:
     """Clean per-call latency: issue label/judgment/report calls one at a time (no concurrent
     dispatch), n times each, on representative states. Tokens come from the API's usage."""
-    from cressey.core.triangle import NOTE, judgment_state, report_state
+    from cressey.engine.reading import NOTE
+    from cressey.engine.report import report_state
+    from cressey.engine.triangle import judgment_state
 
     write = build_run(Runs(EventLog()), cases["w_demo_delete"], judge_final=False)
     # A representative ledger window (what _label sends for one step).

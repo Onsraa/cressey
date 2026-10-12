@@ -16,17 +16,17 @@ import re
 from pydantic import BaseModel, JsonValue
 from typesafe_sdk import Choice, Noul
 
-from cressey.core.triangle import (
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Case, Event, Message, Run, Thread
+from cressey.engine.reading import (
     LAST_RESULT,
     NOTE,
     PREVIOUS,
     SENTENCE,
-    _answers_over_parts,
-    _pieces,
-    _redacted_off_loop,
+    answers_over_parts,
+    in_parts,
+    redacted_off_loop,
 )
-from cressey.domain.policy import Thresholds
-from cressey.domain.runs import Case, Event, Message, Run, Thread
 from cressey.judge import Answers, Judge, NotRecorded, Question, TooLarge, top, yes
 
 log = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ def segment(text: str) -> list[Segment]:
                     built.append(Segment(text=sentence, quoted=quoted))
     segments: list[Segment] = []
     for thought in built:
-        pieces = _pieces(thought.text)
+        pieces = in_parts(thought.text)
         segments += [
             Segment(text=p, quoted=thought.quoted, code=_INLINE.findall(p))
             for p in pieces
@@ -305,7 +305,7 @@ async def read_thought(
     previous = _previous(run, j, i)
     threads = _open_threads(run.case)
     last = next((s for s in run.steps if s.n == m.after), None)
-    shown = await _redacted_off_loop(run, [last]) if last else {}
+    shown = await redacted_off_loop(run, [last]) if last else {}
     window: dict[str, JsonValue] = {
         "task": run.task,
         "mandate": run.mandate.model_dump(),
@@ -331,7 +331,7 @@ async def read_thought(
 
     try:
         # A thought is at most PART long once segmented; a longer one is read in pieces.
-        read = await _answers_over_parts(judge, state_for, _pieces(text), QUESTIONS)
+        read = await answers_over_parts(judge, state_for, in_parts(text), QUESTIONS)
     except NotRecorded:  # the judge logged it; the thought stays unread
         return None
     if read is None:

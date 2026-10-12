@@ -12,8 +12,8 @@ from pydantic import JsonValue
 
 from cressey.core.case import read_prompt_soon
 from cressey.core.proxy import Guard
-from cressey.core.triangle import report_check
 from cressey.domain.runs import Step
+from cressey.engine.report import report_check
 from cressey.scan.trace import strings
 from cressey.store.runs import Runs
 
@@ -90,7 +90,7 @@ async def claude_hook(
             runs.end(run, last)
         else:
             runs.answered(run, last)
-        runs.checked(run, await report_check(run, state.judge, state.thresholds))
+        runs.checked(run, await report_check(run, guard.ledger, state.thresholds))
         return {}
     name = event["tool_name"]
     call = (run.id, str(event.get("tool_use_id", "")))
