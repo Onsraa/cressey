@@ -32,9 +32,9 @@ import yaml
 os.environ["CRESSEY_DECOYS"] = "{}"  # the case file is measured on its own, no trap key
 
 from cressey.app import create_app
-from cressey.core import case as case_mod
+from cressey.engine.case import case as case_mod
+from cressey.engine.case.thoughts import QUESTIONS
 from cressey.judge import Answers, JevJudge, Judge, Question, yes
-from cressey.core.thoughts import QUESTIONS
 from cressey.settings import Settings
 
 HOOK = "/hook/claude"
@@ -307,7 +307,7 @@ async def play(src: Source, client: httpx.AsyncClient, app, scores: list[dict]) 
     await _idle()
     run = app.state.runs.get(rid)
     # The thoughts after the last call: no call follows to read them, read them here.
-    await case_mod._catch_up(
+    await case_mod.catch_up(
         run, len(run.steps) + 1, app.state.judge, app.state.thresholds
     )
     await client.post(

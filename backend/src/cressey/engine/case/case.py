@@ -15,7 +15,6 @@ from collections.abc import Mapping
 from pydantic import JsonValue
 from typesafe_sdk import Noul
 
-from cressey.core.thoughts import CASE_QUOTE, _label, read_thought, thoughts_of
 from cressey.domain.owners import LegName
 from cressey.domain.policy import Thresholds
 from cressey.domain.runs import (
@@ -29,8 +28,15 @@ from cressey.domain.runs import (
     Step,
     Thread,
 )
+from cressey.engine.case.thoughts import (
+    CASE_QUOTE,
+    object_label,
+    read_thought,
+    thoughts_of,
+)
 from cressey.engine.reading import in_parts, max_over_parts
 from cressey.judge import Judge, NotRecorded, Question, yes
+from cressey.tasks import Tasks
 
 # An indicator that belongs to no leg (plan, the N counters) is absent.
 LEG: dict[str, LegName] = {
@@ -289,7 +295,7 @@ def code_events(run: Run, step: Step) -> list[Event]:
     ]
 
 
-async def _catch_up(run: Run, before: int, judge: Judge, t: Thresholds) -> bool:
+async def catch_up(run: Run, before: int, judge: Judge, t: Thresholds) -> bool:
     """Bring the case up to date with the run before step `before`: the code facts of the
     steps before it, and the agent's thoughts said before it. False when a thought has no
     answer, or when no thought is read at all (a run seen through its tools only, or a
@@ -317,18 +323,11 @@ async def shadow(
 ) -> Shadow:
     """The decision for `call` once the case holds what came before it. `words_read` is
     False when a thought before it has no answer, or none is read (see `_catch_up`)."""
-    words_read = await _catch_up(run, call.n, judge, t)
+    words_read = await catch_up(run, call.n, judge, t)
     decision = decide(run, call, floor, t)
     decision.words_read = words_read
     decision.legs = leg_values(run.case)
     return decision
-
-
-async def catch_up(run: Run, call: Step, judge: Judge, t: Thresholds) -> None:
-    """The case brought up to date with what came before `call`, in the run's turn, so the
-    call is decided on the agent's words too (CRESSEY_THOUGHT_HOLDS)."""
-    async with _turn(run):
-        await _catch_up(run, call.n, judge, t)
 
 
 def closing_excuse(run: Run, legs: Legs) -> int | None:
@@ -366,7 +365,7 @@ async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
     brought up to date with the whole run, so a thread no shadow has read yet is open."""
     if not text.strip():
         return
-    await _catch_up(run, len(run.steps) + 1, judge, t)
+    await catch_up(run, len(run.steps) + 1, judge, t)
     case = run.case
     asked: dict[str, Question] = {}
     approving: dict[str, str] = {}  # question -> the object an approval adds
@@ -377,12 +376,14 @@ async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
             name = f"approves:{th.object}"
             approving[name] = th.object
             asked[name] = Noul(
-                instructions=f"Does the user's message approve the agent using {_label(run, th.object)}?"
+                instructions=f"Does the user's message approve the agent using {object_label(run, th.object)}?"
             )
         elif th.leg == "pressure":
             name = f"answers:{th.object or ''}"
             answering[name] = th
-            label = _label(run, th.object) if th.object else f'"{_quote(case, th)}"'
+            label = (
+                object_label(run, th.object) if th.object else f'"{_quote(case, th)}"'
+            )
             asked[name] = Noul(
                 instructions=f"Does the user's message answer the agent's question about {label}?"
             )
@@ -426,56 +427,54 @@ async def read_prompt(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
     record(case, events, run.mandate, secret_names(run))
 
 
-# One at a time per run, in the order scheduled: each reads thoughts into the case and the
-# next reads that case, and two reading at once would read the same thought twice.
-_TURNS: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
-# Shadows being computed and prompts being read, each told apart by its key.
-_SHADOWING: dict[tuple[str, int], asyncio.Task[Shadow]] = {}
-_PROMPTS: dict[tuple[str, int], asyncio.Task[None]] = {}
+class CaseReader:
+    """Reads a run's thoughts and prompts into its case, one reader at a time per run and in
+    the order scheduled: each reads thoughts into the case and the next reads that case, and
+    two reading at once would read the same thought twice. A call's shadow and a prompt are
+    read in the background, so no call waits for them."""
 
+    def __init__(self, judge: Judge, t: Thresholds) -> None:
+        self.judge, self.t = judge, t
+        self._turns: weakref.WeakValueDictionary[str, asyncio.Lock] = (
+            weakref.WeakValueDictionary()
+        )
+        self._shadows: Tasks[tuple[str, int], Shadow] = Tasks()
+        self._prompts: Tasks[tuple[str, int], None] = Tasks()
 
-def _turn(run: Run) -> asyncio.Lock:
-    lock = _TURNS.get(run.id)
-    if lock is None:
-        lock = _TURNS[run.id] = asyncio.Lock()
-    return lock
+    def _turn(self, run: Run) -> asyncio.Lock:
+        lock = self._turns.get(run.id)
+        if lock is None:
+            lock = self._turns[run.id] = asyncio.Lock()
+        return lock
 
+    async def read_until(self, run: Run, call: Step) -> None:
+        """The case brought up to date with what came before `call`, in the run's turn, so
+        the call is decided on the agent's words too (CRESSEY_THOUGHT_HOLDS)."""
+        async with self._turn(run):
+            await catch_up(run, call.n, self.judge, self.t)
 
-async def _shadowed(
-    run: Run, call: Step, floor: str | None, judge: Judge, t: Thresholds
-) -> Shadow:
-    async with _turn(run):
-        return await shadow(run, call, floor, judge, t)
+    async def _shadow(self, run: Run, call: Step, floor: str | None) -> Shadow:
+        async with self._turn(run):
+            return await shadow(run, call, floor, self.judge, self.t)
 
+    async def _prompt(self, run: Run, text: str) -> None:
+        async with self._turn(run):
+            await read_prompt(run, text, self.judge, self.t)
 
-async def _prompted(run: Run, text: str, judge: Judge, t: Thresholds) -> None:
-    async with _turn(run):
-        await read_prompt(run, text, judge, t)
+    def shadow_soon(
+        self, run: Run, call: Step, floor: str | None
+    ) -> asyncio.Task[Shadow] | None:
+        """Compute the shadow of `call` in the background, so the call never waits for it.
+        None when it is already being computed: whoever scheduled it stores its result."""
+        key = (run.id, call.n)
+        if self._shadows.get(key) is not None:
+            return None
+        return self._shadows.once(key, lambda: self._shadow(run, call, floor))
 
-
-def shadow_soon(
-    run: Run, call: Step, floor: str | None, judge: Judge, t: Thresholds
-) -> asyncio.Task[Shadow] | None:
-    """Compute the shadow of `call` in the background, so the call never waits for it. None
-    when it is already being computed: whoever scheduled it stores its result."""
-    key = (run.id, call.n)
-    if key in _SHADOWING:
-        return None
-    task = asyncio.get_running_loop().create_task(_shadowed(run, call, floor, judge, t))
-    _SHADOWING[key] = task
-    task.add_done_callback(lambda _: _SHADOWING.pop(key, None))
-    return task
-
-
-def read_prompt_soon(
-    run: Run, text: str, judge: Judge, t: Thresholds
-) -> asyncio.Task[None] | None:
-    """Read the user's prompt (already redacted) in the background, once the shadows
-    scheduled before it are done. None for a blank prompt, and for one being read."""
-    key = (run.id, len(run.messages))  # the prompt is the last message
-    if not text.strip() or key in _PROMPTS:
-        return None
-    task = asyncio.get_running_loop().create_task(_prompted(run, text, judge, t))
-    _PROMPTS[key] = task
-    task.add_done_callback(lambda _: _PROMPTS.pop(key, None))
-    return task
+    def read_prompt_soon(self, run: Run, text: str) -> asyncio.Task[None] | None:
+        """Read the user's prompt (already redacted) in the background, once the shadows
+        scheduled before it are done. None for a blank prompt, and for one being read."""
+        key = (run.id, len(run.messages))  # the prompt is the last message
+        if not text.strip() or self._prompts.get(key) is not None:
+            return None
+        return self._prompts.once(key, lambda: self._prompt(run, text))

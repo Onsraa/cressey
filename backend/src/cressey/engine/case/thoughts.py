@@ -284,7 +284,7 @@ def _named(run: Run, m: Message, k: int) -> list[str]:
     return objects(m.thoughts[k], code, run)
 
 
-def _label(run: Run, obj: str) -> str:
+def object_label(run: Run, obj: str) -> str:
     """The object's id; for a secret, also its name and the step where it was read."""
     for s in run.steps:
         for secret in s.secrets:
@@ -366,7 +366,7 @@ async def read_thought(
         asked |= {"KINDS": KINDS, "DIRECTION": DIRECTION}
     for o in candidates:
         asked[f"about:{o}"] = Noul(
-            instructions=f"Is the CURRENT thought about {_label(run, o)}?"
+            instructions=f"Is the CURRENT thought about {object_label(run, o)}?"
         )
     got: Answers | None = {}
     if asked:

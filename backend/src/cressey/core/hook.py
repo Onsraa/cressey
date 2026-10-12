@@ -10,7 +10,6 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastmcp.exceptions import ToolError
 from pydantic import JsonValue
 
-from cressey.core.case import read_prompt_soon
 from cressey.core.proxy import Guard
 from cressey.domain.runs import Step
 from cressey.engine.report import report_check
@@ -72,8 +71,7 @@ async def claude_hook(
         return {}
     if kind == "UserPromptSubmit":
         prompt = runs.prompt(run, event.get("prompt") or "")
-        state = request.app.state
-        read_prompt_soon(run, prompt.text, state.judge, state.thresholds)
+        guard.case.read_prompt_soon(run, prompt.text)
         return {}
     if kind == "MessageDisplay":
         runs.stream(

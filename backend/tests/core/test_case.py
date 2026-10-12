@@ -3,22 +3,21 @@ from collections.abc import Mapping
 
 import pytest
 
-from cressey.core.case import (
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Case, Event, Mandate, Secret
+from cressey.engine.case.case import (
     LEG,
+    CaseReader,
     code_events,
     decide,
     leg_values,
     read_message,
     read_prompt,
-    read_prompt_soon,
     record,
     secret_names,
     shadow,
-    shadow_soon,
     uses,
 )
-from cressey.domain.policy import Thresholds
-from cressey.domain.runs import Case, Event, Mandate, Secret
 from tests.core.helpers import message, run_with, step
 from tests.core.test_thoughts import ScriptedJudge
 
@@ -610,20 +609,22 @@ class SlowJudge(PromptJudge):
 async def test_a_shadow_is_scheduled_once_while_it_is_computed():
     run = run_with(step(2, "Read"))
     call = bash(3)
-    first = shadow_soon(run, call, None, SlowJudge(), T)
+    reader = CaseReader(SlowJudge(), T)
+    first = reader.shadow_soon(run, call, None)
     assert first is not None
-    assert shadow_soon(run, call, None, SlowJudge(), T) is None  # already on its way
+    assert reader.shadow_soon(run, call, None) is None  # already on its way
     assert (await first).decision == "allow"
-    again = shadow_soon(run, call, None, SlowJudge(), T)  # done: asked again, not lost
+    again = reader.shadow_soon(run, call, None)  # done: asked again, not lost
     assert again is not None
     await again
 
 
 async def test_a_blank_prompt_or_one_being_read_is_not_scheduled():
     run = run_with(step(2, "Read"), messages=[message(after=1, text="go", role="user")])
-    assert read_prompt_soon(run, "  \n", SlowJudge(), T) is None
-    first = read_prompt_soon(run, "go", SlowJudge(), T)
-    assert first is not None and read_prompt_soon(run, "go", SlowJudge(), T) is None
+    reader = CaseReader(SlowJudge(), T)
+    assert reader.read_prompt_soon(run, "  \n") is None
+    first = reader.read_prompt_soon(run, "go")
+    assert first is not None and reader.read_prompt_soon(run, "go") is None
     await first
 
 
@@ -631,8 +632,9 @@ async def test_shadows_take_turns_so_a_thought_is_read_once():
     m = message(after=0, text="Found the token. Now I will use it.")
     run = run_with(messages=[m])
     judge = SlowJudge({"Found the token.": {}, "Now I will use it.": {}})
-    first = shadow_soon(run, bash(1), None, judge, T)
-    second = shadow_soon(run, bash(2), None, judge, T)
+    reader = CaseReader(judge, T)
+    first = reader.shadow_soon(run, bash(1), None)
+    second = reader.shadow_soon(run, bash(2), None)
     assert first is not None and second is not None
     await asyncio.gather(first, second)
     assert [x["current_thought"] for x in judge.asked] == [
@@ -648,8 +650,9 @@ async def test_a_prompt_is_read_after_the_shadows_scheduled_before_it():
     m = message(after=0, text=f"Found {thing}.")
     run = run_with(step(1, "Read"), messages=[m])
     judge = SlowJudge({f"Found {thing}.": {"O1": 0.9, f"about:{thing}": 1.0}}, 0.9)
-    shadowed = shadow_soon(run, bash(2), None, judge, T)
-    prompt = read_prompt_soon(run, "yes, go ahead", judge, T)
+    reader = CaseReader(judge, T)
+    shadowed = reader.shadow_soon(run, bash(2), None)
+    prompt = reader.read_prompt_soon(run, "yes, go ahead")
     assert shadowed is not None and prompt is not None
     await asyncio.gather(shadowed, prompt)
     assert run.case.approved == [thing]

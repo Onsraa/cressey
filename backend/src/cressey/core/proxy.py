@@ -19,7 +19,6 @@ from fastmcp.tools.base import ToolResult
 from pydantic import JsonValue
 
 from cressey.core.broker import scoped
-from cressey.core.case import catch_up, closing_excuse, excuse_reason, shadow_soon
 from cressey.core.draft import (
     WAY_OUT,
     Drafter,
@@ -31,6 +30,7 @@ from cressey.core.draft import (
 from cressey.core.incidents import Incidents
 from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.runs import Legs, Run, Shadow, Step
+from cressey.engine.case.case import CaseReader, closing_excuse, excuse_reason
 from cressey.engine.floor.labels import ask_tool_kind, floor_labels, tool_kind
 from cressey.engine.floor.rules import check, edits_a_file
 from cressey.engine.floor.tripwires import at_cressey, trap
@@ -131,6 +131,7 @@ class Guard(Middleware):
         self.origins = origins  # where Cressey answers: no call may aim there
         self.policy, self.judge, self.hold_timeout = policy, judge, hold_timeout
         self.ledger = Ledger(judge)
+        self.case = CaseReader(judge, policy.triangle)
         self.triangle_holds, self.holds, self.drafter = triangle_holds, holds, drafter
         self._late: set[asyncio.Task[None]] = (
             set()
@@ -347,12 +348,12 @@ class Guard(Middleware):
 
     async def _read_words(self, run: Run, step: Step) -> None:
         if self.thought_holds:
-            await catch_up(run, step, self.judge, self.policy.triangle)
+            await self.case.read_until(run, step)
 
     def _shadow_later(self, run: Run, step: Step, floor: str | None) -> None:
         """What the case would decide for this call, beside today's decision and after it:
         in the background, never awaited, so the call's latency and hold are unchanged."""
-        task = shadow_soon(run, step, floor, self.judge, self.policy.triangle)
+        task = self.case.shadow_soon(run, step, floor)
         if task is not None:
             task.add_done_callback(lambda t: self._shadowed(run, step, t))
 

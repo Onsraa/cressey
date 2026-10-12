@@ -4,7 +4,9 @@ from typing import get_args
 import pytest
 from typesafe_sdk import Noul
 
-from cressey.core.thoughts import (
+from cressey.domain.policy import Thresholds
+from cressey.domain.runs import Case, Direction, Event, Kind, Secret, Thread
+from cressey.engine.case.thoughts import (
     DIRECTION,
     KINDS,
     QUESTIONS,
@@ -12,8 +14,6 @@ from cressey.core.thoughts import (
     read_thought,
     segment,
 )
-from cressey.domain.policy import Thresholds
-from cressey.domain.runs import Case, Direction, Event, Kind, Secret, Thread
 from cressey.engine.reading import LAST_RESULT, PREVIOUS
 from tests.core.helpers import message, run_with, step
 
