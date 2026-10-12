@@ -116,7 +116,7 @@ class Event(BaseModel):
 class Thread(BaseModel):
     leg: LegName
     object: str | None = None
-    state: Literal["open", "shared", "renounced", "verified", "approved"] = "open"
+    state: Literal["open", "shared", "renounced", "verified"] = "open"
     outside: bool = False  # O: beyond what the mandate grants
     events: list[int] = []  # indexes in Case.events
 
@@ -124,7 +124,6 @@ class Thread(BaseModel):
 class Case(BaseModel):
     events: list[Event] = []
     threads: list[Thread] = []
-    approved: list[str] = []  # objects a human approved
     # Served only: each leg's evidence, an index in `events` (`case.leg_evidence`), the quote
     # its gauge shows. A leg with none is absent.
     evidence: dict[LegName, int] = {}

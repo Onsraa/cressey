@@ -62,7 +62,7 @@ async def claude_hook(
       the dashboard shows it as it is produced and the next call's judgment reads it. The
       decision model flags the message once it is final.
     - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key. The
-      case reads it in the background: what it approves, what it answers.
+      prompt is a record: it never lowers Cressey's caution (a person's word isn't evidence).
     - PreToolUse gets Cressey's decision: nothing when the call may run, a deny with the way
       out when it may not.
     - PostToolUse / PostToolUseFailure record what the call returned and read the step.
@@ -97,8 +97,7 @@ async def claude_hook(
         engine.ended(run)
         return {}
     if kind == "UserPromptSubmit":
-        prompt = runs.prompt(run, event.get("prompt") or "")
-        engine.case.read_prompt_soon(run, prompt.text)
+        runs.prompt(run, event.get("prompt") or "")
         return {}
     if kind == "MessageDisplay":
         runs.stream(

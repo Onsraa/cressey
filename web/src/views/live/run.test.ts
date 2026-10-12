@@ -234,7 +234,6 @@ describe("a thought on the triangle", () => {
 				}),
 			),
 			threads: [],
-			approved: [],
 			evidence: {},
 		},
 	});
@@ -332,7 +331,7 @@ describe("the case", () => {
 		...extra,
 	});
 	const withCase = (events: CaseEvent[]) =>
-		run({ case: { events, threads: [], approved: [], evidence: {} } });
+		run({ case: { events, threads: [], evidence: {} } });
 
 	test("a message lists the indicators its thoughts raised, once each", () => {
 		const r = withCase([

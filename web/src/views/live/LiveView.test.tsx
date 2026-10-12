@@ -442,7 +442,6 @@ const ev = (
 const caseOf = (events: CaseEvent[], evidence: Case["evidence"] = {}) => ({
 	events,
 	threads: [],
-	approved: [],
 	evidence,
 });
 

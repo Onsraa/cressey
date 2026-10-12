@@ -421,11 +421,6 @@ export interface components {
 			 */
 			threads: components["schemas"]["Thread"][];
 			/**
-			 * Approved
-			 * @default []
-			 */
-			approved: string[];
-			/**
 			 * Evidence
 			 * @default {}
 			 */
@@ -1220,7 +1215,7 @@ export interface components {
 			 * @default open
 			 * @enum {string}
 			 */
-			state: "open" | "shared" | "renounced" | "verified" | "approved";
+			state: "open" | "shared" | "renounced" | "verified";
 			/**
 			 * Outside
 			 * @default false

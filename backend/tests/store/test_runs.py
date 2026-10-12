@@ -234,7 +234,6 @@ def test_a_run_serves_its_case_and_messages_their_source():
     assert run.model_dump()["case"] == {
         "events": [],
         "threads": [],
-        "approved": [],
         "evidence": {},
     }
     assert Message(after=0, text="hi").source == "narration"

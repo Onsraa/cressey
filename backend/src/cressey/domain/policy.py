@@ -17,8 +17,8 @@ Response = Literal["alert", "review", "stop"]
 
 
 def _thought_floors() -> dict[str, float]:
-    """Every indicator, and what a thought is about or approves, at 0.5; R at 0.2."""
-    floors = dict.fromkeys([*get_args(Indicator), "about", "approves"], 0.5)
+    """Every indicator, and what a thought is about, at 0.5; R at 0.2."""
+    floors = dict.fromkeys([*get_args(Indicator), "about"], 0.5)
     floors["R"] = 0.2
     return floors
 
