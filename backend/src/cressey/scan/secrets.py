@@ -18,8 +18,8 @@ from collections.abc import Iterator, Mapping
 from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
 
-from cressey.core.trace import encoded
 from cressey.domain.runs import Secret
+from cressey.scan.trace import encoded
 
 MIN_VALUE = 8
 _NAMED = "Named secret"

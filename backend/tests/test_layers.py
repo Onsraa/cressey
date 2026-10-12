@@ -6,13 +6,28 @@ import ast
 from pathlib import Path
 
 SRC = Path(__file__).parents[1] / "src" / "cressey"
-EVERYTHING = {"domain", "settings", "llm", "core", "guide", "app", "demo", "testing"}
+EVERYTHING = {
+    "domain",
+    "settings",
+    "tasks",
+    "scan",
+    "llm",
+    "judge",
+    "core",
+    "guide",
+    "app",
+    "demo",
+    "testing",
+}
 # What each part may import from cressey, besides itself.
 ALLOWED: dict[str, set[str]] = {
     "domain": set(),
     "settings": set(),
+    "tasks": set(),
+    "scan": {"domain"},
     "llm": {"domain", "settings"},
-    "core": {"domain", "llm", "settings"},
+    "judge": {"domain", "llm", "settings"},
+    "core": {"domain", "settings", "tasks", "scan", "llm", "judge"},
     "guide": {"domain", "llm", "settings"},
     "app": EVERYTHING - {"testing"},
     "export_openapi": {"app", "settings"},

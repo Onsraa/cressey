@@ -14,10 +14,10 @@ from fastmcp.client.transports import StreamableHttpTransport
 from typesafe_sdk import Choice
 
 from cressey.app import create_app
-from cressey.core.judge import Judge
 from cressey.core.proxy import MCP_PATH
 from cressey.demo.server import serve
 from cressey.domain.guides import Guide, GuideIncident
+from cressey.judge import Judge
 from cressey.settings import Settings
 
 # The control plane's key in every test app: conftest.py puts it in the environment too,

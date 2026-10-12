@@ -4,7 +4,6 @@ from collections.abc import Mapping
 
 import pytest
 
-from cressey.core.judge import NotRecorded
 from cressey.core.triangle import (
     CHUNK,
     PART,
@@ -17,6 +16,7 @@ from cressey.core.triangle import (
 )
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.runs import Leg, Legs, Mandate, Message, Run, Secret, Step
+from cressey.judge import NotRecorded
 from tests.core.helpers import TASK, run_with, step
 
 pytestmark = pytest.mark.anyio
@@ -332,8 +332,8 @@ async def test_a_step_already_being_read_in_the_background_is_not_read_twice():
 async def test_the_triangle_redacts_results_off_the_event_loop(monkeypatch):
     """Each result is now labelled as it comes in: its redaction must not stall other runs."""
     from cressey.core import triangle
-    from cressey.core.secret_scan import redact
     from cressey.core.triangle import report_check
+    from cressey.scan.secrets import redact
 
     on_loop: list[bool] = []
 
@@ -440,7 +440,7 @@ class SizeLimitedJudge(FakeJudge):
         self.limit = limit
 
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
-        from cressey.core.judge import TooLarge
+        from cressey.judge import TooLarge
 
         if len(json.dumps(state)) > self.limit:
             raise TooLarge
@@ -463,7 +463,7 @@ async def test_a_part_refused_for_size_is_halved_until_it_fits():
 async def test_a_point_refused_for_size_keeps_the_labels_without_a_quote():
     class NoPointJudge(FakeJudge):
         async def answers(self, state: dict, questions: Mapping) -> dict | None:
-            from cressey.core.judge import TooLarge
+            from cressey.judge import TooLarge
 
             if "parts" in state:
                 raise TooLarge
@@ -636,7 +636,7 @@ class SizeLimitedSkipJudge(SkipJudge):
         self.limit = limit
 
     async def answers(self, state: dict, questions: Mapping) -> dict | None:
-        from cressey.core.judge import TooLarge
+        from cressey.judge import TooLarge
 
         if len(json.dumps(state)) > self.limit:
             raise TooLarge

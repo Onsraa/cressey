@@ -9,8 +9,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import redact
-from cressey.core.trace import strings, trace
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.incidents import (
     Fix,
@@ -23,6 +21,8 @@ from cressey.domain.incidents import (
 from cressey.domain.owners import LEGS, OWNERS, LegName
 from cressey.domain.policy import Fleet
 from cressey.domain.runs import Mandate, Preflight, Run, Step
+from cressey.scan.secrets import redact
+from cressey.scan.trace import strings, trace
 
 log = logging.getLogger(__name__)
 ORDER = {"critique": 0, "haute": 1}

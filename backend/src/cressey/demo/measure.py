@@ -37,11 +37,8 @@ from typesafe_sdk import (
 
 from cressey.core.eventlog import EventLog
 from cressey.core.floor import check
-from cressey.core.judge import Answers, Question
 from cressey.core.preflight import CUT, QUESTIONS, assess_for
-from cressey.core.proxy import load_policy
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import redact, scan
 from cressey.core.triangle import (
     JUDGMENT,
     LABELS,
@@ -51,9 +48,11 @@ from cressey.core.triangle import (
     views,
 )
 from cressey.demo.tools import demo_tools
-from cressey.domain.policy import Thresholds
+from cressey.domain.policy import Thresholds, load_policy
 from cressey.domain.runs import Mandate, Run, RunIn
+from cressey.judge import Answers, Question
 from cressey.llm.clients import decision_auth
+from cressey.scan.secrets import redact, scan
 from cressey.settings import DATA, Settings
 from cressey.testing import percentile
 

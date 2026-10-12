@@ -6,7 +6,7 @@ import mcp_types as m
 from fastmcp.tools.base import ToolResult
 
 from cressey.core.proxy import _text
-from cressey.core.secret_scan import scan
+from cressey.scan.secrets import scan
 
 
 def test_embedded_text_resources_are_read():

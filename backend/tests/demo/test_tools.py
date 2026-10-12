@@ -1,9 +1,9 @@
 import pytest
 from fastmcp import Client
 
-from cressey.core.proxy import load_policy
-from cressey.core.secret_scan import find_secrets
 from cressey.demo.tools import PROD_KEY, READ_KEY, TRAP_KEY, demo_tools
+from cressey.domain.policy import load_policy
+from cressey.scan.secrets import find_secrets
 from cressey.settings import DATA
 
 pytestmark = pytest.mark.anyio

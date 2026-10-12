@@ -15,11 +15,11 @@ from typing import Literal
 from pydantic import BaseModel, JsonValue
 
 from cressey.core.floor import check
-from cressey.core.judge import JevJudge, Judge, top, yes
-from cressey.core.proxy import ask_tool_kind, load_policy
+from cressey.core.proxy import ask_tool_kind
 from cressey.core.triangle import floor_labels
-from cressey.domain.policy import Policy, ToolRule
+from cressey.domain.policy import Policy, ToolRule, load_policy
 from cressey.domain.runs import Mandate, Run, Step
+from cressey.judge import JevJudge, Judge, top, yes
 from cressey.settings import DATA, Settings
 
 LABELS = DATA / "eval" / "floor-labels.json"

@@ -1,8 +1,10 @@
 """The policy Cressey enforces (policy.yaml): each tool's kind, the floor's thresholds, the
 responses, the triangle's thresholds, the fleet signal, when a run stops and the key broker."""
 
+from pathlib import Path
 from typing import Literal, get_args
 
+import yaml
 from pydantic import BaseModel, Field
 
 from cressey.domain.runs import Indicator
@@ -100,3 +102,7 @@ class Policy(BaseModel):
     stuck: Stuck = Field(default_factory=Stuck)
     broker: dict[str, Credential] = {}  # tool -> the credentials Cressey hands it
     decoys: dict[str, str] = {}  # trap key name -> value: a call carrying one is caught
+
+
+def load_policy(path: Path) -> Policy:
+    return Policy.model_validate(yaml.safe_load(path.read_text()))

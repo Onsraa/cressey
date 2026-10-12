@@ -13,18 +13,10 @@ from collections.abc import Callable, Mapping, Sequence
 from pydantic import JsonValue
 from typesafe_sdk import Choice, Noul
 
-from cressey.core.judge import (
-    Answers,
-    Judge,
-    NotRecorded,
-    Question,
-    TooLarge,
-    top,
-    yes,
-)
-from cressey.core.secret_scan import redact
 from cressey.domain.policy import Thresholds
-from cressey.domain.runs import Leg, Legs, Risk, Run, Step
+from cressey.domain.runs import Leg, Legs, Risk, Run, Step, confirmed
+from cressey.judge import Answers, Judge, NotRecorded, Question, TooLarge, top, yes
+from cressey.scan.secrets import redact
 
 log = logging.getLogger(__name__)
 
@@ -671,10 +663,6 @@ async def legs(run: Run, call: Step, judge: Judge, t: Thresholds) -> Legs:
 async def read_after(run: Run, call: Step, judge: Judge, t: Thresholds) -> Legs:
     """The triangle for a call that ran before it could be read: every part, now."""
     return await _triangle(run, call, judge, t, everything=True)
-
-
-def confirmed(legs: Legs) -> list[str]:
-    return [name for name, leg in legs if leg.confirmed]
 
 
 def alarm(legs: Legs, risk: Risk) -> bool:

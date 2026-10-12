@@ -8,10 +8,10 @@ from pydantic import JsonValue
 from cressey.core.eventlog import EventLog
 from cressey.core.incidents import Incidents
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import redact, scan
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.guides import Guide, GuideIncident
 from cressey.domain.runs import Leg, Legs, Run, RunIn, Step
+from cressey.scan.secrets import redact, scan
 
 pytestmark = pytest.mark.anyio
 ON = Leg(score=1, confirmed=True, facts=["fait observé"])

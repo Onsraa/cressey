@@ -6,11 +6,9 @@ import json
 import logging
 import math
 import time
-from pathlib import Path
 from typing import Literal
 
 import mcp_types
-import yaml
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from fastmcp.server import create_proxy
@@ -33,9 +31,7 @@ from cressey.core.draft import (
 )
 from cressey.core.floor import at_cressey, check, edits_a_file, trap
 from cressey.core.incidents import Incidents
-from cressey.core.judge import Answer, Judge, NotRecorded, top, yes
 from cressey.core.runs import Runs
-from cressey.core.secret_scan import fingerprint, redact, scan
 from cressey.core.triangle import (
     alarm,
     alarm_reason,
@@ -47,6 +43,8 @@ from cressey.core.triangle import (
 )
 from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.runs import Risk, Run, Shadow, Step
+from cressey.judge import Answer, Judge, NotRecorded, top, yes
+from cressey.scan.secrets import fingerprint, redact, scan
 
 log = logging.getLogger(__name__)
 
@@ -83,10 +81,6 @@ def tool_kind(answer: Answer, read: float) -> Risk | None:
     if answer.get("read", 0.0) >= read:
         return "read"
     return "destructive" if top(answer) == "destructive" else "write"
-
-
-def load_policy(path: Path) -> Policy:
-    return Policy.model_validate(yaml.safe_load(path.read_text()))
 
 
 def _size(b64: str) -> str:

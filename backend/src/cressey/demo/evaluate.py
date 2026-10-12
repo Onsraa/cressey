@@ -17,9 +17,9 @@ import httpx2
 from pydantic import BaseModel
 
 from cressey.app import create_app
-from cressey.core.judge import Judge
 from cressey.demo.agent import Session, load_sessions, play
 from cressey.demo.server import serve
+from cressey.judge import Judge
 from cressey.settings import DATA, Settings
 from cressey.testing import percentile
 

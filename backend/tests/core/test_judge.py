@@ -7,7 +7,7 @@ import typesafe_sdk
 from pydantic import JsonValue
 from typesafe_sdk import AsyncTypeSafeClient, Choice, ChoiceAnswer, Noul
 
-from cressey.core.judge import (
+from cressey.judge import (
     JUDGE_IN_FLIGHT,
     JevJudge,
     NotRecorded,
@@ -189,7 +189,7 @@ async def test_live_decision_model_finds_a_drop_table_outside_a_typo_fix():
 
 
 def test_a_recorded_choice_reads_as_its_most_probable_option():
-    from cressey.core.judge import top
+    from cressey.judge import top
 
     assert top({"m1": 0.2, "t3": 0.7, "none": 0.1}) == "t3"
     assert top(0.4) is None

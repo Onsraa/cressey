@@ -19,13 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from cressey.core.floor import check
-from cressey.core.proxy import load_policy
-from cressey.core.secret_scan import SCAN_LIMIT, find_secrets, redact
-from cressey.core.trace import trace
 from cressey.core.triangle import legs
 from cressey.demo.tools import PROD_KEY
-from cressey.domain.policy import Policy, Thresholds
+from cressey.domain.policy import Policy, Thresholds, load_policy
 from cressey.domain.runs import Mandate, Run, Step
+from cressey.scan.secrets import SCAN_LIMIT, find_secrets, redact
+from cressey.scan.trace import trace
 from cressey.settings import DATA
 from cressey.testing import DownJudge, QuietJudge, agent, api, percentile, serving
 

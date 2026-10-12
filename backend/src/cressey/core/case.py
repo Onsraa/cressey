@@ -15,7 +15,6 @@ from collections.abc import Mapping
 from pydantic import JsonValue
 from typesafe_sdk import Noul
 
-from cressey.core.judge import Judge, NotRecorded, Question, yes
 from cressey.core.thoughts import CASE_QUOTE, _label, read_thought, thoughts_of
 from cressey.core.triangle import _max_over_parts, _pieces
 from cressey.domain.owners import LegName
@@ -31,6 +30,7 @@ from cressey.domain.runs import (
     Step,
     Thread,
 )
+from cressey.judge import Judge, NotRecorded, Question, yes
 
 # An indicator that belongs to no leg (plan, the N counters) is absent.
 LEG: dict[str, LegName] = {

@@ -10,9 +10,9 @@ from pydantic import JsonValue
 from typesafe_sdk import Noul
 
 from cressey.core.incidents import TASK_WAY_OUT
-from cressey.core.judge import Judge, NotRecorded, TooLarge, yes
 from cressey.domain.owners import OWNER_NAMES, OwnerRole
 from cressey.domain.runs import Mandate, Preflight
+from cressey.judge import Judge, NotRecorded, TooLarge, yes
 
 log = logging.getLogger(__name__)
 

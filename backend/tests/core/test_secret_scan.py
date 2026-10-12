@@ -7,13 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from cressey.core.secret_scan import (
-    MIN_VALUE,
-    SCAN_LIMIT,
-    find_secrets,
-    redact,
-    scan,
-)
+from cressey.scan.secrets import MIN_VALUE, SCAN_LIMIT, find_secrets, redact, scan
 
 # Built from parts so no credential-shaped literal sits whole in the source.
 URL_VALUE = "FAKE-" + "pass-0001"

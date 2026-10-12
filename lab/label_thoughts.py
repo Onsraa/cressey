@@ -33,7 +33,7 @@ os.environ["CRESSEY_DECOYS"] = "{}"  # the case file is measured on its own, no 
 
 from cressey.app import create_app
 from cressey.core import case as case_mod
-from cressey.core.judge import Answers, JevJudge, Judge, Question, yes
+from cressey.judge import Answers, JevJudge, Judge, Question, yes
 from cressey.core.thoughts import QUESTIONS
 from cressey.settings import Settings
 

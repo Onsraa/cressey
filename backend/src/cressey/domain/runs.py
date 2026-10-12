@@ -81,6 +81,11 @@ class Legs(BaseModel):
     rationalization: Leg
 
 
+def confirmed(legs: Legs) -> list[str]:
+    """The names of the legs facts confirm."""
+    return [name for name, leg in legs if leg.confirmed]
+
+
 class RunIn(BaseModel):
     task: str = Field(min_length=3, max_length=2000)
     mandate: Mandate = Field(default_factory=Mandate)

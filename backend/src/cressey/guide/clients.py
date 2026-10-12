@@ -50,7 +50,7 @@ PROMPT_WHY_V1 = (
 
 
 # Jev allows 80 requests/s (docs.typesafe.ai, Models). At about 0.25 s a call, 20 in flight
-# stay under it: 16 for the decision model (core/judge.py), 4 for this re-ranker.
+# stay under it: 16 for the decision model (judge.py), 4 for this re-ranker.
 RERANK_IN_FLIGHT = 4
 _RERANK_SLOTS = threading.BoundedSemaphore(RERANK_IN_FLIGHT)
 

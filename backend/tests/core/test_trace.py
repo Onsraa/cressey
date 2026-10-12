@@ -2,7 +2,7 @@ import base64
 
 import pytest
 
-from cressey.core.trace import MIN_TOKEN, Origin, trace
+from cressey.scan.trace import MIN_TOKEN, Origin, trace
 
 KEY = "FAKE-DB-PROD-KEY-0000"
 ENV_PROD = (4, f"DB_PROD={KEY}\n")
