@@ -36,11 +36,13 @@ from typesafe_sdk import (
 )
 
 from cressey.demo.tools import demo_tools
+from cressey.domain.acts import Act, Agent
 from cressey.domain.policy import Thresholds, load_policy
 from cressey.domain.runs import Mandate, Run, RunIn, Step
 from cressey.engine.floor.rules import check
 from cressey.engine.ledger import LABELS, Ledger
 from cressey.engine.preflight import CUT, QUESTIONS, assess_for
+from cressey.engine.provenance import asked_by
 from cressey.engine.reading import steps_before
 from cressey.engine.report import REPORT, report_check
 from cressey.engine.triangle import JUDGMENT, judgment, legs
@@ -210,7 +212,8 @@ def build_run(runs: Runs, case: WriteCase, judge_final: bool) -> Run:
         risk, reason = check(runs_policy.tools.get(st.tool), st.args, run.mandate)
         shown = redact(json.dumps(st.args, ensure_ascii=False), dict(run.known))
         reasons = [reason] if reason else []
-        step = runs.add_step(run, st.tool, st.args, shown, risk, reasons)
+        act = Act(surface="mcp", agent=Agent(), tool=st.tool, args=st.args)
+        step = runs.add_step(run, act, shown, risk, reasons, asked_by(run, st.args))
         if not (final and not judge_final):
             runs.record(run, step, st.is_error, st.result, scan(st.result))
     return run

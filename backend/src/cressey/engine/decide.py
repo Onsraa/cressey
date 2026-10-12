@@ -11,8 +11,7 @@ import time
 from collections.abc import Sequence
 from typing import Literal, Protocol
 
-from pydantic import JsonValue
-
+from cressey.domain.acts import Act, Asker
 from cressey.domain.incidents import Incident
 from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.reasons import Reason, Target, joined, target
@@ -33,6 +32,7 @@ from cressey.engine.floor.labels import ask_tool_kind, floor_labels, tool_kind
 from cressey.engine.floor.rules import check, edits_a_file
 from cressey.engine.floor.tripwires import at_cressey, trap
 from cressey.engine.ledger import Ledger
+from cressey.engine.provenance import asked_by
 from cressey.engine.reading import read_before
 from cressey.engine.triangle import alarm, alarm_reason, legs, read_after, read_only
 from cressey.judge import Judge, NotRecorded, yes
@@ -180,10 +180,11 @@ class Engine:
             fired.append((Reason(check="production", score=p), production))
         return fired
 
-    async def before(self, run: Run, name: str, args: dict[str, JsonValue]) -> Step:
-        """Cressey's decision on a call before it runs: its step, let through or approved.
-        Raises Refused when the call is refused, or held and not approved."""
+    async def before(self, run: Run, act: Act) -> Step:
+        """Cressey's decision on an act before it runs: its step, let through or approved.
+        Raises Refused when the act is refused, or held and not approved."""
         start = time.perf_counter()
+        name, args = act.tool, act.args
         rule = await self._rule(name)
         risk, guarded = check(rule, args, run.mandate)
         trapped = trap(args, self.policy.decoys)
@@ -198,8 +199,12 @@ class Engine:
         known = dict(run.known) | {
             v: fingerprint(v) for v in self.policy.decoys.values()
         }
-        shown = await asyncio.to_thread(redact, dumped, known)
-        step = self.runs.add_step(run, name, args, shown, risk, floor)
+
+        def prepare() -> tuple[str, list[Asker]]:
+            return redact(dumped, known), asked_by(run, args)
+
+        shown, asked = await asyncio.to_thread(prepare)
+        step = self.runs.add_step(run, act, shown, risk, floor, asked)
         try:
             if run.revoked:
                 self.runs.mark(run, step, "denied")

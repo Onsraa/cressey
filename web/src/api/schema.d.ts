@@ -388,6 +388,22 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		/**
+		 * Agent
+		 * @description Who acts, as far as the surface says; None where it says nothing.
+		 */
+		Agent: {
+			/** Client */
+			client?: string | null;
+			/** Client Version */
+			client_version?: string | null;
+			/** Model */
+			model?: string | null;
+			/** Sub Agent */
+			sub_agent?: string | null;
+			/** Sub Agent Type */
+			sub_agent_type?: string | null;
+		};
 		/** Case */
 		Case: {
 			/**
@@ -928,6 +944,7 @@ export interface components {
 			started_at: string;
 			/** Via */
 			via?: ("mcp" | "hook") | null;
+			agent?: components["schemas"]["Agent"];
 			/**
 			 * Revoked
 			 * @default false
@@ -1072,6 +1089,14 @@ export interface components {
 		Step: {
 			/** N */
 			n: number;
+			/** Surface */
+			surface?: ("mcp" | "hook") | null;
+			agent?: components["schemas"]["Agent"];
+			/**
+			 * Asked By
+			 * @default []
+			 */
+			asked_by: ("task" | "user" | "content" | "agent")[];
 			/** Tool */
 			tool: string;
 			/** Args */

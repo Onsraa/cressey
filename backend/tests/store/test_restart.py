@@ -14,6 +14,7 @@ from cressey.settings import Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 from cressey.testing import ADMIN_AUTH
+from tests.helpers import act
 
 pytestmark = pytest.mark.anyio
 TASK = "Fix the failing test"
@@ -36,9 +37,13 @@ async def test_a_restart_keeps_the_key_the_steps_and_expires_an_open_hold(tmp_pa
     created = runs.create(RunIn(task=TASK))
     run = runs.get(created.id)
     assert run is not None
-    read = runs.add_step(run, "Read", {}, '{"file_path": "a"}', "read", [])
+    read = runs.add_step(
+        run, act("Read", {}), '{"file_path": "a"}', "read", [], ["agent"]
+    )
     runs.mark(run, read, "alerted")
-    rm = runs.add_step(run, "Bash", {}, '{"command": "rm -r x"}', "destructive", RM)
+    rm = runs.add_step(
+        run, act("Bash", {}), '{"command": "rm -r x"}', "destructive", RM, ["agent"]
+    )
     holding = asyncio.create_task(runs.hold(run, rm, timeout=60, stop_after=3))
     await asyncio.sleep(0)  # the hold is logged; Cressey stops before anyone decides
 
@@ -50,6 +55,7 @@ async def test_a_restart_keeps_the_key_the_steps_and_expires_an_open_hold(tmp_pa
         (1, "Read", "alerted"),
         (2, "Bash", "expired"),
     ]
+    assert (again.steps[1].reasons, again.steps[1].reason) == (RM, RM[0].text)
     expired = restarted.log.events[-1]
     assert expired.data == {
         "run": run.id,
@@ -57,7 +63,9 @@ async def test_a_restart_keeps_the_key_the_steps_and_expires_an_open_hold(tmp_pa
         "status": "expired",
         "after": "restart",
     }
-    assert restarted.add_step(again, "Read", {}, "{}", "read", []).n == 3
+    assert (
+        restarted.add_step(again, act("Read", {}), "{}", "read", [], ["agent"]).n == 3
+    )
     assert restarted.log.intact
 
 

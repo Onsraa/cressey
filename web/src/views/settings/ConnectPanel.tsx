@@ -32,6 +32,7 @@ function hookSettings(origin: string, hookPath: string): string {
 		{
 			hooks: {
 				SessionStart: [started],
+				PostModelSwitch: [one(10)],
 				UserPromptSubmit: [one(10)],
 				MessageDisplay: [one(10)],
 				PreToolUse: [one(300, { onFailure: "block" })],

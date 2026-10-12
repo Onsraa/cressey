@@ -13,6 +13,7 @@ from typing import Literal
 
 from pydantic import JsonValue
 
+from cressey.domain.acts import Act, Asker
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import (
     Hold,
@@ -104,7 +105,16 @@ class Runs:
                 continue
             fields = recorded.setdefault((run_id, n), {"n": n})
             if event.kind == "call":
-                kept = ("tool", "args", "risk", "reason", "reasons")
+                kept = (
+                    "surface",
+                    "agent",
+                    "asked_by",
+                    "tool",
+                    "args",
+                    "risk",
+                    "reason",
+                )
+                kept += ("reasons",)
                 fields |= {k: event.data[k] for k in kept if k in event.data}
             elif kind := FROM_LOG.get(event.kind):
                 fields |= {k: event.data[k] for k in kind if k in event.data}
@@ -173,29 +183,36 @@ class Runs:
     def add_step(
         self,
         run: Run,
-        tool: str,
-        raw_args: dict[str, JsonValue],
+        act: Act,
         shown: str,
         risk: Risk,
         reasons: list[Reason],
+        asked_by: list[Asker],
     ) -> Step:
-        """`shown`: the arguments as JSON, secrets redacted. The engine redacts them off the
-        event loop: a large argument takes a while."""
+        """`shown`: the act's arguments as JSON, secrets redacted. The engine redacts them off
+        the event loop: a large argument takes a while."""
         step = Step(
             n=len(run.steps) + 1,
-            tool=tool,
+            surface=act.surface,
+            agent=act.agent,
+            asked_by=asked_by,
+            tool=act.tool,
             args=shown,
             risk=risk,
-            raw_args=raw_args,
+            raw_args=act.args,
             running=True,
         )
         step.because(reasons)
         run.steps.append(step)
+        asked: list[JsonValue] = list(asked_by)
         self.log_step(
             run,
             step,
             "call",
-            tool=tool,
+            surface=act.surface,
+            agent=act.agent.model_dump(mode="json", exclude_none=True),
+            asked_by=asked,
+            tool=act.tool,
             args=shown,
             risk=risk,
             reason=step.reason,
@@ -287,6 +304,12 @@ class Runs:
         self.log.append(
             "unlocked", {"run": run.id, "key": "held" if held else "cleared"}
         )
+
+    def model(self, run: Run, model: str, source: str) -> None:
+        """The model the agent runs on from now, as its surface said it (Claude Code's
+        SessionStart, a model switch): every later act records it."""
+        run.agent.model = model
+        self.log.append("model", {"run": run.id, "model": model, "source": source})
 
     def connect(self, run: Run) -> None:
         """A Claude Code session started (or resumed): it waits for a prompt."""

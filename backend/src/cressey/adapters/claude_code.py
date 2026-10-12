@@ -9,7 +9,8 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import JsonValue
 
-from cressey.domain.runs import Step
+from cressey.domain.acts import Act, Agent
+from cressey.domain.runs import Run, Step
 from cressey.engine.agent_text import note
 from cressey.engine.decide import Engine, Refused
 from cressey.engine.report import report_check
@@ -18,7 +19,26 @@ from cressey.store.runs import Runs
 
 router = APIRouter()
 HOOK_PATH = "/hook/claude"
+TOOL_EVENTS = ("PreToolUse", "PostToolUse", "PostToolUseFailure")
 AuthorizationHeader = Annotated[str, Header()]
+
+
+def _act(run: Run, event: dict[str, JsonValue]) -> Act:
+    """The tool call a PreToolUse event announces. A subagent's call names it."""
+    sub, sub_type = event.get("agent_id"), event.get("agent_type")
+    agent = Agent(
+        client="claude-code",
+        model=run.agent.model,
+        sub_agent=str(sub) if sub else None,
+        sub_agent_type=str(sub_type) if sub_type else None,
+    )
+    args = event.get("tool_input")
+    return Act(
+        surface="hook",
+        agent=agent,
+        tool=str(event["tool_name"]),
+        args=args if isinstance(args, dict) else {},
+    )
 
 
 def _deny(reason: str) -> dict[str, JsonValue]:
@@ -64,6 +84,11 @@ async def claude_hook(
     kind = event["hook_event_name"]
     if kind == "SessionStart":
         runs.connect(run)
+        if model := event.get("model"):  # omitted after /clear or a recovery restore
+            runs.model(run, str(model), str(event.get("source", "")))
+        return {}
+    if kind == "PostModelSwitch":
+        runs.model(run, str(event["to_model"]), str(event.get("source", "")))
         return {}
     if kind == "SessionEnd":
         runs.disconnect(run)
@@ -89,13 +114,12 @@ async def claude_hook(
             runs.answered(run, last)
         runs.checked(run, await report_check(run, engine.ledger, state.thresholds))
         return {}
-    name = event["tool_name"]
+    if kind not in TOOL_EVENTS:  # an event Cressey doesn't follow
+        return {}
     call = (run.id, str(event.get("tool_use_id", "")))
     if kind == "PreToolUse":
         try:
-            pending[call] = await engine.before(
-                run, name, event.get("tool_input") or {}
-            )
+            pending[call] = await engine.before(run, _act(run, event))
         except Refused as refused:
             return _deny(str(refused))
         return {}

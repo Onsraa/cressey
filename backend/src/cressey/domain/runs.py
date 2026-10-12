@@ -5,6 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, JsonValue
 
+from cressey.domain.acts import Agent, Asker, Surface
 from cressey.domain.owners import LegName
 from cressey.domain.reasons import Reason, joined
 
@@ -138,6 +139,11 @@ class Shadow(BaseModel):
 
 class Step(BaseModel):
     n: int  # 1-based, as in « étape 4 »
+    # Its act: through which surface, by whom on which model, on whose request. None and
+    # empty for a step a log written before acts were recorded gave back.
+    surface: Surface | None = None
+    agent: Agent = Field(default_factory=Agent)
+    asked_by: list[Asker] = []
     tool: str
     args: str  # the arguments as JSON, secrets redacted
     risk: Risk
@@ -224,6 +230,9 @@ class Run(BaseModel):
     via: Literal["mcp", "hook"] | None = (
         None  # how its calls reach Cressey, for the badge
     )
+    agent: Agent = Field(
+        default_factory=Agent
+    )  # who acts on it now, as the surface said
     revoked: bool = False
     # Holds rejected or expired since the user's last prompt (since the start for MCP, which
     # has none), and whether their number stopped the run: the key stays suspended until an

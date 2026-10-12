@@ -1,8 +1,10 @@
 import asyncio
 from collections.abc import Mapping
 
+from pydantic import JsonValue
 from typesafe_sdk import Noul
 
+from cressey.domain.acts import Act, Agent
 from cressey.domain.runs import Mandate, Message, Run, Step
 
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -77,3 +79,8 @@ class ServedJudge:
             )
             for name, q in questions.items()
         }
+
+
+def act(tool: str, args: dict[str, JsonValue] | None = None) -> Act:
+    """A call through the MCP gateway, by a client that named nothing."""
+    return Act(surface="mcp", agent=Agent(), tool=tool, args=args or {})

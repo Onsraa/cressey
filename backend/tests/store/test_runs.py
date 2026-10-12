@@ -9,6 +9,7 @@ from cressey.domain.runs import Leg, Legs, Message, Run, RunIn, Shadow, Step, Te
 from cressey.engine.decide import act_on_pressure
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
+from tests.helpers import act
 
 ON = Leg(score=1, confirmed=True, facts=[])
 OFF = Leg(score=0, confirmed=False, facts=[])
@@ -23,7 +24,9 @@ def test_acting_on_pressure_is_logged_once_each():
     with_key = Legs(pressure=ON, opportunity=ON, rationalization=OFF)
     for n, legs in enumerate([pressure, with_key, with_key], start=1):
         args: dict[str, JsonValue] = {"path": f"f{n}.md"}
-        step = runs.add_step(run, "read_file", args, str(args), "read", [])
+        step = runs.add_step(
+            run, act("read_file", args), str(args), "read", [], ["agent"]
+        )
         act_on_pressure(runs, run, step, legs)
     acted = [
         (e.kind, e.data["n"])
@@ -45,7 +48,7 @@ def _held_pair() -> tuple[Runs, Run, list[Step]]:
     run = runs.get(runs.create(RunIn(task="nettoyer la base")).id)
     assert run is not None
     calls = [
-        runs.add_step(run, "run_sql", {"q": q}, q, "destructive", HELD)
+        runs.add_step(run, act("run_sql", {"q": q}), q, "destructive", HELD, ["agent"])
         for q in ("DELETE FROM a", "DELETE FROM b")
     ]
     return runs, run, calls
@@ -60,7 +63,9 @@ async def _rejected(runs: Runs, run: Run, step: Step, stop_after: int = 3) -> No
 
 
 def _call(runs: Runs, run: Run) -> Step:
-    return runs.add_step(run, "run_sql", {"q": "x"}, "x", "destructive", HELD)
+    return runs.add_step(
+        run, act("run_sql", {"q": "x"}), "x", "destructive", HELD, ["agent"]
+    )
 
 
 @pytest.mark.anyio
@@ -255,7 +260,7 @@ def test_a_shadow_is_stored_on_its_step_and_logged():
     runs = Runs(EventLog())
     run = runs.get(runs.create(RunIn(task="fais passer les tests")).id)
     assert run is not None
-    step = runs.add_step(run, "Bash", {}, "{}", "write", [])
+    step = runs.add_step(run, act("Bash", {}), "{}", "write", [], ["agent"])
     shadow = Shadow(decision="hold", why=["a link"], uses=["svc:9"], words_read=False)
     runs.set_shadow(run, step, shadow)
     assert step.shadow == shadow

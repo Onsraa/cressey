@@ -46,6 +46,8 @@ const call = (
 	n,
 	tool,
 	args,
+	agent: {},
+	asked_by: ["agent"],
 	risk: "read",
 	status: "allowed",
 	reasons: [],

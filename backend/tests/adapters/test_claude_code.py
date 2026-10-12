@@ -742,3 +742,54 @@ async def test_a_command_aimed_at_cressey_waits_for_a_human(served):
     out = (await call).json()["hookSpecificOutput"]
     assert out["permissionDecision"] == "deny"
     assert (await api(served, "GET", "/api/policy/responses")).json() == before
+
+
+async def test_each_call_records_the_agent_its_model_and_its_subagent(served):
+    """The act record: the model from SessionStart, then from a model switch; a subagent's
+    call says which one made it."""
+    run = await new_run(served)
+    key = run["key"]
+    model = "claude-opus-5-5"
+    await hook(
+        served, key, session_event("SessionStart", source="startup", model=model)
+    )
+    read = {"file_path": "README.md"}
+    await hook(served, key, event("PreToolUse", "Read", "t1", tool_input=read))
+    switch = session_event(
+        "PostModelSwitch",
+        from_model=model,
+        to_model="claude-sonnet-5-5",
+        source="command",
+    )
+    assert (await hook(served, key, switch)).json() == {}
+    sub = {"agent_id": "a7", "agent_type": "Explore"}
+    await hook(served, key, event("PreToolUse", "Read", "t2", tool_input=read, **sub))
+    steps = (await run_of(served, run))["steps"]
+    assert [(s["surface"], s["agent"]) for s in steps] == [
+        ("hook", {"client": "claude-code", "client_version": None, "model": model,
+                  "sub_agent": None, "sub_agent_type": None}),
+        ("hook", {"client": "claude-code", "client_version": None,
+                  "model": "claude-sonnet-5-5", "sub_agent": "a7",
+                  "sub_agent_type": "Explore"}),
+    ]  # fmt: skip
+
+
+async def test_each_call_says_who_asked_for_it(served):
+    """A value the user typed asked for the call; the agent's own choice is the agent's."""
+    run = await new_run(served)
+    key = run["key"]
+    prompt = session_event("UserPromptSubmit", prompt="Open releases/2026-10-12.md")
+    await hook(served, key, prompt)
+    opened = {"file_path": "releases/2026-10-12.md"}
+    await hook(served, key, event("PreToolUse", "Read", "t1", tool_input=opened))
+    await hook(
+        served, key, event("PreToolUse", "Read", "t2", tool_input={"file_path": "a"})
+    )
+    steps = (await run_of(served, run))["steps"]
+    assert [s["asked_by"] for s in steps] == [["user"], ["agent"]]
+
+
+async def test_an_event_cressey_does_not_follow_is_answered_with_nothing(served):
+    run = await new_run(served)
+    out = await hook(served, run["key"], session_event("SubagentStart", agent_id="a7"))
+    assert (out.status_code, out.json()) == (200, {})

@@ -1,5 +1,5 @@
 {
-  "_comment": "Cressey's hook, for a Claude Code agent. `lab/run_agent.sh --hook` fills CRESSEY_HOOK_URL and CRESSEY_RUN_KEY (a run's own key, from POST /api/runs) into the throwaway copy's .claude/settings.json; don't commit real values. PreToolUse waits for a human up to CRESSEY_HOLD_TIMEOUT (240 s), so its timeout is longer. onFailure block needs Claude Code >= 2.1.295; without it a Cressey that is down lets calls through. SessionStart, UserPromptSubmit and SessionEnd give the dashboard Claude Code's turns (waiting for a prompt, working, ended); they don't block, so a Cressey that is down never swallows a prompt. SessionStart takes no http hook (only command), so a curl posts the same event.",
+  "_comment": "Cressey's hook, for a Claude Code agent. `lab/run_agent.sh --hook` fills CRESSEY_HOOK_URL and CRESSEY_RUN_KEY (a run's own key, from POST /api/runs) into the throwaway copy's .claude/settings.json; don't commit real values. PreToolUse waits for a human up to CRESSEY_HOLD_TIMEOUT (240 s), so its timeout is longer. onFailure block needs Claude Code >= 2.1.295; without it a Cressey that is down lets calls through. SessionStart and PostModelSwitch name the model each call runs on; SessionStart, UserPromptSubmit and SessionEnd give the dashboard Claude Code's turns (waiting for a prompt, working, ended); they don't block, so a Cressey that is down never swallows a prompt. SessionStart takes no http hook (only command), so a curl posts the same event.",
   "hooks": {
     "SessionStart": [
       {
@@ -8,6 +8,21 @@
           {
             "type": "command",
             "command": "curl -s -X POST CRESSEY_HOOK_URL/hook/claude -H 'Authorization: Bearer CRESSEY_RUN_KEY' -H 'Content-Type: application/json' --data-binary @- > /dev/null",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostModelSwitch": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "CRESSEY_HOOK_URL/hook/claude",
+            "headers": {
+              "Authorization": "Bearer CRESSEY_RUN_KEY"
+            },
             "timeout": 10
           }
         ]

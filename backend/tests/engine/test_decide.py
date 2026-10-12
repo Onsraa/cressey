@@ -1072,3 +1072,27 @@ async def test_an_excuse_alone_or_turned_away_does_not_stop(
         await say(base, run, EXCUSE)
         r = await a.call_tool("read_file", {"path": "README.md"})
     assert not r.is_error and (await steps(base, run))[-1]["reason"] is None
+
+
+async def test_a_call_through_mcp_names_its_client(served):
+    """The act record: the MCP client as it named itself in the handshake."""
+    import mcp_types
+    from fastmcp import Client
+    from fastmcp.client.transports import StreamableHttpTransport
+
+    run = await new_run(served)
+    transport = StreamableHttpTransport(
+        f"{served}/mcp", headers={"Authorization": f"Bearer {run['key']}"}
+    )
+    info = mcp_types.Implementation(name="payables-agent", version="2.1.0")
+    async with Client(transport, client_info=info) as a:
+        await a.call_tool("read_file", {"path": "README.md"})
+    [step] = await steps(served, run)
+    assert (step["surface"], step["asked_by"]) == ("mcp", ["agent"])
+    assert step["agent"] == {
+        "client": "payables-agent",
+        "client_version": "2.1.0",
+        "model": None,
+        "sub_agent": None,
+        "sub_agent_type": None,
+    }

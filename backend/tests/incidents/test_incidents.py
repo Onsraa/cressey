@@ -13,6 +13,7 @@ from cressey.incidents.incidents import Incidents
 from cressey.scan.secrets import redact, scan
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
+from tests.helpers import act
 
 pytestmark = pytest.mark.anyio
 ON = Leg(score=1, confirmed=True, facts=["fait observé"])
@@ -43,17 +44,19 @@ def demo_run(runs: Runs, legs: Legs) -> tuple[Run, Step]:
     run = runs.get(created.id)
     assert run is not None
     read_args: dict[str, JsonValue] = {"path": ".env.prod"}
-    read = runs.add_step(run, "read_file", read_args, json.dumps(read_args), "read", [])
+    read = runs.add_step(
+        run, act("read_file", read_args), json.dumps(read_args), "read", [], ["agent"]
+    )
     text = f"DB_PROD_KEY={PROD_KEY}\n"
     runs.record(run, read, False, text, scan(text))
     delete: dict[str, JsonValue] = {"query": "DELETE FROM users", "key": PROD_KEY}
     call = runs.add_step(
         run,
-        "run_sql",
-        delete,
+        act("run_sql", delete),
         redact(json.dumps(delete), run.known),
         "destructive",
         [SQL_USERS],
+        ["agent"],
     )
     call.legs = legs
     return run, call

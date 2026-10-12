@@ -14,6 +14,7 @@ from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import ToolResult
 
 from cressey.adapters.broker import scoped
+from cressey.domain.acts import Act, Agent
 from cressey.engine.agent_text import UNKNOWN_KEY, note
 from cressey.engine.decide import Engine, Refused
 
@@ -66,6 +67,17 @@ def tool_text(result: ToolResult) -> str:
     return "\n".join(lines)
 
 
+def _client(context: MiddlewareContext[mcp_types.CallToolRequestParams]) -> Agent:
+    """The MCP client, as it named itself in the handshake."""
+    ctx = context.fastmcp_context
+    params = ctx.session.client_params if ctx is not None else None
+    if params is None:
+        return Agent()
+    return Agent(
+        client=params.client_info.name, client_version=params.client_info.version
+    )
+
+
 class Gateway(Middleware):
     def __init__(self, engine: Engine) -> None:
         self.engine = engine
@@ -83,8 +95,11 @@ class Gateway(Middleware):
             raise ToolError(UNKNOWN_KEY)
         name, args = context.message.name, context.message.arguments or {}
         runs.route(run, "mcp")
+        agent = _client(context)
+        agent.model = run.agent.model
+        act = Act(surface="mcp", agent=agent, tool=name, args=dict(args))
         try:
-            step = await engine.before(run, name, args)
+            step = await engine.before(run, act)
         except Refused as refused:
             raise ToolError(str(refused)) from refused
         try:

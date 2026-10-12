@@ -11,7 +11,7 @@ from cressey.engine.ledger import Ledger
 from cressey.engine.reading import CHUNK, PART
 from cressey.engine.triangle import alarm, judgment_state, legs, opportunity, pressure
 from cressey.judge import NotRecorded
-from tests.helpers import TASK, run_with, step
+from tests.helpers import TASK, act, run_with, step
 
 pytestmark = pytest.mark.anyio
 T = Thresholds(deadline_words=["ce soir"])
@@ -593,8 +593,12 @@ async def test_a_result_still_coming_is_labelled_once_it_is_in():
     runs = Runs(EventLog())
     run = runs.get(runs.create(RunIn(task="corrige le README")).id)
     assert run is not None
-    read = runs.add_step(run, "read_file", {"path": "doc.md"}, "{}", "read", [])
-    write = runs.add_step(run, "write_file", {"path": "README.md"}, "{}", "write", [])
+    read = runs.add_step(
+        run, act("read_file", {"path": "doc.md"}), "{}", "read", [], ["agent"]
+    )
+    write = runs.add_step(
+        run, act("write_file", {"path": "README.md"}), "{}", "write", [], ["agent"]
+    )
     judge = GatedLabels()
     ledger = Ledger(judge)
     judging = asyncio.create_task(legs(run, write, ledger, T))
