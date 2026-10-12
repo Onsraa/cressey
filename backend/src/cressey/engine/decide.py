@@ -367,7 +367,7 @@ class Engine:
         await self._late.settled(run.id)
         await self.ledger.settled(run)
         if run.ended_at is not None:
-            self.runs.forget_results(steps)
+            self.runs.forget_results(run, steps)
 
     async def _labelled_late(self, run: Run, step: Step) -> list[Reason]:
         """The floor's labels for a write that ran before it could be read, as `_labelled`

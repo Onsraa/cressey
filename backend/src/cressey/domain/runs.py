@@ -261,6 +261,11 @@ class Run(BaseModel):
     session: str | None = Field(default=None, exclude=True)
     # Secret value -> fingerprint, to redact it wherever it shows up later. Never served.
     known: dict[str, str] = Field(default_factory=dict, exclude=True)
+    # What its tools returned, as tokens (scan/trace.py `index`), each result indexed once
+    # for `asked_by`: a call then costs its own values, not the run's length. Never served;
+    # dropped with the results.
+    read_tokens: set[str] = Field(default_factory=set, exclude=True)
+    read_indexed: set[int] = Field(default_factory=set, exclude=True)  # those steps
 
 
 class RunSummary(BaseModel):

@@ -43,7 +43,7 @@ def strings(value: JsonValue) -> list[str]:
     return [] if value is None or isinstance(value, bool) else [str(value)]
 
 
-def _tokens(call: str) -> list[str]:
+def tokens(call: str) -> list[str]:
     # The whole word stays too: base64 padding and URLs contain `=` and `:`.
     tokens = [
         token
@@ -52,6 +52,12 @@ def _tokens(call: str) -> list[str]:
         if len(token) >= MIN_TOKEN
     ]
     return list(dict.fromkeys(tokens))
+
+
+def index(text: str) -> set[str]:
+    """The tokens of `text`, as they are and lower-cased: what `asked_by` looks a value up in
+    (a token of a call, where `trace` finds it anywhere in the text)."""
+    return {form for token in tokens(text) for form in (token, token.lower())}
 
 
 def _decodings(token: str) -> Iterator[tuple[How, str]]:
@@ -67,7 +73,7 @@ def _decodings(token: str) -> Iterator[tuple[How, str]]:
 
 def encoded(text: str) -> list[tuple[str, str]]:
     """(token, what it decodes to) for each token of `text` valid as base64, hex or URL."""
-    return [(token, d) for token in _tokens(text) for _, d in _decodings(token)]
+    return [(token, d) for token in tokens(text) for _, d in _decodings(token)]
 
 
 def decoded(text: str) -> list[str]:
@@ -100,5 +106,5 @@ def _origin(token: str, reads: Reads, lowered: Reads) -> Origin | None:
 def trace(call: str, reads: Reads) -> list[Origin]:
     """Origin of each token of `call`; `reads` are (step, tool output) in step order."""
     lowered = [(step, text.lower()) for step, text in reads]
-    origins = (_origin(token, reads, lowered) for token in _tokens(call))
+    origins = (_origin(token, reads, lowered) for token in tokens(call))
     return [origin for origin in origins if origin is not None]

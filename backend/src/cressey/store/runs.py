@@ -350,12 +350,13 @@ class Runs:
         run.ended_at = _now().isoformat()
         self.log.append("session", {"run": run.id, "state": "ended"})
 
-    def forget_results(self, steps: list[Step]) -> None:
+    def forget_results(self, run: Run, steps: list[Step]) -> None:
         """What these calls returned, and the arguments they carried unredacted, dropped
         from memory once nothing reads them (the log keeps neither; the redacted arguments
         stay on the step)."""
         for step in steps:
             step.result, step.raw_args = "", {}
+        run.read_tokens, run.read_indexed = set(), set()
 
     def route(self, run: Run, via: Literal["mcp", "hook"]) -> None:
         """How this run reached Cressey, for the Run view's badge. Set once, on its first call."""
