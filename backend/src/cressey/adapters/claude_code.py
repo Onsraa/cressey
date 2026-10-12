@@ -20,9 +20,6 @@ router = APIRouter()
 HOOK_PATH = "/hook/claude"
 AuthorizationHeader = Annotated[str, Header()]
 
-# The calls let through and not yet returned: (run, tool_use_id) -> step.
-_pending: dict[tuple[str, str], Step] = {}
-
 
 def _deny(reason: str) -> dict[str, JsonValue]:
     return {
@@ -55,6 +52,8 @@ async def claude_hook(
     """
     runs: Runs = request.app.state.runs
     engine: Engine = request.app.state.engine
+    # The calls let through and not yet returned: (run, tool_use_id) -> step.
+    pending: dict[tuple[str, str], Step] = request.app.state.hook_calls
     run = runs.by_key(authorization.removeprefix("Bearer ").strip())
     if run is None:
         raise HTTPException(403)
@@ -94,13 +93,13 @@ async def claude_hook(
     call = (run.id, str(event.get("tool_use_id", "")))
     if kind == "PreToolUse":
         try:
-            _pending[call] = await engine.before(
+            pending[call] = await engine.before(
                 run, name, event.get("tool_input") or {}
             )
         except Refused as refused:
             return _deny(str(refused))
         return {}
-    step = _pending.pop(call, None)
+    step = pending.pop(call, None)
     if step is None:  # a call Cressey refused: Claude Code never ran it
         return {}
     failed = kind == "PostToolUseFailure"

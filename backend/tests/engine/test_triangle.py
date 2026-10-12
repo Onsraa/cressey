@@ -11,7 +11,7 @@ from cressey.engine.ledger import Ledger
 from cressey.engine.reading import CHUNK, PART
 from cressey.engine.triangle import alarm, judgment_state, legs, opportunity, pressure
 from cressey.judge import NotRecorded
-from tests.core.helpers import TASK, run_with, step
+from tests.helpers import TASK, run_with, step
 
 pytestmark = pytest.mark.anyio
 T = Thresholds(deadline_words=["ce soir"])

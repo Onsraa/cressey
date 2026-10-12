@@ -15,7 +15,7 @@ from cressey.engine.case.thoughts import (
     segment,
 )
 from cressey.engine.reading import LAST_RESULT, PREVIOUS
-from tests.core.helpers import message, run_with, step
+from tests.helpers import message, run_with, step
 
 pytestmark = pytest.mark.anyio
 T = Thresholds()

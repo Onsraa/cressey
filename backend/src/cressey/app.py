@@ -86,6 +86,7 @@ def create_app(
     app.state.judge, app.state.thresholds = judge, policy.triangle  # the report check
     app.state.policy = policy  # its responses change live
     app.state.engine = engine  # the Claude Code hook runs its decision
+    app.state.hook_calls = {}  # the hook's calls let through and not yet returned
     app.state.ledger = engine.ledger  # the report check reads its labels
     app.state.assess_task = assess_task  # each new run's task
     app.state.assessing = Tasks()  # those assessments, in the background

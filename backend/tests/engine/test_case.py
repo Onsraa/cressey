@@ -18,8 +18,8 @@ from cressey.engine.case.case import (
     shadow,
     uses,
 )
-from tests.core.helpers import message, run_with, step
-from tests.core.test_thoughts import ScriptedJudge
+from tests.engine.test_thoughts import ScriptedJudge
+from tests.helpers import message, run_with, step
 
 pytestmark = pytest.mark.anyio
 T = Thresholds()

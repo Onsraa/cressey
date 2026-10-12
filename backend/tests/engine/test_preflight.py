@@ -17,7 +17,7 @@ from cressey.settings import Settings
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 from cressey.testing import api, fake_guide
-from tests.core.test_incidents import OFF, ON, demo_run, guide, until
+from tests.incidents.test_incidents import OFF, ON, demo_run, guide, until
 
 pytestmark = pytest.mark.anyio
 TASK = "fais passer les tests avant la mise en prod de ce soir"
