@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from cressey.app import create_app
+from cressey.engine.agent_text import ENDED
 from cressey.judge import Judge
 from cressey.settings import Settings
 from cressey.testing import ADMIN, ADMIN_AUTH, QuietJudge, fake_guide, no_to_all
@@ -152,3 +153,54 @@ def test_a_session_end_drops_the_arguments_a_call_carried_too():
         s.send("SessionEnd")
         until(lambda: step.raw_args == {})
     assert "notes.md" in step.args  # the shown, redacted form stays
+
+
+def test_an_ended_run_refuses_calls_until_a_prompt_reopens_it():
+    """An agent that ends its own run (its report) can't go on acting with the trail of
+    what it read dropped; the user's next prompt starts a new turn."""
+    app = _app(QuietJudge())
+    with TestClient(app) as c:
+        s = Session(c)
+        s.read("t1", "the ops token is in .env")
+        report = {"text": "Done."}
+        assert c.post(
+            f"/api/runs/{s.id}/report", json=report, headers=s.auth
+        ).is_success
+        call = {"tool_name": "Read", "tool_input": {"file_path": "b.md"}}
+        body = {"hook_event_name": "PreToolUse", "session_id": "s1", "cwd": "/w"}
+        after = c.post(
+            "/hook/claude", json={**body, **call, "tool_use_id": "t2"}, headers=s.auth
+        ).json()
+        s.send("UserPromptSubmit", prompt="carry on")
+        again = c.post(
+            "/hook/claude", json={**body, **call, "tool_use_id": "t3"}, headers=s.auth
+        ).json()
+    denied = after["hookSpecificOutput"]
+    assert (denied["permissionDecision"], denied["permissionDecisionReason"]) == (
+        "deny",
+        ENDED,
+    )
+    assert again == {}
+
+
+def test_a_result_that_comes_after_the_end_is_dropped_too():
+    """A call held over the end, approved later: what it returned goes as well."""
+    app = _app(QuietJudge())
+    with TestClient(app) as c:
+        s = Session(c)
+        rm = {
+            "tool_name": "Bash",
+            "tool_use_id": "b1",
+            "tool_input": {"command": "rm -rf build"},
+        }
+        held = threading.Thread(target=s.send, args=("PreToolUse",), kwargs=rm)
+        held.start()
+        until(lambda: c.get("/api/holds", headers=ADMIN_AUTH).json() != [])
+        s.send("SessionEnd")
+        assert c.post(
+            f"/api/runs/{s.id}/steps/1/approve", headers=ADMIN_AUTH
+        ).is_success
+        held.join()
+        s.send("PostToolUse", **rm, tool_response=BIG)
+        [step] = app.state.runs.get(s.id).steps
+        until(lambda: step.result == "")

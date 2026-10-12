@@ -26,6 +26,7 @@ TASK_WAY_OUT = (
 # Every answer Cressey gives the agent starts so: a client tells them from the tool's own.
 PREFIX = "Cressey:"
 UNKNOWN_KEY = f"{PREFIX} unknown key."
+ENDED = f"{PREFIX} this run has ended."  # its report, or its session's end
 # Resources and prompts would be acts Cressey neither decides nor records.
 TOOLS_ONLY = f"{PREFIX} only tool calls go through, not resources or prompts."
 SUSPENDED = f"{PREFIX} key suspended. {WAY_OUT}"

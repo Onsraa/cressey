@@ -294,15 +294,15 @@ class Runs:
     def prompt(self, run: Run, text: str) -> Message:
         """The user's prompt (Claude Code's UserPromptSubmit), placed where it was sent, even
         mid-turn, and returned. It closes a message cut short by Esc, which Claude Code
-        doesn't report. It starts a new turn: the count of refused calls resets and a
-        suspended key unlocks, the user being back, but the key waits while a call is still
-        held (see `unlock`)."""
+        doesn't report. It starts a new turn: a run a Stop ended goes on, the count of
+        refused calls resets and a suspended key unlocks, the user being back, but the key
+        waits while a call is still held (see `unlock`)."""
         self._close_streams(run)
         message = Message(
             after=len(run.steps), text=redact(text, run.known), role="user"
         )
         run.messages.append(message)
-        run.turn = "working"
+        run.turn, run.ended_at = "working", None  # a new turn: the run goes on
         # The log keeps what the user typed, not what the thought reading adds later.
         said = message.model_dump(
             exclude={"source", "thoughts", "read", "scores", "legs"}

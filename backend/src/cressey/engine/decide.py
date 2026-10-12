@@ -17,6 +17,7 @@ from cressey.domain.policy import Policy, Response, ToolRule
 from cressey.domain.reasons import Reason, Target, joined, target
 from cressey.domain.runs import Legs, Run, Shadow, Step
 from cressey.engine.agent_text import (
+    ENDED,
     REFUSED,
     SUSPENDED,
     WAY_OUT,
@@ -200,7 +201,11 @@ class Engine:
 
     async def before(self, run: Run, act: Act) -> Step:
         """Cressey's decision on an act before it runs: its step, let through or approved.
-        Raises Refused when the act is refused, or held and not approved."""
+        Raises Refused when the act is refused, or held and not approved. A run that ended
+        refuses every act until a session start or the user's next prompt reopens it: an
+        agent that ends its own run can't go on with the trail of its reads dropped."""
+        if run.ended_at is not None:
+            raise Refused(ENDED)
         start = time.perf_counter()
         name, args = act.tool, act.args
         rule = await self._rule(act.surface, name)
@@ -346,6 +351,8 @@ class Engine:
         late = step.reason is None and step.risk != "read" and not read_before(step)
         if late and run.kind != "replay":
             self._late.once((run.id, step.n), lambda: self._read_late(run, step))
+        if run.ended_at is not None:  # held over the end: what it returned goes too
+            self.ended(run)
         return WAY_OUT if run.way_out_step == step.n else None
 
     def ended(self, run: Run) -> None:
