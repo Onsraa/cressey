@@ -41,7 +41,7 @@ The code claims below were checked on `main` at `c1b51e1`.
 | 4 | **"Audit-ready" isn't true yet.** `EventLog()` gets no path, so there is no record on disk and no anchor. | `app.py`, `core/eventlog.py` | P0: log to disk, anchor the head, verify at start. Off-machine WORM storage is P1. |
 | 5 | **Holds wait on a separate web page** for up to 240 s, then expire as refusals; 3 refusals stop the run. | `settings.py`, `Runs.hold` | P1: decision cards where the approver works; async approvals bound to the exact act. |
 | 6 | **"Always held" is stronger than the code.** Shell destruction is one regex. `find -delete`, `curl -X DELETE`, `git push origin +main` and `psql -c "UPDATE …"` are writes left to Jev at 0.5 (20/22 held on our labels; production deploys at 0.35–0.52). When Jev doesn't answer, those writes pass unjudged. | `core/floor.py`, `Guard._irreversible` | P0: when no model answers, hold the writes code can't vouch for. P1: deterministic rules per sector. |
-| 7 | **Nobody writes the mandate.** It is JSON per run (`may_destroy` tables, recipients, paths). `connect.sh` creates "Free chat" runs with an empty mandate. | `Mandate`, `connect.sh` | P1: an organization charter in plain language; mandates proposed from the request and confirmed in one click; rules learned from approvals. |
+| 7 | **Nobody writes the mandate.** It is JSON per run (`may_destroy` tables, recipients, paths). `connect.sh` creates "Free chat" runs with an empty mandate. | `Mandate`, `connect.sh` | P1: an organization charter in plain language; mandates proposed from the request and confirmed in one click; rules proposed from facts only (a replay that proves an act reversible), never learned from approvals. |
 | 8 | **Stops on words are noisy and fragile.** 24 of 87 normal messages cross the evidence floors (10-11). Thought holds had 2 false holds in calibration. Anthropic made its own classifier blind to the agent's text because that text made it worse. Models state what drove them 25–39% of the time. | `docs/decisions.md`, `policy.yaml` `thoughts` | Keep words as an early warning that only adds caution (the current design). Never make them the safety case. Measure lead time, not coverage. |
 | 9 | **The evidence is thin.** 13 sessions we wrote, and 3 live runs. The triangle alone caught 1 session, written to exercise it. The one real delete was caught by the trap key while the triangle stayed quiet. | `docs/evaluation.md` | P2: sector sets written by practitioners, a user study, shadow-mode data from pilots. |
 | 10 | **Outside model API.** Jev, and OpenAI or Bedrock for the guides, receive agent data. Banks, defense, health and public bodies require on-prem or qualified hosting. | `core/judge.py`, `guide/clients.py` | P1: an on-prem decision model (ask TypeSafe for an on-prem Jev, else a measured open-weights fallback). |
@@ -192,7 +192,7 @@ The code claims below were checked on `main` at `c1b51e1`.
     - KYC decisions that cite evidence.
   - **Shadow mode as onboarding** (`shadow_soon`, `control` runs).
   - **Decision cards** in Teams, email or mobile, with async approvals.
-  - **Cached labels per normalized act,** and rules suggested after consistent approvals.
+  - **Cached labels per normalized act.** Fewer prompts come from facts only: an act class a sandbox replay proves reversible, never a count of approvals.
   - **A claims-versus-sources check** before an act goes out.
   - **Canary IBANs and vendors.**
   - **On-prem models.**
@@ -212,11 +212,11 @@ The code claims below were checked on `main` at `c1b51e1`.
   - **write the charter:** propose rules from the customer's documents, which a human approves.
 - **Never in the enforcement path.** A retrieval miss must not open a gate. A critical rule is compiled once into a code check or a calibrated Jev question. Retrieval explains and guides; code enforces. The corpus is pinned and fingerprinted, as the guide corpus already is.
 - **Machine learning where it pays:**
-  - calibrating thresholds per customer, from approvers' decisions (`calibrate_floor`'s method, on their data);
-  - suggesting rules from approvals that keep agreeing, which cuts prompts;
+  - calibrating thresholds per customer on factual outcomes (`calibrate_floor`'s method, on what each act did when replayed in a sandbox), never on approvers' decisions;
   - taking the bank's own fraud scores and verification-of-payee results in as code facts, rather than rebuilding fraud models.
 - **Not:** an opaque anomaly score as a gate. In a bank, a model inside a control is itself subject to model-risk validation. Cressey's split (code decides, models label, each label with a calibration report) is what an auditor can validate.
 - **The rule stays:** Cressey trains its monitors, never the agents it watches.
+- **Human decisions are records, not evidence.** An approval, a rejection, a user saying "go ahead" or "continue": Cressey logs who decided what, and never takes it as proof that an act was safe or unsafe, never learns from it, never lowers its caution because of it. The person may not be an expert, or may have no good reason. Cressey improves only from facts code can verify: what an act did, what a replay shows, a trap key touched, a check that fired.
 
 ## Beyond one agent: pools, sub-agents, agents that talk to each other
 - **Today:**
