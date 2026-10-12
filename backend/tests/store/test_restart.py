@@ -165,3 +165,17 @@ def test_a_reason_this_version_does_not_know_is_dropped_its_text_stays(tmp_path)
     assert restored is not None
     [step] = restored.steps
     assert (step.reasons, step.reason) == ([], RM[0].text)
+
+
+def test_a_run_line_cut_by_a_crash_never_stops_a_start(tmp_path):
+    """The runs' file follows the log's rule: its last line, cut mid-write, is left out."""
+    runs = _cressey(tmp_path)
+    created = runs.create(RunIn(task=TASK))
+    with (tmp_path / "runs.jsonl").open("a", encoding="utf-8") as f:
+        f.write('{"kind": "run", "run": {"id": "x')  # the crash
+    restarted = _cressey(tmp_path)
+    assert restarted.by_key(created.key) is not None
+    _cressey(tmp_path).create(
+        RunIn(task=TASK)
+    )  # the next line starts a line of its own
+    assert len(_cressey(tmp_path).all()) == 2

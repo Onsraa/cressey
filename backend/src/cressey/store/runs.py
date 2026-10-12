@@ -30,7 +30,7 @@ from cressey.domain.runs import (
     confirmed,
 )
 from cressey.scan.secrets import redact
-from cressey.store.eventlog import EventLog
+from cressey.store.eventlog import EventLog, read_lines
 
 # The step field each later event of a step sets, as the log records it.
 FROM_LOG = {
@@ -90,19 +90,19 @@ class Runs:
         as the log recorded them, so numbering goes on; a call that was still held when
         Cressey stopped is logged expired. A restart ends a suspension: what the run had
         in memory (results, secrets read, the case) is gone."""
-        with store.open(encoding="utf-8") as f:
-            for line in f:
-                e = json.loads(line)
-                if e["kind"] == "session":
-                    self._runs[e["id"]].session = e["session"]
-                    continue
-                run = Run.model_validate(e["run"])
-                self._runs[run.id] = run
-                if e["kind"] == "run":
-                    self._keys[e["digest"]] = run.id
-                else:  # a later session's run on that key
-                    run.session = e["session"]
-                    self._sessions[(e["of"], e["session"])] = run.id
+        # A run's line cut by a crash mid-write is left out: that run's key is lost.
+        registered, _ = read_lines(store, json.loads)
+        for e in registered:
+            if e["kind"] == "session":
+                self._runs[e["id"]].session = e["session"]
+                continue
+            run = Run.model_validate(e["run"])
+            self._runs[run.id] = run
+            if e["kind"] == "run":
+                self._keys[e["digest"]] = run.id
+            else:  # a later session's run on that key
+                run.session = e["session"]
+                self._sessions[(e["of"], e["session"])] = run.id
         # Each step as the log last recorded it, in the order its call came in.
         recorded: dict[tuple[str, int], dict[str, JsonValue]] = {}
         for event in self.log.events:

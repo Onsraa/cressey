@@ -321,11 +321,11 @@ async def test_a_key_cressey_did_not_issue_is_refused(served):
     assert (await hook(served, "csy_not-issued", body)).status_code == 403
 
 
-async def test_stop_ends_the_run_with_the_agents_last_message_as_its_report(served):
+async def test_stop_ends_a_run_with_no_session_with_its_last_message_as_report(served):
+    """A replay sends no session: its Stop is its end."""
     run = await new_run(served)
     stop = {
         "hook_event_name": "Stop",
-        "session_id": "s1",
         "cwd": "/work",
         "stop_hook_active": False,
         "last_assistant_message": "Staging is healthy again.",
@@ -334,6 +334,24 @@ async def test_stop_ends_the_run_with_the_agents_last_message_as_its_report(serv
     got = await run_of(served, run)
     assert got["report"] == "Staging is healthy again." and got["ended_at"]
     assert got["report_check"]["confirmed"] is False  # no model in these tests
+
+
+async def test_a_session_whose_settings_send_no_turns_goes_on_after_each_stop(served):
+    """Older settings: no SessionStart, no UserPromptSubmit. A Stop ends the turn, not the
+    run: the session's next turn is let through."""
+    run = await new_run(served)
+    key = run["key"]
+    first = event("PreToolUse", "Read", "t1", tool_input={"file_path": "a.md"})
+    await hook(served, key, first)
+    stop = {
+        "hook_event_name": "Stop",
+        "session_id": "s1",
+        "last_assistant_message": "Done.",
+    }
+    await hook(served, key, stop)
+    second = event("PreToolUse", "Read", "t2", tool_input={"file_path": "b.md"})
+    assert (await hook(served, key, second)).json() == {}
+    assert (await run_of(served, run))["ended_at"] is None
 
 
 def session_event(kind: str, session: str = "s1", **extra) -> dict:

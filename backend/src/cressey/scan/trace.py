@@ -54,10 +54,18 @@ def tokens(call: str) -> list[str]:
     return list(dict.fromkeys(tokens))
 
 
+# What a word carries at its edges in prose or markdown: a sentence's period, `code`, **bold**.
+_EDGES = ".,;:!?`*_~'\"()[]{}<>|"
+
+
 def index(text: str) -> set[str]:
-    """The tokens of `text`, as they are and lower-cased: what `asked_by` looks a value up in
-    (a token of a call, where `trace` finds it anywhere in the text)."""
-    return {form for token in tokens(text) for form in (token, token.lower())}
+    """The tokens of `text`, as they are and with their edge punctuation stripped, each also
+    lower-cased: what `asked_by` looks a value up in (a token of a call, where `trace` finds
+    it anywhere in the text)."""
+    forms = {
+        f for t in tokens(text) for f in (t, t.strip(_EDGES)) if len(f) >= MIN_TOKEN
+    }
+    return forms | {f.lower() for f in forms}
 
 
 def _decodings(token: str) -> Iterator[tuple[How, str]]:

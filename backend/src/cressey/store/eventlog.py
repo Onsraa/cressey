@@ -9,11 +9,11 @@ checks the log against it. Not thread-safe: append from one thread (the event lo
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, JsonValue, ValidationError
+from pydantic import BaseModel, JsonValue
 
 
 class Event(BaseModel):
@@ -23,6 +23,34 @@ class Event(BaseModel):
     data: dict[str, JsonValue]
     prev: str  # hash of the previous event, "" for the first
     hash: str  # sha256 of the canonical JSON of every other field
+
+
+def read_lines[T](path: Path, parse: Callable[[bytes], T]) -> tuple[list[T], bool]:
+    """Each line of an append-only file, parsed, and True when its last line was cut short
+    by a crash mid-write: that line is cut from the file, so the next write starts a line of
+    its own. A line that doesn't parse anywhere else is no crash: it raises."""
+    # Bytes, cut on "\n" only: str.splitlines() would also cut on the raw U+2028 and U+0085
+    # that JSON strings may hold.
+    with path.open("rb") as f:
+        lines = f.readlines()
+    read: list[T] = []
+    whole = 0  # bytes of the lines read
+    for i, line in enumerate(lines):
+        last = i == len(lines) - 1
+        if last and not line.endswith(b"\n"):
+            break
+        try:
+            read.append(parse(line))
+        except ValueError:  # JSON or pydantic: what a cut line raises
+            if not last:
+                raise
+            break
+        whole += len(line)
+    else:
+        return read, False
+    with path.open("r+b") as f:
+        f.truncate(whole)
+    return read, True
 
 
 def event_hash(event: Event) -> str:
@@ -54,30 +82,10 @@ class EventLog:
             )
 
     def _load(self, path: Path) -> bool:
-        """The events in the file; True when its last line was cut short by a crash mid-write.
-        That line is cut from the file, so the next event starts a line of its own; the event
-        it held is lost. A line that doesn't read anywhere else is no crash: the start fails."""
-        # Bytes, cut on "\n" only: str.splitlines() would also cut on the raw U+2028 and
-        # U+0085 that JSON strings may hold.
-        with path.open("rb") as f:
-            lines = f.readlines()
-        whole = 0  # bytes of the lines read
-        for i, line in enumerate(lines):
-            last = i == len(lines) - 1
-            if last and not line.endswith(b"\n"):
-                break
-            try:
-                self.events.append(Event.model_validate_json(line))
-            except ValidationError:
-                if not last:
-                    raise
-                break
-            whole += len(line)
-        else:
-            return False
-        with path.open("r+b") as f:
-            f.truncate(whole)
-        return True
+        """The events in the file; True when its last line was cut by a crash mid-write and
+        the event it held is lost."""
+        self.events, torn = read_lines(path, Event.model_validate_json)
+        return torn
 
     def head(self) -> tuple[str, int]:
         return (self.events[-1].hash if self.events else "", len(self.events))

@@ -67,8 +67,8 @@ async def claude_hook(
       out when it may not.
     - PostToolUse / PostToolUseFailure record what the call returned and read the step.
     - Stop takes the agent's last message as the report, checked against the log. It ends
-      the turn; the run ends with the session (SessionEnd). A run that never saw its
-      session start (a replay, older settings) has no other end: its Stop ends it.
+      the turn; the run ends with the session (SessionEnd). A run with no session (a
+      replay) has no other end: its Stop ends it.
     """
     runs: Runs = request.app.state.runs
     engine: Engine = request.app.state.engine
@@ -110,12 +110,15 @@ async def claude_hook(
     if kind == "Stop":
         state = request.app.state
         last = event.get("last_assistant_message") or "(no final message)"
-        if run.turn is None:
+        # A run with no session (a replay) has no other end; a session's run ends with
+        # its session (SessionEnd), even when its settings send no turns.
+        final = run.session is None
+        if final:
             runs.end(run, last)
         else:
             runs.answered(run, last)
         runs.checked(run, await report_check(run, engine.ledger, state.thresholds))
-        if run.turn is None:
+        if final:
             engine.ended(run)
         return {}
     if kind not in TOOL_EVENTS:  # an event Cressey doesn't follow
