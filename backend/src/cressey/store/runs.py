@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
-from pydantic import JsonValue
+from pydantic import JsonValue, ValidationError
 
 from cressey.domain.acts import Act, Asker
 from cressey.domain.reasons import Reason
@@ -42,6 +42,14 @@ FROM_LOG = {
 
 def _digest(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _known(reason: JsonValue) -> bool:
+    try:
+        Reason.model_validate(reason)
+    except ValidationError:
+        return False
+    return True
 
 
 def _logged(reasons: list[Reason]) -> list[JsonValue]:
@@ -120,6 +128,11 @@ class Runs:
                 fields |= {k: event.data[k] for k in kind if k in event.data}
         for (run_id, _), fields in recorded.items():
             run = self._runs[run_id]
+            # A reason whose check this version doesn't know (renamed since) is dropped; the
+            # step keeps its text.
+            logged = fields.get("reasons")
+            if isinstance(logged, list):
+                fields["reasons"] = [r for r in logged if _known(r)]
             step = Step.model_validate(fields)
             run.steps.append(step)
             if step.status == "held":
@@ -338,10 +351,11 @@ class Runs:
         self.log.append("session", {"run": run.id, "state": "ended"})
 
     def forget_results(self, steps: list[Step]) -> None:
-        """What these calls returned, dropped from memory once nothing reads it (the log
-        never had it)."""
+        """What these calls returned, and the arguments they carried unredacted, dropped
+        from memory once nothing reads them (the log keeps neither; the redacted arguments
+        stay on the step)."""
         for step in steps:
-            step.result = ""
+            step.result, step.raw_args = "", {}
 
     def route(self, run: Run, via: Literal["mcp", "hook"]) -> None:
         """How this run reached Cressey, for the Run view's badge. Set once, on its first call."""

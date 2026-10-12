@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, JsonValue, ValidationError
 
 
 class Event(BaseModel):
@@ -39,21 +39,45 @@ class EventLog:
     def __init__(self, path: Path | None = None, anchor: Path | None = None) -> None:
         self.path, self.anchor = path, anchor
         self.events: list[Event] = []
-        if path and path.exists():
-            # Iterate the file: str.splitlines() would also cut on the raw U+2028 and
-            # U+0085 that JSON strings may hold.
-            with path.open(encoding="utf-8") as f:
-                self.events = [Event.model_validate_json(line) for line in f]
+        torn = path is not None and path.exists() and self._load(path)
         # Checked once, at start: appends then extend a chain they build themselves. A log
         # cut short or rewritten no longer matches the head the last process anchored, and a
         # log whose anchor is gone can't be vouched for.
         if anchor is None:
-            self.intact = verify(self.events) is None
+            self.intact = not torn and verify(self.events) is None
         else:
             head = _read_anchor(anchor)
-            self.intact = (head is not None or not self.events) and verify(
-                self.events, head
-            ) is None
+            self.intact = (
+                not torn
+                and (head is not None or not self.events)
+                and verify(self.events, head) is None
+            )
+
+    def _load(self, path: Path) -> bool:
+        """The events in the file; True when its last line was cut short by a crash mid-write.
+        That line is cut from the file, so the next event starts a line of its own; the event
+        it held is lost. A line that doesn't read anywhere else is no crash: the start fails."""
+        # Bytes, cut on "\n" only: str.splitlines() would also cut on the raw U+2028 and
+        # U+0085 that JSON strings may hold.
+        with path.open("rb") as f:
+            lines = f.readlines()
+        whole = 0  # bytes of the lines read
+        for i, line in enumerate(lines):
+            last = i == len(lines) - 1
+            if last and not line.endswith(b"\n"):
+                break
+            try:
+                self.events.append(Event.model_validate_json(line))
+            except ValidationError:
+                if not last:
+                    raise
+                break
+            whole += len(line)
+        else:
+            return False
+        with path.open("r+b") as f:
+            f.truncate(whole)
+        return True
 
     def head(self) -> tuple[str, int]:
         return (self.events[-1].hash if self.events else "", len(self.events))

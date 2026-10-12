@@ -138,3 +138,30 @@ def test_the_dashboard_sees_a_tampered_log_and_old_keys_keep_working(tmp_path):
     events.write_text(events.read_text().splitlines(keepends=True)[0])
     tampered = _app(state).get("/api/status", headers=ADMIN_AUTH).json()
     assert not tampered["log"]["intact"]
+
+
+def test_a_crash_mid_write_starts_again_with_the_log_marked_not_intact(tmp_path):
+    """The line being written when Cressey died is cut away: a start never fails on it,
+    and the event it held is lost, so the log no longer vouches for itself."""
+    _append(tmp_path, 3)
+    with (tmp_path / "events.jsonl").open("a", encoding="utf-8") as f:
+        f.write('{"seq": 3, "ts": "2026-10-12T21:')  # the crash
+    log = EventLog(tmp_path / "events.jsonl", tmp_path / "anchor.json")
+    assert (len(log.events), log.intact) == (3, False)
+    log.append("x", {})  # the next event follows the last whole line
+    assert len(EventLog(tmp_path / "events.jsonl").events) == 4
+
+
+def test_a_reason_this_version_does_not_know_is_dropped_its_text_stays(tmp_path):
+    """A check renamed since the log was written never stops a state folder from starting."""
+    runs = _cressey(tmp_path)
+    run = runs.get(runs.create(RunIn(task=TASK)).id)
+    assert run is not None
+    runs.add_step(run, act("Bash", {}), "{}", "destructive", RM, ["agent"])
+    path = tmp_path / "events.jsonl"
+    path.write_text(path.read_text().replace('"destructive_shell"', '"retired_check"'))
+    (tmp_path / "anchor.json").unlink()  # the rewrite would also break the anchor
+    restored = _cressey(tmp_path).get(run.id)
+    assert restored is not None
+    [step] = restored.steps
+    assert (step.reasons, step.reason) == ([], RM[0].text)

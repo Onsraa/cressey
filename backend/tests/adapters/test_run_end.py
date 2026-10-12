@@ -136,3 +136,19 @@ def test_a_session_resumed_before_its_reads_end_keeps_what_its_calls_returned():
         until(lambda: step.labels is not None)
         time.sleep(0.1)
     assert step.result == BIG
+
+
+def test_a_session_end_drops_the_arguments_a_call_carried_too():
+    """Only an incident opening reads them; the record keeps their redacted form."""
+    app = _app(QuietJudge())
+    with TestClient(app) as c:
+        s = Session(c)
+        wrote = {"file_path": "notes.md", "content": BIG}
+        call = {"tool_name": "Write", "tool_use_id": "w1", "tool_input": wrote}
+        s.send("PreToolUse", **call)
+        s.send("PostToolUse", **call, tool_response="written")
+        [step] = app.state.runs.get(s.id).steps
+        assert step.raw_args == wrote
+        s.send("SessionEnd")
+        until(lambda: step.raw_args == {})
+    assert "notes.md" in step.args  # the shown, redacted form stays
