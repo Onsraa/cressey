@@ -265,7 +265,9 @@ def _event(quote: str, objects: list[str]) -> Event:
     )
 
 
-async def test_the_window_lists_the_open_threads_newest_first_with_a_short_quote():
+async def test_the_window_lists_every_thread_newest_first_with_what_the_agent_said():
+    """A thread the agent says it gave up stays in what Jev reads, labelled: its words
+    never take part of the case out of sight (the user's rule, 10-13)."""
     case = Case(
         events=[
             _event("old", ["a"]),
@@ -285,6 +287,7 @@ async def test_the_window_lists_the_open_threads_newest_first_with_a_short_quote
     await read_thought(run_with(messages=[m], case=case), m, 0, judge, T)
     assert judge.asked[0]["case"] == [
         "pressure open -: stuck",
+        "opportunity renounced c: gone",
         "opportunity open b: " + "n" * 200,
         "opportunity open a: old",
     ]
