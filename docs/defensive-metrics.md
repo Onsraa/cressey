@@ -7,7 +7,7 @@ What the defender gets, and what we can and cannot show. Numbers come from `docs
 
 What is measured is machine time, not analyst time:
 - Time to stop a dangerous call: p50 617 ms, p95 749 ms with live Jev and the calls back to back (10-13); 236 ms at the stage's pace (one run, 10-10).
-- Time to produce three sourced fix guides after a hold, in parallel: 9.1 to 13.6 s (three live runs).
+- Time to produce three sourced fix guides after a hold, in parallel: 9.1 to 13.6 s (three live runs, 10-10).
 - Each hold arrives with the step, the reason, the confirmed legs of the triangle, and the traced source of the misused secret, so the analyst starts from a finished case rather than a raw log. Whether that is faster is not yet timed.
 
 To measure it: time the same triage task with and without Cressey on the same synthetic incidents, with an analyst who has not seen them before.
