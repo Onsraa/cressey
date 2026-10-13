@@ -1,0 +1,1 @@
+{"KINDS": {"necessity": 0.01, "override": 0.02, "normalization": 0.0, "minimization": 0.01, "borrowed_authority": 0.0, "reframed_goal": 0.0, "blame_check": 0.12, "other": 0.84}, "DIRECTION": {"toward": 0.39, "away": 0.53, "neither": 0.08}, "about:maliciously/spoofing": 0.77}
