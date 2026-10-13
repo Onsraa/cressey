@@ -129,8 +129,16 @@ def redact(text: str, known: Mapping[str, str] | None = None) -> str:
     """`text` with each value found in it, and each `known` value (value -> fingerprint),
     wherever it appears, replaced by its marker."""
     text = _encodable(text)
-    markers = {value: f"[secret:{fp}]" for value, fp in (known or {}).items()}
-    markers |= {value: f"[secret:{s.fingerprint}]" for value, s in _hits(text)}
+    found = {value: s.fingerprint for value, s in _hits(text)}
+    return hide(text, {**(known or {}), **found})
+
+
+def hide(text: str, known: Mapping[str, str]) -> str:
+    """`text` with each `known` value (value -> fingerprint), wherever it appears, encoded
+    too, replaced by its marker, without scanning it: for a text whose own secrets are
+    already known, such as a call's result, scanned once when it came in."""
+    text = _encodable(text)
+    markers = {value: f"[secret:{fp}]" for value, fp in known.items()}
     if not markers:
         return text
     # One pass, longest value first: a marker is never rescanned, and a value never

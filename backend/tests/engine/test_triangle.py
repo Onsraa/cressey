@@ -328,19 +328,19 @@ async def test_the_triangle_redacts_results_off_the_event_loop(monkeypatch):
     """Each result is now labelled as it comes in: its redaction must not stall other runs."""
     from cressey.engine import reading
     from cressey.engine.report import report_check
-    from cressey.scan.secrets import redact
+    from cressey.scan.secrets import hide
 
     on_loop: list[bool] = []
 
-    def spy(text: str, known=None) -> str:
+    def spy(text: str, known) -> str:
         try:
             asyncio.get_running_loop()
             on_loop.append(True)
         except RuntimeError:
             on_loop.append(False)
-        return redact(text, known)
+        return hide(text, known)
 
-    monkeypatch.setattr(reading, "redact", spy)
+    monkeypatch.setattr(reading, "hide", spy)
     run = emailed_run()
     await legs(run, run.steps[-1], Ledger(FakeJudge()), T)
     await report_check(run, Ledger(FakeJudge()), T)

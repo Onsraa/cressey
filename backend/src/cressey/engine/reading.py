@@ -11,7 +11,7 @@ from pydantic import JsonValue
 
 from cressey.domain.runs import Run, Step
 from cressey.judge import Answers, Judge, Question, TooLarge, yes
-from cressey.scan.secrets import redact
+from cressey.scan.secrets import hide
 
 log = logging.getLogger(__name__)
 
@@ -157,8 +157,9 @@ async def max_over_parts(
 
 
 def redacted(run: Run, steps: Sequence[Step]) -> dict[int, str]:
-    """Each step's result, redacted with every secret known so far."""
-    return {s.n: redact(s.result, run.known) for s in steps if s.result}
+    """Each step's result, redacted with every secret known so far. Not scanned again: its
+    own secrets were found when it came in (`Engine.after`), and are known."""
+    return {s.n: hide(s.result, run.known) for s in steps if s.result}
 
 
 async def redacted_off_loop(run: Run, steps: Sequence[Step]) -> dict[int, str]:
@@ -166,5 +167,5 @@ async def redacted_off_loop(run: Run, steps: Sequence[Step]) -> dict[int, str]:
     are copied, since other calls may add to them meanwhile."""
     known, chosen = dict(run.known), list(steps)
     return await asyncio.to_thread(
-        lambda: {s.n: redact(s.result, known) for s in chosen if s.result}
+        lambda: {s.n: hide(s.result, known) for s in chosen if s.result}
     )
