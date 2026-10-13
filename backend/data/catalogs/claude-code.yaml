@@ -8,8 +8,9 @@ tools:
   # only reads (no file written, no body but a GraphQL query's; a redirection to /dev/null
   # writes nothing); rm, DROP, TRUNCATE, DELETE FROM and git push --force are destructive;
   # any other is a write the triangle judges, and Jev's floor label holds when it can't be
-  # undone (engine/floor/shell.py, shell_risk; `floor` in policy.yaml).
-  Bash: {kind: shell, arg: command}
+  # undone (engine/floor/shell.py, shell_risk; `floor` in policy.yaml). Its description is
+  # the agent's own summary of the command.
+  Bash: {kind: shell, arg: command, words: [description]}
   Read: {kind: read, arg: file_path}
   Glob: {kind: read, arg: path}
   Grep: {kind: read, arg: path}

@@ -177,8 +177,11 @@ class Engine:
         waits for a human: only a file edit, whose path code checked, goes on."""
         if floor or step.risk != "write" or not read_before(step):
             return []
+        words = rule.words if rule else []
         try:
-            labels = await floor_labels(run, step, self.judge, self.policy.triangle)
+            labels = await floor_labels(
+                run, step, self.judge, self.policy.triangle, words
+            )
         except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []
         if labels is None:
@@ -392,12 +395,14 @@ class Engine:
         response, as `_labelled` asks them before: a file edit, whose path code checked,
         isn't asked."""
         assert step.surface is not None  # a live call's act named it
-        if step.risk != "write" or edits_a_file(
-            await self._rule(step.surface, step.tool)
-        ):
+        rule = await self._rule(step.surface, step.tool)
+        if step.risk != "write" or edits_a_file(rule):
             return []
+        words = rule.words if rule else []
         try:
-            labels = await floor_labels(run, step, self.judge, self.policy.triangle)
+            labels = await floor_labels(
+                run, step, self.judge, self.policy.triangle, words
+            )
         except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []
         if labels is None:

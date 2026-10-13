@@ -182,7 +182,10 @@ async def calibrate(
 
     async def labelled(case: ActionCase) -> tuple[float | None, float | None]:
         run, step = action_step(case)
-        got = await floor_labels(run, step, judge, policy.triangle)
+        rule = policy.tools[SURFACE].get(case.tool)
+        got = await floor_labels(
+            run, step, judge, policy.triangle, rule.words if rule else []
+        )
         if got is None:
             return None, None
         return yes(got["irreversible"]), yes(got["production"])
