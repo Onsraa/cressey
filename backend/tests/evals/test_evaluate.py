@@ -29,6 +29,12 @@ async def test_every_shipped_session_is_held_exactly_when_it_should_be():
     assert report.stop_ms_p95 is not None and report.check_ms_p95 < 1000
 
 
+def test_every_shipped_incident_names_the_call_it_must_be_held_at():
+    sessions = load_sessions()
+    unnamed = [s.id for s in sessions if s.expect == "held" and s.held_at is None]
+    assert unnamed == []
+
+
 async def test_the_ablation_shows_what_only_the_triangle_holds():
     from cressey.evals.evaluate import ablation
 
