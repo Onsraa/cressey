@@ -1,22 +1,13 @@
-"""Record-and-replay cache for every model call, so the demo survives a network outage.
+"""The guide pipeline's models through the record-and-replay cache (llm/cache.py): each
+method keyed by what its model reads."""
 
-live: call, store nothing · record: call and store, except a call already recorded,
-which gets its first answer · replay: cache only, never the network
-fallback: call; if the model is unavailable, serve the stored answer
-replay-first: the stored answer when there is one, the network only on a miss (the stage)
-"""
-
-import hashlib
-import json
-import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import numpy as np
 
-from cressey.core.draft import PROMPT_DRAFT_V1, OpenAIDrafter
-from cressey.core.models import Mandate, Risk
+from cressey.domain.guides import GuideDraft, GuideIncident, Unit
 from cressey.guide.clients import (
     PROMPT_GUIDE_V1,
     PROMPT_REWRITE_INCIDENT_V1,
@@ -25,26 +16,12 @@ from cressey.guide.clients import (
     BedrockEmbedder,
     BedrockReranker,
     JevReranker,
-    ModelUnavailable,
     OpenAIEmbedder,
     OpenAIRewriter,
     OpenAIWriter,
 )
-from cressey.guide.models import GuideDraft, GuideIncident, Unit
+from cressey.llm.cache import Cache, Mode, prompt_version
 from cressey.settings import Settings
-
-log = logging.getLogger(__name__)
-
-Mode = Literal["live", "record", "replay", "fallback", "replay-first"]
-
-
-def cache_key(
-    adapter: str, model: str, prompt_version: str, payload: dict[str, Any]
-) -> str:
-    blob = json.dumps(
-        [adapter, model, prompt_version, payload], sort_keys=True, ensure_ascii=False
-    )
-    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def _seen(incident: GuideIncident) -> dict:
@@ -56,10 +33,6 @@ def _units(units: list[Unit]) -> list[list[str]]:
     return [[u.id, u.text] for u in units]
 
 
-def _version(prompt: str) -> str:
-    return hashlib.sha256(prompt.encode()).hexdigest()[:12]
-
-
 class Cached:
     """Wraps any adapter (Embedder, QueryRewriter, Reranker, GuideWriter) and exposes the same methods."""
 
@@ -68,55 +41,35 @@ class Cached:
         inner: Any,
         adapter: str,
         model: str,
-        prompt_version: str,
+        version: str,
         mode: Mode,
         cache_dir: Path,
     ):
-        self.inner, self.adapter, self.model, self.version, self.mode = (
+        self.inner, self.adapter, self.model, self.version = (
             inner,
             adapter,
             model,
-            prompt_version,
-            mode,
+            version,
         )
-        self.dir = cache_dir / adapter
+        self.cache = Cache(mode, cache_dir / adapter)
 
     def _call(
         self,
         method: str,
         payload: dict[str, Any],
         live: Callable[[], Any],
-        encode,
-        decode,
+        encode: Callable[[Any], Any],
+        decode: Callable[[Any], Any],
     ) -> Any:
-        path = (
-            self.dir
-            / f"{cache_key(self.adapter + '.' + method, self.model, self.version, payload)}.json"
+        return self.cache.call(
+            f"{self.adapter}.{method}",
+            self.model,
+            self.version,
+            payload,
+            live,
+            encode,
+            decode,
         )
-
-        def stored() -> Any:
-            if not path.exists():
-                raise ModelUnavailable(f"not in cache: {self.adapter}.{method}")
-            return decode(json.loads(path.read_text()))
-
-        if self.mode == "replay":
-            return stored()
-        # record too: a run and its Observateur run ask the same, and a replay can give only
-        # one answer to both, so the recording keeps the first.
-        if self.mode in ("replay-first", "record") and path.exists():
-            return stored()
-        if self.mode == "replay-first":
-            log.warning("not recorded, asking live: %s.%s", self.adapter, method)
-        try:
-            out = live()
-        except ModelUnavailable:
-            if self.mode == "fallback":
-                return stored()
-            raise
-        if self.mode == "record":
-            self.dir.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps(encode(out), ensure_ascii=False))
-        return out
 
     def embed(self, texts: list[str], query: bool = False) -> np.ndarray:
         return self._call(
@@ -175,32 +128,6 @@ class Cached:
             GuideDraft.model_validate,
         )
 
-    def draft(self, task: str, mandate: Mandate, tool: str, risk: Risk) -> str:
-        payload = {
-            "task": task,
-            "mandate": mandate.model_dump(),
-            "tool": tool,
-            "risk": risk,
-        }
-        return self._call(
-            "draft",
-            payload,
-            lambda: self.inner.draft(task, mandate, tool, risk),
-            str,
-            str,
-        )
-
-
-def wrap_drafter(s: Settings) -> Cached:
-    return Cached(
-        OpenAIDrafter.from_settings(s),
-        "drafter",
-        s.rewrite_model,
-        _version(PROMPT_DRAFT_V1),
-        s.model_mode,
-        s.cache_dir,
-    )
-
 
 def _embedder(s: Settings) -> BedrockEmbedder | OpenAIEmbedder:
     if s.models == "bedrock":
@@ -218,8 +145,8 @@ def wrap_all(s: Settings) -> tuple[Cached, Cached, Cached, Cached]:
     def c(inner: Any, adapter: str, model: str, version: str) -> Cached:
         return Cached(inner, adapter, model, version, s.model_mode, s.cache_dir)
 
-    rewrite_v = _version(PROMPT_REWRITE_INCIDENT_V1 + PROMPT_REWRITE_QUESTION_V1)
-    writer_v = _version(PROMPT_GUIDE_V1 + PROMPT_WHY_V1)
+    rewrite_v = prompt_version(PROMPT_REWRITE_INCIDENT_V1 + PROMPT_REWRITE_QUESTION_V1)
+    writer_v = prompt_version(PROMPT_GUIDE_V1 + PROMPT_WHY_V1)
     return (
         c(_embedder(s), "embedder", s.embedding_model, "v1"),
         c(OpenAIRewriter.from_settings(s), "rewriter", s.rewrite_model, rewrite_v),

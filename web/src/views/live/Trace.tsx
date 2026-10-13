@@ -142,7 +142,7 @@ function CallRow({ run, step }: { run: Run; step: Step }) {
 	const secrets = carried(step);
 	const status = shown(step);
 	const Why = STATUS[step.status].Icon;
-	// The backend names a signal's target "<tool> | <reason>" (core/incidents.py, _count).
+	// The backend names a signal's target "<tool> | <reason>" (incidents/fleet.py, FleetWatch.count).
 	const signal = fleet.find(
 		(f) =>
 			f.runs.includes(run.id) && f.target === `${step.tool} | ${step.reason}`,
@@ -283,7 +283,7 @@ const stopTip = (s: Step) =>
 
 // A call's or a thought's three scores as pixel cells: darker is higher, ringed in the leg's
 // colour once facts confirm it at this step.
-function Legs({ legs }: { legs?: LegScores }) {
+function Legs({ legs }: { legs?: LegScores | null }) {
 	return (
 		<span
 			role="img"

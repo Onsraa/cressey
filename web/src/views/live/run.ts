@@ -1,5 +1,4 @@
 import type {
-	CaseEvent,
 	Indicator,
 	Leg,
 	LegName,
@@ -9,8 +8,8 @@ import type {
 	Secret,
 	Shadow,
 	Step,
-	Thread,
 } from "@/api/types";
+import { isRecord } from "@/lib/utils";
 
 // What the trace lists, in order. A message carries the indicators its thoughts raised.
 export type Row =
@@ -19,7 +18,6 @@ export type Row =
 			id: string;
 			kind: "msg";
 			indicators: Indicator[];
-			legs?: Legs;
 			stops?: Step; // the call this thought's excuse stopped (CRESSEY_THOUGHT_HOLDS)
 	  } & Message)
 	| { id: string; kind: "report"; text: string };
@@ -38,7 +36,6 @@ export function rows(run: Run): Row[] {
 			id: `m${i}`,
 			kind: "msg",
 			indicators: indicatorsOn(run, i),
-			legs: thoughtLegs(run, i),
 			stops: run.steps.find(
 				(s) =>
 					s.stopped_by != null && run.case?.events[s.stopped_by]?.message === i,
@@ -59,9 +56,6 @@ export const reportLabel = (run?: Run) =>
 
 const MARK = /\[secret:([0-9a-f]+)\]/g;
 const MARK_ONLY = /^\[secret:[0-9a-f]+\]$/;
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-	typeof v === "object" && v !== null && !Array.isArray(v);
 
 // step.args, when it parses to a JSON object.
 function parsed(args: string): Record<string, unknown> | undefined {
@@ -151,78 +145,14 @@ export function shownLegs(step: Step): Legs | undefined {
 	};
 }
 
-// The questions each leg asks of a thought (core/thoughts.py QUESTIONS); the counters and
-// the plan belong to no leg.
-const ASKS: Record<LegName, string[]> = {
-	pressure: ["P1"],
-	opportunity: ["O1", "O2", "O3"],
-	rationalization: ["R", "C1"],
-};
-
-// One read thought of message `message` on each leg: its strongest question. A justification
-// or concealment whose conclusion goes away from the crossing counts for nothing, as in the
-// case (core/case.py, leg_values).
-function thoughtScores(run: Run, message: number) {
-	const away = (run.case?.events ?? []).filter(
-		(e) => e.message === message && e.direction === "away",
-	);
-	return Object.entries(run.messages[message].scores).map(([t, p]) => {
-		const leg = (k: LegName) =>
-			Math.max(
-				0,
-				...ASKS[k].map((q) =>
-					away.some((e) => e.thought === Number(t) && e.indicator === q)
-						? 0
-						: (p[q] ?? 0),
-				),
-			);
-		return {
-			thought: Number(t),
-			legs: {
-				pressure: leg("pressure"),
-				opportunity: leg("opportunity"),
-				rationalization: leg("rationalization"),
-			},
-		};
-	});
-}
-
-// A message's thoughts on the triangle: each leg is its strongest thought, and each thought's
-// score is a fact, strongest first. Undefined until a thought is read.
-export function thoughtLegs(run: Run, message: number): Legs | undefined {
-	const m = run.messages[message];
-	const read = thoughtScores(run, message);
-	if (!read.length) return undefined;
-	const leg = (k: LegName): Leg => {
-		const scored = read
-			.map((x) => ({ text: m.thoughts[x.thought], score: x.legs[k] }))
-			.filter((x) => x.score > 0)
-			.sort((a, b) => b.score - a.score);
-		return {
-			score: scored[0]?.score ?? 0,
-			confirmed: false,
-			facts: scored.map((x) => `“${x.text}” ${fmt(x.score)}`),
-		};
-	};
-	return {
-		pressure: leg("pressure"),
-		opportunity: leg("opportunity"),
-		rationalization: leg("rationalization"),
-	};
-}
-
-// Every read thought of the run, in the order said, as its own point on the triangle; `at`
-// places it among the calls, as `rows` does. Display only, like the scores it is drawn from.
+// Every read thought of the run, in the order said, as its own point on the triangle, scored
+// by the case (`points`); `at` places it among the calls, as `rows` does.
 export const thoughtDots = (run: Run) =>
 	run.messages.flatMap((m, i) =>
-		thoughtScores(run, i).map(({ thought, legs }) => ({
-			id: `m${i}.${thought}`,
+		m.points.map((t) => ({
+			id: `m${i}.${t.thought}`,
 			at: m.after + 0.5,
-			legs: {
-				p: legs.pressure,
-				o: legs.opportunity,
-				r: legs.rationalization,
-			},
+			legs: { p: t.pressure, o: t.opportunity, r: t.rationalization },
 		})),
 	);
 
@@ -305,57 +235,6 @@ export function agg(calls: Scored[]): Agg {
 export const shadowOf = (step: Step): Shadow | undefined =>
 	step.shadow ?? undefined;
 
-// A thread is as strong as its strongest event, which also gives its quote.
-export function strongestEvent(run: Run, t: Thread): CaseEvent | undefined {
-	let best: CaseEvent | undefined;
-	for (const i of t.events) {
-		const e = run.case?.events[i];
-		if (e && (!best || e.p > best.p)) best = e;
-	}
-	return best;
-}
-
-// Each leg's strongest open thread: what the leg shows.
-export function legThreads(run: Run): Record<LegName, Thread | undefined> {
-	const out: Record<LegName, Thread | undefined> = {
-		pressure: undefined,
-		opportunity: undefined,
-		rationalization: undefined,
-	};
-	const strength = (t: Thread) => strongestEvent(run, t)?.p ?? 0;
-	for (const t of run.case?.threads ?? []) {
-		const lead = out[t.leg];
-		if (t.state === "open" && (!lead || strength(t) > strength(lead)))
-			out[t.leg] = t;
-	}
-	return out;
-}
-
-// What each leg shows: the strongest event of its strongest open thread. Rationalization
-// has no threads (R and C1 are events, core/case.py), so it shows the strongest justification
-// or concealment whose conclusion goes toward the crossing; one that goes away from it
-// (a pause, a question, a refusal) is not evidence.
-export function legEvidence(run: Run): Record<LegName, CaseEvent | undefined> {
-	const open = legThreads(run);
-	const lead = (events: CaseEvent[]) =>
-		events.reduce<CaseEvent | undefined>(
-			(best, e) => (!best || e.p > best.p ? e : best),
-			undefined,
-		);
-	const pick = (t?: Thread) => t && strongestEvent(run, t);
-	return {
-		pressure: pick(open.pressure),
-		opportunity: pick(open.opportunity),
-		rationalization: lead(
-			(run.case?.events ?? []).filter(
-				(e) =>
-					(e.indicator === "R" || e.indicator === "C1") &&
-					e.direction === "toward",
-			),
-		),
-	};
-}
-
 // The indicators raised by the thoughts of message `message` (an index in run.messages),
 // each once, in the order they came.
 export const indicatorsOn = (run: Run, message: number): Indicator[] => [
@@ -365,6 +244,3 @@ export const indicatorsOn = (run: Run, message: number): Indicator[] => [
 			.map((e) => e.indicator),
 	),
 ];
-
-// The floor's reason for a call carrying a trap key (core/floor.py).
-export const TRAP = "trap key used";

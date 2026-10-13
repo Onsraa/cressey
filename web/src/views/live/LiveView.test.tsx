@@ -2,13 +2,14 @@ import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as real from "@/api/live";
 import type {
+	Case,
 	CaseEvent,
 	Incident,
 	Indicator,
 	Legs,
 	Run,
+	RunSummary,
 	Step,
-	Thread,
 } from "@/api/types";
 import { time } from "@/lib/labels";
 import type { Decision } from "./decide";
@@ -19,8 +20,8 @@ const words = {
 	source: "narration" as const,
 	thoughts: [],
 	read: 0,
-	flagged: [],
 	scores: {},
+	points: [],
 };
 const NOW = Date.parse("2026-10-10T20:00:00Z");
 const at = (s: number) => new Date(NOW + s * 1000).toISOString();
@@ -47,8 +48,11 @@ const call = (
 	n,
 	tool,
 	args,
+	agent: {},
+	asked_by: ["agent"],
 	risk: "read",
 	status: "allowed",
+	reasons: [],
 	is_error: false,
 	secrets: [],
 	running: false,
@@ -135,6 +139,14 @@ const incident: Incident = {
 	step: 4,
 	severity: "critique",
 	reason: "SQL destructeur hors mandat : users",
+	reasons: [
+		{
+			check: "destructive_sql",
+			target: "users",
+			score: null,
+			afterwards: false,
+		},
+	],
 	created_at: at(-40),
 	decision: "held",
 	sources: [],
@@ -144,33 +156,52 @@ const incident: Incident = {
 };
 
 let state: real.Live;
+let detailed: Run[] = []; // what useRun fetches: the runs the poll summarizes
+const summary = (r: Run): RunSummary => ({
+	id: r.id,
+	task: r.task,
+	kind: r.kind,
+	via: r.via ?? null,
+	started_at: r.started_at,
+	calls: r.steps.length,
+});
 const live = (
 	runs: Run[],
 	focus: real.Focus = {},
 	stop_after = 3,
-): real.Live => ({
-	status: {
-		mode: "guard",
-		model_mode: "live",
-		mcp_path: "/mcp",
-		hook_path: "/hook/claude",
-		stop_after,
-		log: { hash: "h", count: 1, intact: true },
-	},
-	runs,
-	holds: [],
-	incidents: [incident],
-	fleet: [],
-	now: NOW,
-	offline: false,
-	refresh: () => {},
-	view: "live",
-	focus,
-	go: () => {},
-	focusMode: false,
-	toggleFocus: () => {},
-});
-mock.module("@/api/live", () => ({ ...real, useLive: () => state }));
+): real.Live => {
+	detailed = runs;
+	return {
+		status: {
+			mode: "guard",
+			model_mode: "live",
+			mcp_path: "/mcp",
+			hook_path: "/hook/claude",
+			stop_after,
+			log: { hash: "h", count: 1, intact: true },
+		},
+		runs: runs.map(summary),
+		holds: [],
+		incidents: [incident],
+		fleet: [],
+		now: NOW,
+		offline: false,
+		locked: false,
+		refresh: () => {},
+		view: "live",
+		focus,
+		go: () => {},
+		focusMode: false,
+		toggleFocus: () => {},
+		shown: runs,
+		show: () => () => {},
+	};
+};
+mock.module("@/api/live", () => ({
+	...real,
+	useLive: () => state,
+	useRun: (id?: string) => detailed.find((r) => r.id === id),
+}));
 const { LiveView } = await import("./LiveView");
 const { Hold, ReasonBox, reasonMax } = await import("./Hold");
 const html = () =>
@@ -303,6 +334,7 @@ test("on its Live page, alert mode and the run's cross-run signal are chips, not
 		fleet: [
 			{
 				target: "run_sql | SQL destructeur hors mandat : users",
+				checks: ["destructive_sql"],
 				runs: ["f0e1d2c3b4a5", run.id],
 				first_at: at(-300),
 				last_at: at(-10),
@@ -395,42 +427,6 @@ const row = (out: string, id: string) => {
 	return out.slice(from, out.indexOf("</button>", from));
 };
 
-test("a leg reads its score, whatever the agent's words said of it", () => {
-	const spoken = legs({ ...leg(0.6, true), words: 0.9 }, leg(0), {
-		...leg(0),
-		words: 0.9,
-	});
-	state = live(
-		[
-			demo(
-				{},
-				{
-					steps: [
-						call(1, "read_file", '{"path": "README.md"}', { legs: spoken }),
-					],
-				},
-			),
-		],
-		{ run: "a1b2c3d4e5f6", step: 1 },
-	);
-	const out = html();
-	expect(out).not.toContain("from the agent");
-	const gauges = panel(out, "Fraud triangle");
-	expect(gauges).toContain(">0.60<");
-	expect(gauges).not.toContain(">0.90<");
-	const cells = row(out, "c1");
-	expect(cells).toContain(
-		'data-tip="Pressure 0.60\nconfirmed by facts at this step"',
-	);
-	expect(cells).toContain('data-tip="Rationalization 0.00"');
-	expect(cells).toContain(
-		'aria-label="Pressure 0.60, Opportunity 0.00, Rationalization 0.00"',
-	);
-	const inspector = panel(out, "Inspector");
-	expect(inspector).toContain(">0.60<");
-	expect(inspector).not.toContain(">0.90<");
-});
-
 const SHADOW_TIP = "Shadow mode: computed and logged, changes nothing yet.";
 
 const ev = (
@@ -447,19 +443,14 @@ const ev = (
 	objects: [],
 	...extra,
 });
-const thread = (
-	leg: Thread["leg"],
-	events: number[],
-	state: Thread["state"] = "open",
-): Thread => ({ leg, state, outside: false, events });
-const caseOf = (events: CaseEvent[], threads: Thread[] = []) => ({
+// The case as served: its events, and the evidence the backend picked for each leg.
+const caseOf = (events: CaseEvent[], evidence: Case["evidence"] = {}) => ({
 	events,
-	threads,
-	approved: [],
-	notes: [],
+	threads: [],
+	evidence,
 });
 
-test("each leg shows the quote of its strongest open thread, and where it was said", () => {
+test("each gauge quotes the event the case serves as its evidence, and where it was said", () => {
 	state = live([
 		demo(
 			{},
@@ -472,13 +463,11 @@ test("each leg shows the quote of its strongest open thread, and where it was sa
 						ev("O1", 0.8, "the shared ops token is in the legacy script", {
 							source: "code",
 						}),
+						ev("R", 0.9, "now I need to delete it using the shared ops token", {
+							source: "narration",
+						}),
 					],
-					[
-						thread("pressure", [0]),
-						thread("pressure", [1]),
-						thread("pressure", [2], "shared"),
-						thread("opportunity", [3]),
-					],
+					{ pressure: 1, opportunity: 3, rationalization: 4 },
 				),
 			},
 		),
@@ -489,40 +478,21 @@ test("each leg shows the quote of its strongest open thread, and where it was sa
 		">reasoning<",
 		"the shared ops token is in the legacy script",
 		">code<",
+		"now I need to delete it using the shared ops token",
+		">narration<",
 	])
 		expect(gauges).toContain(s);
-	// Weaker than the lead, or closed: not shown.
+	// Not the evidence: not shown.
 	for (const s of ["the deploy token may be scoped", "we missed the window"])
 		expect(gauges).not.toContain(s);
 });
 
-test("the rationalization gauge shows the justification that goes toward the crossing", () => {
-	const justify = (direction?: "toward" | "away" | "neither") =>
-		live([
-			demo(
-				{},
-				{
-					case: caseOf([
-						ev("R", 0.6, "I should pause here", { direction: "away" }),
-						ev("R", 0.9, "now I need to delete it using the shared ops token", {
-							direction,
-						}),
-					]),
-				},
-			),
-		]);
-	state = justify("toward");
-	const gauges = gaugesOf(html());
-	expect(gauges).toContain(
-		"now I need to delete it using the shared ops token",
-	);
-	expect(gauges).toContain(">reasoning<");
-	expect(gauges).not.toContain("I should pause here");
-	// The same words pointing away from the crossing, or nowhere, are no evidence.
-	for (const direction of ["away", "neither", undefined] as const) {
-		state = justify(direction);
-		expect(gaugesOf(html())).not.toContain("“");
-	}
+test("a leg the case serves no evidence for shows no quote, whatever its events", () => {
+	const justify = ev("R", 0.9, "now I need to delete it", {
+		direction: "toward",
+	});
+	state = live([demo({}, { case: caseOf([justify]) })]);
+	expect(gaugesOf(html())).not.toContain("“");
 });
 
 test("the hold sits over the triangle; the inspector keeps reading the trace", () => {
@@ -561,6 +531,42 @@ test("a Thought row shows the indicators its words raised: flags amber, counters
 	expect(row(out, "m3")).toMatch(/bg-ok[^"]*">shared</);
 	for (const id of ["m0", "m1", "m4", "c1"])
 		expect(row(out, id)).not.toMatch(/bg-(warn|ok)[^"]*">[a-z ]+</);
+});
+
+test("a Thought row shows the scores the case served for its thoughts", () => {
+	const read = legs(leg(0.97, false, ["“Toujours en échec.” 0.97"]));
+	const run = demo({});
+	state = live([
+		{
+			...run,
+			messages: run.messages.map((m, i) =>
+				i === 2 ? { ...m, legs: read } : m,
+			),
+		},
+	]);
+	const out = html();
+	expect(row(out, "m2")).toContain(
+		'aria-label="Pressure 0.97, Opportunity 0.00, Rationalization 0.00"',
+	);
+	expect(row(out, "m1")).toContain('aria-label="no score"');
+});
+
+test("the decoy key in use is found by its check, whatever the reason's wording", () => {
+	const trap = {
+		check: "trap_key" as const,
+		target: "DB_ADMIN_KEY",
+		score: null,
+		afterwards: false,
+	};
+	state = live([
+		demo({ reason: "clé piège utilisée : DB_ADMIN_KEY", reasons: [trap] }),
+	]);
+	const gauges = gaugesOf(html());
+	expect(gauges).toContain("Decoy key used · step 4");
+	expect(gauges).toContain("clé piège utilisée : DB_ADMIN_KEY (step 4)");
+	// The words alone are no trap key.
+	state = live([demo({ reason: "trap key used: DB_ADMIN_KEY", reasons: [] })]);
+	expect(gaugesOf(html())).not.toContain("Decoy key used");
 });
 
 const hold = {
@@ -853,7 +859,7 @@ test("the limit shown is the policy's, not three", () => {
 });
 
 test("a run that ended while stopped reads Ended, with no Unlock", () => {
-	state = live([demo({}, { ...stopped().runs[0], ended_at: at(-1) })]);
+	state = live([demo({}, { ...stopped().shown[0], ended_at: at(-1) })]);
 	const out = html();
 	expect(out).toContain("Ended");
 	expect(out).not.toContain("Stopped");

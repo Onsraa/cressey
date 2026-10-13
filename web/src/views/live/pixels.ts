@@ -1,5 +1,6 @@
 import gsap from "gsap";
 import { still } from "@/lib/motion";
+import { inkColor } from "@/lib/utils";
 import { band, RAMP } from "./run";
 
 // The design's fraud-triangle field, ported from its prototype (frame, drawEdges, drawHL):
@@ -13,7 +14,6 @@ const CELL = 6; // finer than the design's 10 px « medium » pixel: room for ma
 const STAGGER = 90; // ms between two dots firing
 const HOT = "#EF7462";
 const SALMON = "#FFD6CE";
-const INK = "#1E1E1E";
 const PAPER = "#FEFEFE";
 const LC = { p: "#3D64D8", o: "#0E8F86", r: "#8A55D1" } as const;
 
@@ -176,6 +176,7 @@ export class Pixels {
 	private raf = 0;
 	private timers: number[] = [];
 	private rm = false; // reduced motion: the field stands still
+	private ink = ""; // read from index.css when a canvas attaches
 	private S = Math.random() * 1000;
 	private t = 0;
 	private intro = 0;
@@ -216,6 +217,7 @@ export class Pixels {
 		this.onLayout = onLayout;
 		this.reported = "";
 		this.rm = still();
+		this.ink = inkColor();
 		if (run !== this.run) {
 			this.run = run;
 			this.waves = [];
@@ -692,7 +694,7 @@ export class Pixels {
 		const put = (d: Dot, thought: boolean) => {
 			if (!this.landed.has(d.id)) return;
 			const { x0, y0, n } = square(T, d, thought);
-			ctx.fillStyle = thought ? hue(d.legs) : d.hold ? HOT : INK;
+			ctx.fillStyle = thought ? hue(d.legs) : d.hold ? HOT : this.ink;
 			ctx.fillRect(x0, y0, n * CELL - 1, n * CELL - 1);
 		};
 		for (const d of sc.thoughts) put(d, true);
@@ -713,7 +715,7 @@ export class Pixels {
 			const B = T[b];
 			const closed = sc.confirmed[ka] && sc.confirmed[kb];
 			const n = Math.ceil(Math.hypot(B[0] - A[0], B[1] - A[1]) / (c * 0.5));
-			ctx.fillStyle = sc.held ? HOT : closed ? INK : "#C9C9C6";
+			ctx.fillStyle = sc.held ? HOT : closed ? this.ink : "#C9C9C6";
 			let last = -1;
 			for (let k = 0; k <= n; k++) {
 				const q = Math.floor((A[0] + ((B[0] - A[0]) * k) / n) / c);
@@ -725,7 +727,7 @@ export class Pixels {
 				ctx.fillRect(q * c, r * c, c - 1, c - 1);
 			}
 		}
-		ctx.fillStyle = INK;
+		ctx.fillStyle = this.ink;
 		for (const k of ["P", "O", "R"] as const) {
 			const q = Math.floor(T[k][0] / c);
 			const r = Math.floor(T[k][1] / c);
@@ -823,7 +825,7 @@ export class Pixels {
 		const sz = half * 2;
 		const rx = M.x - half;
 		const ry = M.y - half;
-		const ink = held ? "#B8331C" : INK;
+		const ink = held ? "#B8331C" : this.ink;
 		const a = Math.min(1, M.a);
 		ctx.globalAlpha = a * 0.35;
 		ctx.fillStyle = held ? SALMON : PAPER;

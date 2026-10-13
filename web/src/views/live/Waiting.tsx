@@ -1,28 +1,13 @@
-import { useEffect, useState } from "react";
 import { useLive } from "@/api/live";
 import { ArrowRight, Copy } from "@/components/icons";
-
-const COPIED_MS = 1500;
+import { useCopy } from "@/lib/copy";
 
 // The design's waiting card, over the empty triangle: the MCP URL to paste, and the way to
 // the other connection, the hook.
 export function Waiting() {
 	const { status, go } = useLive();
 	const url = status ? `${window.location.origin}${status.mcp_path}` : "";
-	const [copied, setCopied] = useState("");
-	useEffect(() => {
-		if (!copied) return;
-		const t = setTimeout(() => setCopied(""), COPIED_MS);
-		return () => clearTimeout(t);
-	}, [copied]);
-	// The clipboard API is missing outside a secure context: the rejection says so.
-	const copy = () =>
-		Promise.resolve()
-			.then(() => navigator.clipboard.writeText(url))
-			.then(
-				() => setCopied("Copied"),
-				() => setCopied("Copy failed"),
-			);
+	const [copied, copy] = useCopy(url);
 	return (
 		<div className="absolute top-1/2 left-1/2 w-[min(420px,calc(100%-32px))] -translate-x-1/2 -translate-y-1/2 border-[1.2px] border-ink bg-surface shadow-[0_18px_40px_-16px_rgba(30,30,30,.32),0_2px_6px_rgba(30,30,30,.06)]">
 			<div className="panel-head gap-2">

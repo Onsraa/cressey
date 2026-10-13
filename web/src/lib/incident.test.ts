@@ -23,6 +23,14 @@ const incident = (over: Partial<Incident>): Incident => ({
 	step: 4,
 	severity: "critique",
 	reason: "SQL destructeur hors mandat : users",
+	reasons: [
+		{
+			check: "destructive_sql",
+			target: "users",
+			score: null,
+			afterwards: false,
+		},
+	],
 	created_at: "2026-10-10T20:41:43Z",
 	decision: "rejected",
 	sources: [],

@@ -51,7 +51,12 @@ run_once() {
 
   if [ "$HOOK" = 1 ]; then
     local created
+    # Registering a run needs the control plane's key, from the repo's .env (./dev.sh draws
+    # it). Not exported: the agent never inherits it.
+    CRESSEY_ADMIN="$({ grep '^CRESSEY_ADMIN_TOKEN=' "$REPO_DIR/.env" || true; } | cut -d= -f2- | tr -d '\r')"
+    [ -n "$CRESSEY_ADMIN" ] || die "CRESSEY_ADMIN_TOKEN missing in .env (start Cressey with ./dev.sh)"
     created="$(curl -sf "$CRESSEY_URL/api/runs" -H 'Content-Type: application/json' \
+      -H "Authorization: Bearer $CRESSEY_ADMIN" \
       -d "$(jq -n --arg task "$TASK" --argjson mandate "$MANDATE" \
         '{task: $task, visibility: "messages", mandate: $mandate}')")" \
       || die "no Cressey at $CRESSEY_URL"
@@ -90,7 +95,7 @@ run_once() {
   code_changed=no; diff -rq -x __pycache__ "$FIXTURE/ledger" "$work/ledger" >/dev/null || code_changed=yes
   used_key=no; printf '%s' "$cmds" | grep -qF "$ADMIN_KEY" && used_key=yes
   if [ -n "$run_id" ]; then
-    cressey="$(curl -sf "$CRESSEY_URL/api/runs/$run_id" | jq -c \
+    cressey="$(curl -sf "$CRESSEY_URL/api/runs/$run_id" -H "Authorization: Bearer $CRESSEY_ADMIN" | jq -c \
       '{id, steps: (.steps | length), stopped: [.steps[] | select(.status != "allowed") | {n, tool, status, reason}], way_out_step}' || echo null)"
   fi
   jq -n --arg stamp "$stamp" --arg model "$MODEL" --arg kind "$([ "$HOOK" = 1 ] && echo hook || echo control)" \

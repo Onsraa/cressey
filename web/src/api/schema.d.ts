@@ -100,52 +100,14 @@ export interface paths {
 			path?: never;
 			cookie?: never;
 		};
-		/** Get Run */
+		/**
+		 * Get Run
+		 * @description With what the dashboard draws from the case, worked out now by the case's rules: each
+		 *     leg's evidence, and each message's thoughts on the triangle, together and one by one.
+		 */
 		get: operations["get_run_api_runs__run_id__get"];
 		put?: never;
 		post?: never;
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	"/api/runs/{run_id}/messages": {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/**
-		 * Message
-		 * @description What the agent says along the way. Only the run's own key may send it. The decision
-		 *     model flags the message in the background.
-		 */
-		post: operations["message_api_runs__run_id__messages_post"];
-		delete?: never;
-		options?: never;
-		head?: never;
-		patch?: never;
-		trace?: never;
-	};
-	"/api/runs/{run_id}/report": {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		get?: never;
-		put?: never;
-		/**
-		 * Report
-		 * @description The agent's final report. It ends the run, and the decision model checks it against
-		 *     the log (S9). Only the run's own key may send it.
-		 */
-		post: operations["report_api_runs__run_id__report_post"];
 		delete?: never;
 		options?: never;
 		head?: never;
@@ -385,10 +347,67 @@ export interface paths {
 		patch?: never;
 		trace?: never;
 	};
+	"/api/runs/{run_id}/messages": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Message
+		 * @description What the agent says along the way. Only the run's own key may send it.
+		 */
+		post: operations["message_api_runs__run_id__messages_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
+	"/api/runs/{run_id}/report": {
+		parameters: {
+			query?: never;
+			header?: never;
+			path?: never;
+			cookie?: never;
+		};
+		get?: never;
+		put?: never;
+		/**
+		 * Report
+		 * @description The agent's final report. It ends the run, and the decision model checks it against
+		 *     the log (S9). Only the run's own key may send it.
+		 */
+		post: operations["report_api_runs__run_id__report_post"];
+		delete?: never;
+		options?: never;
+		head?: never;
+		patch?: never;
+		trace?: never;
+	};
 }
 export type webhooks = Record<string, never>;
 export interface components {
 	schemas: {
+		/**
+		 * Agent
+		 * @description Who acts, as far as the surface says; None where it says nothing.
+		 */
+		Agent: {
+			/** Client */
+			client?: string | null;
+			/** Client Version */
+			client_version?: string | null;
+			/** Model */
+			model?: string | null;
+			/** Sub Agent */
+			sub_agent?: string | null;
+			/** Sub Agent Type */
+			sub_agent_type?: string | null;
+		};
 		/** Case */
 		Case: {
 			/**
@@ -402,15 +421,12 @@ export interface components {
 			 */
 			threads: components["schemas"]["Thread"][];
 			/**
-			 * Approved
-			 * @default []
+			 * Evidence
+			 * @default {}
 			 */
-			approved: string[];
-			/**
-			 * Notes
-			 * @default []
-			 */
-			notes: components["schemas"]["Note"][];
+			evidence: {
+				[key: string]: number;
+			};
 		};
 		/**
 		 * EvalFile
@@ -532,6 +548,25 @@ export interface components {
 		FleetSignal: {
 			/** Target */
 			target: string;
+			/** Checks */
+			checks: (
+				| "unknown_tool"
+				| "destructive_tool"
+				| "destructive_shell"
+				| "unclassified_sql"
+				| "destructive_sql"
+				| "egress"
+				| "protected_path"
+				| "frozen_path"
+				| "trap_key"
+				| "self_call"
+				| "irreversible"
+				| "production"
+				| "no_answer"
+				| "triangle"
+				| "thought"
+				| "read_only"
+			)[];
 			/** Runs */
 			runs: string[];
 			/** First At */
@@ -617,6 +652,11 @@ export interface components {
 			severity: "critique" | "haute";
 			/** Reason */
 			reason: string;
+			/**
+			 * Reasons
+			 * @default []
+			 */
+			reasons: components["schemas"]["Reason"][];
 			/** Created At */
 			created_at: string;
 			/** Decision */
@@ -642,8 +682,6 @@ export interface components {
 			confirmed: boolean;
 			/** Facts */
 			facts: string[];
-			/** Words */
-			words?: number | null;
 		};
 		/** Legs */
 		Legs: {
@@ -730,30 +768,12 @@ export interface components {
 					[key: string]: number;
 				};
 			};
-			/** Labels */
-			labels?: {
-				[key: string]: number;
-			} | null;
+			legs?: components["schemas"]["Legs"] | null;
 			/**
-			 * Flagged
+			 * Points
 			 * @default []
 			 */
-			flagged: string[];
-		};
-		/**
-		 * Note
-		 * @description An intervention the spec makes before any act.
-		 */
-		Note: {
-			/** After */
-			after: number;
-			/**
-			 * Action
-			 * @enum {string}
-			 */
-			action: "way_out" | "alert";
-			/** Why */
-			why: string;
+			points: components["schemas"]["ThoughtPoint"][];
 		};
 		/** OwnerGuide */
 		OwnerGuide: {
@@ -788,6 +808,39 @@ export interface components {
 			};
 			/** Facts */
 			facts: string[];
+		};
+		/** Reason */
+		Reason: {
+			/**
+			 * Check
+			 * @enum {string}
+			 */
+			check:
+				| "unknown_tool"
+				| "destructive_tool"
+				| "destructive_shell"
+				| "unclassified_sql"
+				| "destructive_sql"
+				| "egress"
+				| "protected_path"
+				| "frozen_path"
+				| "trap_key"
+				| "self_call"
+				| "irreversible"
+				| "production"
+				| "no_answer"
+				| "triangle"
+				| "thought"
+				| "read_only";
+			/** Target */
+			target?: string | null;
+			/** Score */
+			score?: number | null;
+			/**
+			 * Afterwards
+			 * @default false
+			 */
+			afterwards: boolean;
 		};
 		/**
 		 * RejectIn
@@ -903,6 +956,7 @@ export interface components {
 			started_at: string;
 			/** Via */
 			via?: ("mcp" | "hook") | null;
+			agent?: components["schemas"]["Agent"];
 			/**
 			 * Revoked
 			 * @default false
@@ -966,6 +1020,27 @@ export interface components {
 			 * @enum {string}
 			 */
 			kind: "live" | "replay" | "control";
+		};
+		/**
+		 * RunSummary
+		 * @description A run as the dashboard polls it every second; the run itself is served on demand.
+		 */
+		RunSummary: {
+			/** Id */
+			id: string;
+			/** Task */
+			task: string;
+			/**
+			 * Kind
+			 * @enum {string}
+			 */
+			kind: "live" | "replay" | "control";
+			/** Via */
+			via: ("mcp" | "hook") | null;
+			/** Started At */
+			started_at: string;
+			/** Calls */
+			calls: number;
 		};
 		/** Secret */
 		Secret: {
@@ -1047,6 +1122,14 @@ export interface components {
 		Step: {
 			/** N */
 			n: number;
+			/** Surface */
+			surface?: ("mcp" | "hook") | null;
+			agent?: components["schemas"]["Agent"];
+			/**
+			 * Asked By
+			 * @default []
+			 */
+			asked_by: ("task" | "user" | "content" | "agent")[];
 			/** Tool */
 			tool: string;
 			/** Args */
@@ -1072,6 +1155,11 @@ export interface components {
 				| "would_hold";
 			/** Reason */
 			reason?: string | null;
+			/**
+			 * Reasons
+			 * @default []
+			 */
+			reasons: components["schemas"]["Reason"][];
 			/**
 			 * Is Error
 			 * @default false
@@ -1118,6 +1206,20 @@ export interface components {
 			 */
 			source: "narration" | "summary" | "reasoning";
 		};
+		/**
+		 * ThoughtPoint
+		 * @description One read thought on the triangle: its score on each leg (`case.thought_points`).
+		 */
+		ThoughtPoint: {
+			/** Thought */
+			thought: number;
+			/** Pressure */
+			pressure: number;
+			/** Opportunity */
+			opportunity: number;
+			/** Rationalization */
+			rationalization: number;
+		};
 		/** Thread */
 		Thread: {
 			/**
@@ -1132,7 +1234,7 @@ export interface components {
 			 * @default open
 			 * @enum {string}
 			 */
-			state: "open" | "shared" | "renounced" | "verified" | "approved";
+			state: "open" | "shared" | "renounced" | "verified";
 			/**
 			 * Outside
 			 * @default false
@@ -1227,7 +1329,9 @@ export interface operations {
 	create_guide_api_guides_post: {
 		parameters: {
 			query?: never;
-			header?: never;
+			header?: {
+				authorization?: string;
+			};
 			path?: never;
 			cookie?: never;
 		};
@@ -1260,7 +1364,9 @@ export interface operations {
 	read_guide_api_guides__gid__get: {
 		parameters: {
 			query?: never;
-			header?: never;
+			header?: {
+				authorization?: string;
+			};
 			path: {
 				gid: string;
 			};
@@ -1291,7 +1397,9 @@ export interface operations {
 	why_api_guides__gid__why_post: {
 		parameters: {
 			query?: never;
-			header?: never;
+			header?: {
+				authorization?: string;
+			};
 			path: {
 				gid: string;
 			};
@@ -1326,7 +1434,9 @@ export interface operations {
 	list_runs_api_runs_get: {
 		parameters: {
 			query?: never;
-			header?: never;
+			header?: {
+				authorization?: string;
+			};
 			path?: never;
 			cookie?: never;
 		};
@@ -1338,7 +1448,16 @@ export interface operations {
 					[name: string]: unknown;
 				};
 				content: {
-					"application/json": components["schemas"]["Run"][];
+					"application/json": components["schemas"]["RunSummary"][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
 				};
 			};
 		};
@@ -1346,7 +1465,9 @@ export interface operations {
 	create_run_api_runs_post: {
 		parameters: {
 			query?: never;
-			header?: never;
+			header?: {
+				authorization?: string;
+			};
 			path?: never;
 			cookie?: never;
 		};
@@ -1379,7 +1500,9 @@ export interface operations {
 	get_run_api_runs__run_id__get: {
 		parameters: {
 			query?: never;
-			header?: never;
+			header?: {
+				authorization?: string;
+			};
 			path: {
 				run_id: string;
 			};
@@ -1395,6 +1518,424 @@ export interface operations {
 				content: {
 					"application/json": components["schemas"]["Run"];
 				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	status_api_status_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Status"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	list_incidents_api_incidents_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Incident"][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	get_incident_api_incidents__incident_id__get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				incident_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Incident"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	get_responses_api_policy_responses_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Responses"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	set_responses_api_policy_responses_put: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody: {
+			content: {
+				"application/json": components["schemas"]["Responses"];
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Responses"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	fleet_api_fleet_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["FleetSignal"][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	approve_fix_api_incidents__incident_id__fixes__leg__approve_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				incident_id: string;
+				leg: "pressure" | "opportunity" | "rationalization";
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	replay_incident_api_incidents__incident_id__replay_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				incident_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Replay"];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	eval_reports_api_eval_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["EvalFile"][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	unlock_api_runs__run_id__unlock_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				run_id: string;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	list_holds_api_holds_get: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path?: never;
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			200: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["Hold"][];
+				};
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	approve_api_runs__run_id__steps__n__approve_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				run_id: string;
+				n: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: never;
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
+			};
+			/** @description Validation Error */
+			422: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content: {
+					"application/json": components["schemas"]["HTTPValidationError"];
+				};
+			};
+		};
+	};
+	reject_api_runs__run_id__steps__n__reject_post: {
+		parameters: {
+			query?: never;
+			header?: {
+				authorization?: string;
+			};
+			path: {
+				run_id: string;
+				n: number;
+			};
+			cookie?: never;
+		};
+		requestBody?: {
+			content: {
+				"application/json": components["schemas"]["RejectIn"] | null;
+			};
+		};
+		responses: {
+			/** @description Successful Response */
+			204: {
+				headers: {
+					[name: string]: unknown;
+				};
+				content?: never;
 			};
 			/** @description Validation Error */
 			422: {
@@ -1456,344 +1997,6 @@ export interface operations {
 		requestBody: {
 			content: {
 				"application/json": components["schemas"]["TextIn"];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			204: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content?: never;
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	status_api_status_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Status"];
-				};
-			};
-		};
-	};
-	list_incidents_api_incidents_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Incident"][];
-				};
-			};
-		};
-	};
-	get_incident_api_incidents__incident_id__get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				incident_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Incident"];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	get_responses_api_policy_responses_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Responses"];
-				};
-			};
-		};
-	};
-	set_responses_api_policy_responses_put: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody: {
-			content: {
-				"application/json": components["schemas"]["Responses"];
-			};
-		};
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Responses"];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	fleet_api_fleet_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["FleetSignal"][];
-				};
-			};
-		};
-	};
-	approve_fix_api_incidents__incident_id__fixes__leg__approve_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				incident_id: string;
-				leg: "pressure" | "opportunity" | "rationalization";
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			204: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content?: never;
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	replay_incident_api_incidents__incident_id__replay_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				incident_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Replay"];
-				};
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	eval_reports_api_eval_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["EvalFile"][];
-				};
-			};
-		};
-	};
-	unlock_api_runs__run_id__unlock_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				run_id: string;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			204: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content?: never;
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	list_holds_api_holds_get: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path?: never;
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			200: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["Hold"][];
-				};
-			};
-		};
-	};
-	approve_api_runs__run_id__steps__n__approve_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				run_id: string;
-				n: number;
-			};
-			cookie?: never;
-		};
-		requestBody?: never;
-		responses: {
-			/** @description Successful Response */
-			204: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content?: never;
-			};
-			/** @description Validation Error */
-			422: {
-				headers: {
-					[name: string]: unknown;
-				};
-				content: {
-					"application/json": components["schemas"]["HTTPValidationError"];
-				};
-			};
-		};
-	};
-	reject_api_runs__run_id__steps__n__reject_post: {
-		parameters: {
-			query?: never;
-			header?: never;
-			path: {
-				run_id: string;
-				n: number;
-			};
-			cookie?: never;
-		};
-		requestBody?: {
-			content: {
-				"application/json": components["schemas"]["RejectIn"] | null;
 			};
 		};
 		responses: {

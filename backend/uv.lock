@@ -431,7 +431,6 @@ dependencies = [
     { name = "pypdf" },
     { name = "pyyaml" },
     { name = "sqlglot" },
-    { name = "sse-starlette" },
     { name = "typesafe-sdk" },
     { name = "uvicorn" },
 ]
@@ -459,7 +458,6 @@ requires-dist = [
     { name = "pypdf", specifier = ">=6.20.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "sqlglot", specifier = ">=30.22.0" },
-    { name = "sse-starlette", specifier = ">=3.5.0" },
     { name = "typesafe-sdk", specifier = ">=0.7.4" },
     { name = "uvicorn", specifier = ">=0.54.0" },
 ]

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { EvalFile } from "@/api/types";
+import { day } from "@/lib/format";
 import { TONE } from "@/lib/labels";
-import { day } from "./format";
 
 // « report-detection.json · dev · 2026-10-10 »
 export const source = (f: EvalFile) =>

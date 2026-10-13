@@ -1,7 +1,7 @@
 import type { EvalFile } from "@/api/types";
 import { Check, X } from "@/components/icons";
+import { ms, sample } from "@/lib/format";
 import { HeldChart } from "./charts";
-import { ms, sample } from "./format";
 import type { Detection, Session } from "./read";
 import { Aside, Miss, Panel, type Tile, Tiles } from "./ui";
 

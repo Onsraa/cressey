@@ -4,13 +4,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from cressey.domain.guides import Guide, GuideIncident, WhyAnswer
 from cressey.guide.cache import wrap_all
-from cressey.guide.corpus import DATA, load_corpus
-from cressey.guide.models import Guide, GuideIncident, WhyAnswer
+from cressey.guide.corpus import load_corpus
 from cressey.guide.pipeline import GuidePipeline
 from cressey.guide.retrieve import Retriever
 from cressey.guide.store import GuideStore
-from cressey.settings import Settings
+from cressey.settings import DATA, Settings
 
 router = APIRouter(prefix="/guides", tags=["guides"])
 

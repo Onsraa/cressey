@@ -1,7 +1,7 @@
 import json
 
+from cressey.domain.guides import DraftStep, GuideDraft
 from cressey.guide.eval import evaluate, same_unit
-from cressey.guide.models import DraftStep, GuideDraft
 from cressey.guide.pipeline import GuidePipeline
 from tests.guide.test_pipeline import GOOD, R9, R12, Rer, Retr, Rew, Wri
 

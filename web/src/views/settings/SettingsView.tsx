@@ -6,7 +6,7 @@ import { ResponsesPanel } from "./ResponsesPanel";
 export function SettingsView() {
 	const { runs } = useLive();
 	const run = latestLive(runs);
-	const calls = run?.steps.length ?? 0;
+	const calls = run?.calls ?? 0;
 	// The run's calls come one way: through the MCP proxy, or through the hook.
 	const via =
 		run?.via === "hook" ? `0 MCP, ${calls} hook` : `${calls} MCP, 0 hook`;

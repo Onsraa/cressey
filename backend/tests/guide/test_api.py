@@ -2,11 +2,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from cressey.app import create_app
+from cressey.domain.guides import Guide, GuideDraft, WhyAnswer
 from cressey.guide.api import get_pipeline, get_store
-from cressey.guide.models import Guide, GuideDraft, WhyAnswer
 from cressey.guide.pipeline import GuidePipeline
 from cressey.guide.store import GuideStore
 from cressey.settings import Settings
+from cressey.testing import ADMIN_AUTH
 from tests.guide.test_pipeline import GOOD, R9, Rer, Retr, Rew, Wri
 
 INC = {
@@ -26,7 +27,7 @@ def client(tmp_path, writer=None) -> TestClient:
     store = GuideStore(tmp_path / "g.sqlite")
     app.dependency_overrides[get_pipeline] = lambda: pipe
     app.dependency_overrides[get_store] = lambda: store
-    return TestClient(app)
+    return TestClient(app, headers=ADMIN_AUTH)
 
 
 def test_post_guide_then_get_it(tmp_path):

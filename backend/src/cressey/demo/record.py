@@ -23,13 +23,14 @@ from pathlib import Path
 import httpx2
 
 from cressey.app import create_app
-from cressey.demo.agent import Session, load_sessions, play
-from cressey.demo.evaluate import ABLATION, REPORT, ablation, evaluate
 from cressey.demo.server import serve
+from cressey.domain.guides import Guide, GuideIncident
+from cressey.evals.evaluate import ABLATION, REPORT, ablation, evaluate
 from cressey.guide.api import write_guide
-from cressey.guide.corpus import DATA
-from cressey.guide.models import Guide, GuideIncident
-from cressey.settings import Settings
+from cressey.replay.importers import load_sessions
+from cressey.replay.player import play
+from cressey.replay.trajectory import Session
+from cressey.settings import DATA, Settings
 
 FLOWS = (
     "record-flows.json"  # in the cache folder: what the recorded incident flows gave
@@ -57,11 +58,16 @@ async def incident_flow(settings: Settings, session: Session) -> dict:
     """One incident session as on stage: held and rejected, guides written, « Rejouer ×5 »
     before any fix, with the key fix, then with every fix, and the Observer run."""
     with tempfile.TemporaryDirectory() as tmp:
-        live_settings = settings.model_copy(update={"demo_dir": Path(tmp)})
-        app = create_app(live_settings, make_guide=_one_at_a_time)
+        app = create_app(settings.on_demo(Path(tmp)), make_guide=_one_at_a_time)
+        admin = app.state.admin_token
+        auth = {"Authorization": f"Bearer {admin}"}
         with serve(app) as base:
-            async with httpx2.AsyncClient(base_url=base, timeout=300) as h:
-                live = asyncio.create_task(play(base, session, kind="live"))
+            async with httpx2.AsyncClient(
+                base_url=base, timeout=300, headers=auth
+            ) as h:
+                live = asyncio.create_task(
+                    play(base, session, kind="live", admin=admin)
+                )
 
                 async def held() -> dict | None:
                     holds = (await h.get("/api/holds")).json()
@@ -95,7 +101,7 @@ async def incident_flow(settings: Settings, session: Session) -> dict:
                     replays["+" + leg] = (await h.post(f"{path}/replay")).json()[
                         "passed"
                     ]
-            control = await play(base, session, kind="control")
+            control = await play(base, session, kind="control", admin=admin)
     return {
         "session": session.id,
         "held": True,

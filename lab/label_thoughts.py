@@ -7,9 +7,9 @@ shadow decision, go to a JSONL file. Cressey's code is not changed: the judge is
 to keep the scores that `read_thought` drops below a cut-off.
 
     cd backend
-    uv run --with httpx python ../lab/label_thoughts.py play --out OUT.jsonl --cache DIR \\
+    uv run python ../lab/label_thoughts.py play --out OUT.jsonl --cache DIR \\
         [--mode record|replay-first] [--thresholds FILE.json] [--lab DIR] [--metr FILE]
-    uv run --with httpx python ../lab/label_thoughts.py report OUT1.jsonl [OUT2.jsonl ...]
+    uv run python ../lab/label_thoughts.py report OUT1.jsonl [OUT2.jsonl ...]
 
 Sources (§10): the 4 lab transcripts (git-ignored, --lab), METR's quotes (--metr), the 22
 S9 runs and the shipped sessions. Benign runs give the false-positive side. Outputs hold the
@@ -23,21 +23,23 @@ import os
 import runpy
 import statistics
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
-import httpx
-import yaml
+import httpx2
 
 os.environ["CRESSEY_DECOYS"] = "{}"  # the case file is measured on its own, no trap key
 
 from cressey.app import create_app
-from cressey.core import case as case_mod
-from cressey.core.judge import Answers, JevJudge, Judge, Question, yes
-from cressey.core.thoughts import QUESTIONS
+from cressey.domain.runs import Mandate
+from cressey.engine.case import case as case_mod
+from cressey.engine.case.thoughts import QUESTIONS
+from cressey.judge import Answers, JevJudge, Judge, Question, yes
+from cressey.replay import player
+from cressey.replay.importers import load_sessions, load_transcript
+from cressey.replay.trajectory import Call, Say, Trajectory
 from cressey.settings import Settings
 
-HOOK = "/hook/claude"
 REPO = Path(__file__).resolve().parents[1]
 # The indicators that can open a hold or an alert (§7). Counters only close a thread.
 CALIBRATED = ["P1", "O1", "O2", "O3", "R", "C1"]
@@ -52,16 +54,15 @@ LAB_TASK = (
 
 @dataclass
 class Source:
-    id: str
     group: str  # lab, metr, s9-dev, s9-heldout, session
     incident: bool
-    task: str
-    mandate: dict
-    # ("say", text) or ("call", tool, input, result, failed)
-    events: list[tuple] = field(default_factory=list)
-    report: str = "(no final message)"
+    trajectory: Trajectory
     harm: int | None = None  # the harmful call's number, when known
     pivot: int | None = None
+
+    @property
+    def id(self) -> str:
+        return self.trajectory.id
 
 
 def lab_sources(lab: Path) -> list[Source]:
@@ -72,75 +73,40 @@ def lab_sources(lab: Path) -> list[Source]:
         "20261011-011950-1",
         "20261011-023759-1",
     ):
-        events, results, report = [], {}, "(no final message)"
-        for line in (lab / stamp / "transcript.jsonl").read_text().splitlines():
-            try:
-                e = json.loads(line)
-            except ValueError:
-                continue
-            if e.get("type") == "result":
-                report = e.get("result") or report
-            for b in (e.get("message") or {}).get("content") or []:
-                if not isinstance(b, dict):
-                    continue
-                if e.get("type") == "user" and b.get("type") == "tool_result":
-                    c = b.get("content")
-                    text = (
-                        c
-                        if isinstance(c, str)
-                        else "\n".join(
-                            x.get("text", "") for x in c or [] if isinstance(x, dict)
-                        )
-                    )
-                    results[b.get("tool_use_id")] = (text, bool(b.get("is_error")))
-                elif (
-                    e.get("type") == "assistant"
-                    and b.get("type") == "text"
-                    and b["text"].strip()
-                ):
-                    events.append(("say", b["text"].strip()))
-                elif e.get("type") == "assistant" and b.get("type") == "tool_use":
-                    events.append(
-                        ("call", b["name"], b.get("input") or {}, b.get("id"))
-                    )
-        calls, harm = [], None
-        for ev in events:
-            if ev[0] == "call":
-                text, failed = results.get(ev[3], ("", False))
-                calls.append(("call", ev[1], ev[2], text, failed))
-                n = sum(1 for x in calls if x[0] == "call")
-                if harm is None and "serviceDelete" in json.dumps(ev[2]):
-                    harm = n
-            else:
-                calls.append(ev)
-        incident = stamp == "20261011-011950-1"
-        out.append(
-            Source(
-                f"lab-{stamp}",
-                "lab",
-                incident,
-                LAB_TASK,
-                {"may_read_secrets": ["RAILWAY_TOKEN"]},
-                calls,
-                report,
-                harm if incident else None,
-            )
+        mandate = Mandate(may_read_secrets=["RAILWAY_TOKEN"])
+        t = load_transcript(lab / stamp / "transcript.jsonl", LAB_TASK, mandate)
+        # Every run's file is transcript.jsonl: the run is its folder.
+        t = t.model_copy(update={"id": f"lab-{stamp}"})
+        calls = [s for s in t.steps if isinstance(s, Call)]
+        harm = next(
+            (
+                n
+                for n, c in enumerate(calls, 1)
+                if "serviceDelete" in json.dumps(c.args)
+            ),
+            None,
         )
+        incident = stamp == "20261011-011950-1"
+        named = t.model_copy(update={"id": f"lab-{stamp}"})
+        out.append(Source("lab", incident, named, harm if incident else None))
     return out
 
 
 def metr_source(path: Path) -> Source:
     g = runpy.run_path(str(path))
-    events, n, harm = [], 0, None
+    steps: list[Say | Call] = []
+    n, harm = 0, None
     for ev in g["TIMELINE"]:
         if ev[0] == "say":
-            events.append(("say", f"{ev[1]}: {ev[2]}"))
+            steps.append(Say(say=f"{ev[1]}: {ev[2]}"))
         else:
             n += 1
-            events.append(("call", ev[1], ev[2], ev[3] or "", False))
+            steps.append(Call(call=ev[1], args=ev[2], returned=ev[3] or ""))
             if ev[1] == "Edit":
                 harm = n
-    return Source("metr-hf", "metr", True, g["TASK"], g["MANDATE"], events, harm=harm)
+    mandate = Mandate.model_validate(g["MANDATE"])
+    t = Trajectory(id="metr-hf", task=g["TASK"], mandate=mandate, steps=steps)
+    return Source("metr", True, t, harm=harm)
 
 
 def _s9_call(tool: str, args: dict) -> tuple[str, dict]:
@@ -179,29 +145,35 @@ def s9_sources() -> list[Source]:
                     "Way out: " + m.get("way_out", ""),
                 ]
             )
-            mandate = {
-                "may_destroy": m.get("may_destroy", []),
-                "may_send_to": m.get("allowed_hosts", []),
-            }
-            events, report = [], "(no final message)"
+            mandate = Mandate(
+                may_destroy=m.get("may_destroy", []),
+                may_send_to=m.get("allowed_hosts", []),
+            )
+            steps: list[Say | Call] = []
+            report = "(no final message)"
             for s in r["steps"]:
                 if s.get("reasoning"):
-                    events.append(("say", s["reasoning"]))
+                    steps.append(Say(say=s["reasoning"]))
                 if s["tool"] == "report":
                     report = (s.get("args") or {}).get("message", report)
                     continue
                 tool, args = _s9_call(s["tool"], s.get("args") or {})
-                events.append(("call", tool, args, str(s.get("result", "")), False))
+                steps.append(
+                    Call(call=tool, args=args, returned=str(s.get("result", "")))
+                )
             t = r["truth"]
+            played = Trajectory(
+                id=f"s9-{r['id']}",
+                task=task,
+                mandate=mandate,
+                steps=steps,
+                report=report,
+            )
             out.append(
                 Source(
-                    f"s9-{r['id']}",
                     f"s9-{group}",
                     bool(t["incident"]),
-                    task,
-                    mandate,
-                    events,
-                    report,
+                    played,
                     t.get("harm_step"),
                     t.get("pivot"),
                 )
@@ -211,25 +183,14 @@ def s9_sources() -> list[Source]:
 
 def session_sources() -> list[Source]:
     out = []
-    for p in sorted((REPO / "backend/data/sessions").glob("*.yaml")):
-        s = yaml.safe_load(p.read_text())
-        events = []
-        for st in s["steps"]:
-            if st.get("say"):
-                events.append(("say", st["say"]))
-            if st.get("call"):
-                events.append(("call", st["call"], st.get("args") or {}, "", False))
-        out.append(
-            Source(
-                f"session-{s['id']}",
-                "session",
-                s["expect"] == "held",
-                s["task"],
-                s.get("mandate") or {},
-                events,
-                s.get("report", "(no final message)"),
-            )
-        )
+    for s in load_sessions():
+        # As Claude Code would play it: every word shown, each call returning nothing.
+        steps = [
+            c.model_copy(update={"returned": ""}) if isinstance(c, Call) else c
+            for c in s.steps
+        ]
+        update = {"id": f"session-{s.id}", "steps": steps, "visibility": "messages"}
+        out.append(Source("session", s.expect == "held", s.model_copy(update=update)))
     return out
 
 
@@ -260,62 +221,28 @@ async def _idle() -> None:
         await asyncio.wait(pending, timeout=180)
 
 
-async def play(src: Source, client: httpx.AsyncClient, app, scores: list[dict]) -> dict:
-    r = (
-        await client.post(
-            "/api/runs",
-            json={
-                "task": src.task,
-                "mandate": src.mandate,
-                "visibility": "messages",
-                "kind": "control",
-            },
-        )
-    ).json()
-    rid, h = r["id"], {"Authorization": f"Bearer {r['key']}"}
+async def play(src: Source, app, scores: list[dict]) -> dict:
     mark = len(scores)
-    n = 0
-    for i, ev in enumerate(src.events):
-        if ev[0] == "say":
-            await client.post(
-                HOOK,
-                headers=h,
-                json={
-                    "hook_event_name": "MessageDisplay",
-                    "message_id": f"m{i}",
-                    "delta": ev[1],
-                    "final": True,
-                },
-            )
-            continue
-        _, tool, args, result, failed = ev
-        n += 1
-        call = {"tool_name": tool, "tool_input": args, "tool_use_id": f"c{n}"}
-        await client.post(
-            HOOK, headers=h, json={"hook_event_name": "PreToolUse", **call}
+
+    async def last_thoughts(run_id: str) -> None:
+        """The thoughts after the last call: no call follows to read them, read them here."""
+        await _idle()
+        run = app.state.runs.get(run_id)
+        await case_mod.catch_up(
+            run, len(run.steps) + 1, app.state.judge, app.state.thresholds
         )
-        done = {"error": result} if failed else {"tool_response": result}
-        await client.post(
-            HOOK,
-            headers=h,
-            json={
-                "hook_event_name": "PostToolUseFailure" if failed else "PostToolUse",
-                **call,
-                **done,
-            },
-        )
-    await _idle()
-    run = app.state.runs.get(rid)
-    # The thoughts after the last call: no call follows to read them, read them here.
-    await case_mod._catch_up(
-        run, len(run.steps) + 1, app.state.judge, app.state.thresholds
-    )
-    await client.post(
-        HOOK,
-        headers=h,
-        json={"hook_event_name": "Stop", "last_assistant_message": src.report},
+
+    played = await player.play(
+        "http://cressey",
+        src.trajectory,
+        "control",
+        admin=app.state.admin_token,
+        surface="hook",
+        transport=httpx2.ASGITransport(app=app),
+        before_report=last_thoughts,
     )
     await _idle()
+    run = app.state.runs.get(played.run_id)
     # Each thought's score: the max over the pieces it was read in, as read_thought takes it.
     asked = scores[mark:]
     thoughts = []
@@ -353,12 +280,11 @@ async def play(src: Source, client: httpx.AsyncClient, app, scores: list[dict]) 
         "pivot": src.pivot,
         "thoughts": thoughts,
         "steps": steps,
-        "notes": [x.model_dump() for x in run.case.notes],
     }
 
 
 async def run_all(a) -> None:
-    s = Settings(model_mode=a.mode, cache_dir=Path(a.cache))
+    s = Settings(model_mode=a.mode, cache_dir=Path(a.cache), state_dir=None)
     scores: list[dict] = []
     judge = Recording(JevJudge.from_settings(s), scores)
     app = create_app(s, judge=judge)
@@ -370,26 +296,22 @@ async def run_all(a) -> None:
         *s9_sources(),
         *session_sources(),
     ]
-    transport = httpx.ASGITransport(app=app)
     Path(a.out).write_text("")
-    async with httpx.AsyncClient(
-        transport=transport, base_url="http://cressey", timeout=600
-    ) as client:
-        for src in sources:
-            if a.only and not src.id.startswith(a.only):
-                continue
-            row = await play(src, client, app, scores)
-            _append(a.out, row)
-            holds = [
-                x["n"]
-                for x in row["steps"]
-                if x["shadow"] and x["shadow"]["decision"] == "hold"
-            ]
-            unread = sum(1 for t in row["thoughts"] if t["p"] is None)
-            print(
-                f"{src.id:45} thoughts {len(row['thoughts']):3}  unread {unread:2}  shadow holds {holds[:6]}",
-                flush=True,
-            )
+    for src in sources:
+        if a.only and not src.id.startswith(a.only):
+            continue
+        row = await play(src, app, scores)
+        _append(a.out, row)
+        holds = [
+            x["n"]
+            for x in row["steps"]
+            if x["shadow"] and x["shadow"]["decision"] == "hold"
+        ]
+        unread = sum(1 for t in row["thoughts"] if t["p"] is None)
+        print(
+            f"{src.id:45} thoughts {len(row['thoughts']):3}  unread {unread:2}  shadow holds {holds[:6]}",
+            flush=True,
+        )
 
 
 def _append(path: str, row: dict) -> None:

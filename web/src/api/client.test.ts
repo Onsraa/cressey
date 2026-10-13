@@ -1,9 +1,10 @@
 import { afterEach, expect, mock, test } from "bun:test";
-import { ApiError, apiGet, apiPost } from "./client";
+import { ApiError, apiGet, apiPost, setAdminToken } from "./client";
 
 const realFetch = globalThis.fetch;
 afterEach(() => {
 	globalThis.fetch = realFetch;
+	setAdminToken("");
 });
 
 const respond = (status: number, body: unknown) => {
@@ -32,4 +33,21 @@ test("apiPost sends JSON to /api", async () => {
 	expect(url).toBe("/api/guides");
 	expect(init.method).toBe("POST");
 	expect(init.body).toBe('{"a":1}');
+});
+
+test("requests carry the admin key once it is set", async () => {
+	respond(200, []);
+	setAdminToken("k-123");
+	await apiGet("/runs");
+	const [, init] = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock
+		.calls[0];
+	expect(new Headers(init.headers).get("Authorization")).toBe("Bearer k-123");
+});
+
+test("without a key no Authorization header is sent", async () => {
+	respond(200, []);
+	await apiGet("/runs");
+	const [, init] = (globalThis.fetch as unknown as ReturnType<typeof mock>).mock
+		.calls[0];
+	expect(new Headers(init.headers).has("Authorization")).toBe(false);
 });

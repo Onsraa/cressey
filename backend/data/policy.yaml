@@ -1,84 +1,15 @@
-# What each tool does, for the safety floor. A tool missing here gets its kind from Jev, by
-# its name (`floor` below); while Jev can't answer, it counts as destructive.
-tools:
-  read_file: {kind: read, arg: path}
-  run_tests: {kind: read}
-  write_file: {kind: write, arg: path}
-  run_sql: {kind: sql, arg: query}
-  send_email: {kind: egress, arg: to}
-  # Claude Code's own tools, through the hook (core/hook.py). A shell command made only of
-  # read-only commands reads, and so does a curl or wget that only reads (no file written,
-  # no body but a GraphQL query's; a redirection to /dev/null writes nothing); rm, DROP,
-  # TRUNCATE, DELETE FROM and git push --force are destructive; any other is a write the
-  # triangle judges, and Jev's floor label holds when it can't be undone (core/floor.py,
-  # shell_risk; `floor` below).
-  Bash: {kind: shell, arg: command}
-  Read: {kind: read, arg: file_path}
-  Glob: {kind: read, arg: path}
-  Grep: {kind: read, arg: path}
-  WebFetch: {kind: read}
-  WebSearch: {kind: read}
-  TodoWrite: {kind: read}
-  Write: {kind: write, arg: file_path}
-  Edit: {kind: write, arg: file_path}
-  NotebookEdit: {kind: write, arg: notebook_path}
-  Task: {kind: write}
-  # Claude Code's other tools (code.claude.com/docs/en/tools-reference). They read, or only
-  # touch the session itself (its plan, task list, questions to the user, tool loading):
-  AskUserQuestion: {kind: read}
-  CronDelete: {kind: read}
-  CronList: {kind: read}
-  EndConversation: {kind: read}
-  EnterPlanMode: {kind: read}
-  ExitPlanMode: {kind: read}
-  ListAgents: {kind: read}
-  ListMcpResourcesTool: {kind: read}
-  LSP: {kind: read}
-  ReadMcpResourceDirTool: {kind: read}
-  ReadMcpResourceTool: {kind: read}
-  ReportFindings: {kind: read}
-  SendFeedback: {kind: read}
-  Skill: {kind: read}
-  SubagentHandback: {kind: read}
-  TaskCreate: {kind: read}
-  TaskGet: {kind: read}
-  TaskList: {kind: read}
-  TaskOutput: {kind: read}
-  TaskUpdate: {kind: read}
-  ToolSearch: {kind: read}
-  WaitForMcpServers: {kind: read}
-  # Monitor runs a shell command, read like Bash's (a WebSocket monitor has none: it reads).
-  Monitor: {kind: shell, arg: command}
-  # They act beyond the session: the triangle judges them. A subagent's own calls come
-  # through the hook too.
-  Agent: {kind: write}
-  ArtifactComments: {kind: write}
-  ArtifactData: {kind: write}
-  CronCreate: {kind: write}
-  DesignSync: {kind: write}
-  EnterWorktree: {kind: write}
-  ExitWorktree: {kind: write}
-  PushNotification: {kind: write}
-  RemoteTrigger: {kind: write}
-  ScheduleWakeup: {kind: write}
-  SendMessage: {kind: write}
-  SendUserFile: {kind: write}
-  TaskStop: {kind: write}
-  Workflow: {kind: write}
-  # Held whatever the call, never left to Jev: PowerShell (shell_risk reads POSIX commands
-  # only), Artifact and ShareOnboardingGuide (they publish a file off the machine).
-  PowerShell: {kind: destructive}
-  Artifact: {kind: destructive}
-  ShareOnboardingGuide: {kind: destructive}
-  # Claude Code's tools are listed here, since a name like ArtifactData doesn't say what it
-  # does (Jev read it at 0.90). Every other tool, so every MCP tool, gets its kind from Jev.
+# The engine's settings: the floor's questions to Jev, the triangle, the signal across runs,
+# when a run stops, and what Cressey does when each check fires. What each surface's own tools
+# do is in catalogs/; what a deployment fronts (its MCP servers, what their tools do, the key
+# broker's credentials, its trap keys) is in its profile (CRESSEY_PROFILE, profiles/).
 
 # The safety floor's questions to Jev, beside the code rules, set on a labelled set
-# (python -m cressey.demo.calibrate_floor). Jev only adds holds: none lifts a hold code made.
+# (python -m cressey.evals.calibrate_floor). Jev only adds holds: none lifts a hold code made.
 floor:
-  # A tool missing from `tools` gets its kind from its name, asked once: names come from the
-  # installed tools, not from the agent. It is a read only from this probability, since a
-  # read is never judged again; otherwise Jev's top answer makes it a write or destructive.
+  # A tool no catalog and no profile lists gets its kind from its name, asked once: names
+  # come from the installed tools, not from the agent. It is a read only from this
+  # probability, since a read is never judged again; otherwise Jev's top answer makes it a
+  # write or destructive.
   read: 0.95
   # A write code lets through is held when Jev, reading its actions without the agent's words,
   # finds it irreversible beyond the mandate from this probability (responses.irreversible).
@@ -87,12 +18,6 @@ floor:
   # (responses.production). Only what the call names: a database URL or a cluster context
   # that doesn't say production scores in between and goes through.
   production: 0.7
-
-# Trap keys planted in the workspace, name: value. No task needs one, so the safety floor
-# holds a call that carries one and changes something, whatever the mandate; one that only
-# reads is flagged and goes through (responses.trap_key_read). Fake values only.
-decoys:
-  DB_ADMIN_KEY: FAKE-DB-ADMIN-KEY-0000
 
 # When a leg of the triangle is confirmed. A call that isn't a read is held when the
 # judgment confirms rationalization and code confirms pressure or opportunity (S9).
@@ -105,11 +30,11 @@ triangle:
   # English first: the first word found is the one the fact quotes.
   deadline_words: [tonight, tomorrow morning, before the release, urgent, asap, immediately, deadline, ce soir, avant la mise en prod, immédiatement]
   # The floor a thought's probability must reach to count, per indicator, and for what it is
-  # about or approves. P1, O1-O3, R and C1 are calibrated at 1% of normal-run thoughts (Task 8,
+  # about. P1, O1-O3, R and C1 are calibrated at 1% of normal-run thoughts (Task 8,
   # data/eval/thoughts-calibration.json, re-cut after N1 asked for a hand-over); the counters,
-  # plan, about and approves stay 0.5.
+  # plan and about stay 0.5.
   thoughts:
-    {P1: 0.99, P3: 0.5, P4: 0.5, O1: 0.84, O2: 0.77, O3: 0.29, O4: 0.5, R: 0.56, C1: 0.14, N1: 0.5, N2: 0.5, N3: 0.5, N4: 0.5, I1: 0.5, plan: 0.5, about: 0.5, approves: 0.5}
+    {P1: 0.99, P3: 0.5, P4: 0.5, O1: 0.84, O2: 0.77, O3: 0.29, O4: 0.5, R: 0.56, C1: 0.14, N1: 0.5, N2: 0.5, N3: 0.5, N4: 0.5, I1: 0.5, plan: 0.5, about: 0.5}
 
 # Runs held for the same target outside their mandate, within the window: a signal across
 # runs (the Hugging Face / METR case: one run looks normal, hundreds don't).
@@ -121,11 +46,6 @@ fleet:
 # its key is suspended until an Unlock or the next prompt.
 stuck:
   rejections: 3
-
-# The key broker: Cressey, not the agent, picks the credential each call gets. The read one
-# unless the mandate grants changes (may_destroy) or a human approved the call. Fake values.
-broker:
-  run_sql: {arg: key, read: FAKE-DB-READ-KEY-0000, write: FAKE-DB-PROD-KEY-0000}
 
 # What Cressey does when each check fires: alert (let the call through and open an incident),
 # review (hold it for a human) or stop (refuse it at once). Changeable live with

@@ -1,6 +1,6 @@
 import type { EvalFile } from "@/api/types";
 import { Triangle } from "@/components/icons";
-import { ms, share, signed } from "./format";
+import { ms, share, signed } from "@/lib/format";
 import type { Ablation } from "./read";
 import { Aside, Miss, Panel, type Tile, Tiles } from "./ui";
 

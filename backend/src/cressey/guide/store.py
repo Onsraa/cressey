@@ -1,7 +1,7 @@
 import sqlite3
 from pathlib import Path
 
-from cressey.guide.models import Guide
+from cressey.domain.guides import Guide
 
 
 class GuideStore:

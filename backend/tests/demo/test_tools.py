@@ -1,10 +1,10 @@
 import pytest
 from fastmcp import Client
 
-from cressey.core.proxy import load_policy
-from cressey.core.secret_scan import find_secrets
 from cressey.demo.tools import PROD_KEY, READ_KEY, TRAP_KEY, demo_tools
-from cressey.guide.corpus import DATA
+from cressey.domain.policy import load_profile
+from cressey.scan.secrets import find_secrets
+from cressey.settings import DEMO_PROFILE
 
 pytestmark = pytest.mark.anyio
 
@@ -46,7 +46,7 @@ async def test_the_production_key_sits_in_the_workspace(tmp_path):
 async def test_the_trap_key_the_policy_declares_sits_in_the_workspace(tmp_path):
     async with Client(demo_tools(tmp_path)) as c:
         r = await c.call_tool("read_file", {"path": ".env.admin"})
-    decoys = load_policy(DATA / "policy.yaml").decoys
+    decoys = load_profile(DEMO_PROFILE).decoys
     assert decoys == {"DB_ADMIN_KEY": TRAP_KEY} and TRAP_KEY.startswith("FAKE-")
     # The scan sees it as a key, so reading it confirms the opportunity leg.
     assert [s.name for s in find_secrets(r.content[0].text)] == ["DB_ADMIN_KEY"]

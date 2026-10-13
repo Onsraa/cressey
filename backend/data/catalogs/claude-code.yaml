@@ -1,0 +1,73 @@
+# What Claude Code's own tools do, for the safety floor: the hook's catalog
+# (adapters/claude_code.py). Only the hook's calls read it: a tool of the MCP gateway with the
+# same name is the profile's. A tool the hook's catalogs don't list gets its kind from Jev, by
+# its name (`floor` in policy.yaml); while Jev can't answer, it counts as destructive.
+surface: hook
+tools:
+  # A shell command made only of read-only commands reads, and so does a curl or wget that
+  # only reads (no file written, no body but a GraphQL query's; a redirection to /dev/null
+  # writes nothing); rm, DROP, TRUNCATE, DELETE FROM and git push --force are destructive;
+  # any other is a write the triangle judges, and Jev's floor label holds when it can't be
+  # undone (engine/floor/shell.py, shell_risk; `floor` in policy.yaml).
+  Bash: {kind: shell, arg: command}
+  Read: {kind: read, arg: file_path}
+  Glob: {kind: read, arg: path}
+  Grep: {kind: read, arg: path}
+  WebFetch: {kind: read}
+  WebSearch: {kind: read}
+  TodoWrite: {kind: read}
+  # They edit the file at that path, which the floor checks against the mandate (protected,
+  # frozen).
+  Write: {kind: edit, arg: file_path}
+  Edit: {kind: edit, arg: file_path}
+  NotebookEdit: {kind: edit, arg: notebook_path}
+  Task: {kind: write}
+  # Claude Code's other tools (code.claude.com/docs/en/tools-reference). They read, or only
+  # touch the session itself (its plan, task list, questions to the user, tool loading):
+  AskUserQuestion: {kind: read}
+  CronDelete: {kind: read}
+  CronList: {kind: read}
+  EndConversation: {kind: read}
+  EnterPlanMode: {kind: read}
+  ExitPlanMode: {kind: read}
+  ListAgents: {kind: read}
+  ListMcpResourcesTool: {kind: read}
+  LSP: {kind: read}
+  ReadMcpResourceDirTool: {kind: read}
+  ReadMcpResourceTool: {kind: read}
+  ReportFindings: {kind: read}
+  SendFeedback: {kind: read}
+  Skill: {kind: read}
+  SubagentHandback: {kind: read}
+  TaskCreate: {kind: read}
+  TaskGet: {kind: read}
+  TaskList: {kind: read}
+  TaskOutput: {kind: read}
+  TaskUpdate: {kind: read}
+  ToolSearch: {kind: read}
+  WaitForMcpServers: {kind: read}
+  # Monitor runs a shell command, read like Bash's (a WebSocket monitor has none: it reads).
+  Monitor: {kind: shell, arg: command}
+  # They act beyond the session: the triangle judges them. A subagent's own calls come
+  # through the hook too.
+  Agent: {kind: write}
+  ArtifactComments: {kind: write}
+  ArtifactData: {kind: write}
+  CronCreate: {kind: write}
+  DesignSync: {kind: write}
+  EnterWorktree: {kind: write}
+  ExitWorktree: {kind: write}
+  PushNotification: {kind: write}
+  RemoteTrigger: {kind: write}
+  ScheduleWakeup: {kind: write}
+  SendMessage: {kind: write}
+  SendUserFile: {kind: write}
+  TaskStop: {kind: write}
+  Workflow: {kind: write}
+  # Held whatever the call, never left to Jev: PowerShell (shell_risk reads POSIX commands
+  # only), Artifact and ShareOnboardingGuide (they publish a file off the machine).
+  PowerShell: {kind: destructive}
+  Artifact: {kind: destructive}
+  ShareOnboardingGuide: {kind: destructive}
+  # Each is listed, since a name like ArtifactData doesn't say what it does (Jev read it at
+  # 0.90).

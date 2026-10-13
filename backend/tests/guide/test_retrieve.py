@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from cressey.guide.clients import ModelUnavailable
-from cressey.guide.models import Unit
+from cressey.domain.guides import Unit
 from cressey.guide.retrieve import Retriever, rrf_fuse
+from cressey.llm.clients import ModelUnavailable
 
 
 def _u(i: str, text: str) -> Unit:

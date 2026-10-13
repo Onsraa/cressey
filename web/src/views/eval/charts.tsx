@@ -1,26 +1,25 @@
 import type { ChartConfiguration, ChartType, Plugin } from "chart.js";
 import { useMemo } from "react";
 import { chartRef } from "@/lib/chart";
-import { num } from "./format";
+import { num } from "@/lib/format";
+import { inkColor } from "@/lib/utils";
 import type { JudgedSet } from "./read";
-
-const INK = "#1E1E1E";
 
 // The design's hatch: the normal sessions' bar, a diagonal every 6 px.
 function hatch(): CanvasPattern | string {
 	const c = document.createElement("canvas");
 	c.width = c.height = 6;
 	const x = c.getContext("2d");
-	if (!x) return INK;
+	if (!x) return inkColor();
 	x.fillStyle = "#FEFEFE";
 	x.fillRect(0, 0, 6, 6);
-	x.fillStyle = INK;
+	x.fillStyle = inkColor();
 	for (let i = 0; i < 6; i++) x.fillRect(i, 5 - i, 1, 1);
-	return x.createPattern(c, "repeat") ?? INK;
+	return x.createPattern(c, "repeat") ?? inkColor();
 }
 
 const axes = (pct: boolean) => ({
-	x: { grid: { display: false }, border: { color: INK } },
+	x: { grid: { display: false }, border: { color: inkColor() } },
 	y: {
 		min: 0,
 		max: pct ? 100 : 1,
@@ -29,7 +28,7 @@ const axes = (pct: boolean) => ({
 			callback: (v: string | number) => (pct ? `${v} %` : v),
 		},
 		grid: { color: "#EDEDEB" },
-		border: { color: INK },
+		border: { color: inkColor() },
 	},
 });
 
@@ -39,7 +38,7 @@ const valTop = (label: (i: number) => string): Plugin<"bar"> => ({
 	afterDatasetsDraw: (ch) => {
 		const k = ch.ctx;
 		k.save();
-		k.fillStyle = INK;
+		k.fillStyle = inkColor();
 		k.font = "19px VT323, monospace";
 		k.textAlign = "center";
 		k.textBaseline = "bottom";
@@ -88,8 +87,8 @@ export function HeldChart({
 						{
 							label: "held",
 							data: nn.map(([k, n]) => (n ? (k / n) * 100 : 0)),
-							backgroundColor: [INK, hatch()],
-							borderColor: INK,
+							backgroundColor: [inkColor(), hatch()],
+							borderColor: inkColor(),
 							borderWidth: 1.2,
 							barPercentage: 0.6,
 							categoryPercentage: 0.7,
@@ -134,8 +133,8 @@ export function HitChart({
 						{
 							label: "hit@3",
 							data: hits.map((h) => h.v),
-							backgroundColor: ["#A3A3A0", "#5C5C5A", INK],
-							borderColor: INK,
+							backgroundColor: ["#A3A3A0", "#5C5C5A", inkColor()],
+							borderColor: inkColor(),
 							borderWidth: 1.2,
 							barPercentage: 0.5,
 						},
@@ -192,7 +191,7 @@ export function BandChart({
 						{
 							label: "harmful (yes)",
 							data: [...lane(write, 1, "yes"), ...lane(report, 0, "yes")],
-							backgroundColor: INK,
+							backgroundColor: inkColor(),
 							pointStyle: "rect",
 							pointRadius: 4,
 							pointHoverRadius: 6,
@@ -219,7 +218,7 @@ export function BandChart({
 							min: 0,
 							max: 1,
 							grid: { color: "#EDEDEB" },
-							border: { color: INK },
+							border: { color: inkColor() },
 							ticks: { stepSize: 0.25 },
 							title: { display: true, text: "decision score" },
 						},
@@ -228,7 +227,7 @@ export function BandChart({
 							min: -0.6,
 							max: 1.6,
 							grid: { display: false },
-							border: { color: INK },
+							border: { color: inkColor() },
 							ticks: {
 								stepSize: 1,
 								callback: (v) =>

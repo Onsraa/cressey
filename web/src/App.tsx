@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { adminToken, setAdminToken } from "@/api/client";
 import { LiveProvider, shownRun, useLive, type View } from "@/api/live";
 import type { FleetSignal } from "@/api/types";
 import {
@@ -51,7 +52,7 @@ export default function App() {
 function Shell() {
 	useTooltips();
 	usePopovers();
-	const { view, go, holds, now, toggleFocus } = useLive();
+	const { view, go, holds, now, toggleFocus, locked } = useLive();
 	const [collapsed, setCollapsed] = useState(() => window.innerWidth < 1180);
 	const main = useRef<HTMLElement>(null);
 	const hold = holds[0];
@@ -90,6 +91,8 @@ function Shell() {
 		document.title = title;
 	}, [title]);
 
+	if (locked) return <AdminGate />;
+
 	return (
 		<div className="flex h-screen overflow-hidden bg-paper font-sans text-ink">
 			<Sidebar collapsed={collapsed} toggle={() => setCollapsed((c) => !c)} />
@@ -104,6 +107,76 @@ function Shell() {
 					{view === "connect" && <SettingsView />}
 				</main>
 			</div>
+		</div>
+	);
+}
+
+// The logo: the deck's pixel triangle (deck/index.html .mark), favicon too.
+function Logo() {
+	return (
+		<svg
+			viewBox="0 0 11 10"
+			width={22}
+			height={20}
+			aria-hidden="true"
+			className="flex-none"
+		>
+			<path
+				d="M5 0h1v1h1v2h1v2h1v2h1v3H0V7h1V5h1V3h1V1h1V0z M5 3v1H4v2H3v2h5V6H7V4H6V3z"
+				fill="currentColor"
+				fillRule="evenodd"
+			/>
+		</svg>
+	);
+}
+
+// The dashboard decides holds and changes the policy: it needs the control plane's key,
+// which agents never hold. ./connect.sh puts it in the repo's .env and prints it.
+function AdminGate() {
+	const { refresh } = useLive();
+	const [token, setToken] = useState("");
+	const refused = adminToken() !== "";
+	return (
+		<div className="flex h-screen items-center justify-center bg-paper font-sans text-ink">
+			<form
+				className="flex w-[400px] flex-col gap-3.5 border-[1.2px] border-ink bg-surface p-5"
+				onSubmit={(e) => {
+					e.preventDefault();
+					setAdminToken(token.trim());
+					refresh();
+				}}
+			>
+				<div className="flex items-center gap-2.5">
+					<Logo />
+					<span className="font-semibold text-[19px] leading-none tracking-[-0.03em]">
+						Cressey
+					</span>
+				</div>
+				<p className="text-pretty text-[13px] leading-normal">
+					{refused
+						? "Cressey refused this admin key."
+						: "The dashboard needs the admin key."}{" "}
+					It is <code className="font-mono">CRESSEY_ADMIN_TOKEN</code> in the
+					repo's .env, printed by ./connect.sh. Your agents never hold it.
+				</p>
+				<div className="flex border-[1.2px] border-ink">
+					<input
+						type="password"
+						aria-label="Admin key"
+						autoComplete="off"
+						value={token}
+						onChange={(e) => setToken(e.target.value)}
+						className="h-[34px] min-w-0 flex-1 bg-surface px-2.5 font-mono text-[13px] -outline-offset-2"
+					/>
+					<button
+						type="submit"
+						disabled={!token.trim()}
+						className="press inline-flex items-center whitespace-nowrap border-ink border-l-[1.2px] bg-ink px-[11px] font-medium text-[13px] text-surface hover:bg-[#3a3a38] disabled:opacity-45"
+					>
+						Unlock
+					</button>
+				</div>
+			</form>
 		</div>
 	);
 }
@@ -170,20 +243,7 @@ function Sidebar({
 			style={{ width: open ? 224 : 60 }}
 		>
 			<div className="flex h-16 flex-none items-center gap-2.5 overflow-hidden whitespace-nowrap border-line border-b px-[19px]">
-				{/* The logo: the deck's pixel triangle (deck/index.html .mark), favicon too. */}
-				<svg
-					viewBox="0 0 11 10"
-					width={22}
-					height={20}
-					aria-hidden="true"
-					className="flex-none"
-				>
-					<path
-						d="M5 0h1v1h1v2h1v2h1v2h1v3H0V7h1V5h1V3h1V1h1V0z M5 3v1H4v2H3v2h5V6H7V4H6V3z"
-						fill="currentColor"
-						fillRule="evenodd"
-					/>
-				</svg>
+				<Logo />
 				{open && (
 					<span className="font-semibold text-[19px] leading-none tracking-[-0.03em]">
 						Cressey
