@@ -19,6 +19,7 @@ from cressey.engine.reading import (
 )
 from cressey.engine.triangle import judgment_state
 from cressey.judge import Answer, Answers, Judge, top, yes
+from cressey.scan.secrets import redact
 
 # Asked once for each tool the policy doesn't list, on its name alone: names come from the
 # installed tools, never from the agent, so no call can argue a tool into a read.
@@ -82,12 +83,13 @@ async def floor_labels(
     NotRecorded on a replay with no recorded answer."""
     shown = await redacted_off_loop(run, steps_before(run, call.n)[-1:])
     views = [call]
-    args = json.loads(call.args) if words else {}
-    if any(w in args for w in words):
-        act = {k: v for k, v in args.items() if k not in words}
-        views.append(
-            call.model_copy(update={"args": json.dumps(act, ensure_ascii=False)})
-        )
+    # From the call's own arguments: what is shown is redacted, and redaction can cut the
+    # JSON it was dumped from (a secret's value running into its closing quote).
+    act = {k: v for k, v in call.raw_args.items() if k not in words}
+    if len(act) < len(call.raw_args):
+        dumped = json.dumps(act, ensure_ascii=False)
+        args = await asyncio.to_thread(redact, dumped, dict(run.known))
+        views.append(call.model_copy(update={"args": args}))
     got = await asyncio.gather(
         *(
             max_over_parts(
