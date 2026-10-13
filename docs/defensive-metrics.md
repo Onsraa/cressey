@@ -18,12 +18,12 @@ These figures are our assumptions, not data. Each one needs the timed test above
 | Step per held incident | Without Cressey (assumed) | With Cressey (assumed) | Saved (assumed) |
 |---|---|---|---|
 | Find out what the agent did and why | 15 to 30 min: read the transcript, find the call | 2 to 5 min: the hold shows the step, the reason and the legs of the triangle | 10 to 25 min |
-| Find where the misused secret came from | 10 to 30 min: search the repo and the session for the key | under 1 min: traced by Cressey, exact match on the first try in 3 of 3 demo runs | 10 to 30 min |
-| Write a fix guide per owner | 30 to 60 min | about 5 min to review the sourced guide (guide generated in 9 to 14 s) | 25 to 55 min |
+| Find where the misused secret came from | 10 to 30 min: search the repo and the session for the key | under 1 min: traced by Cressey, exact match on the first try in 3 of 3 demo runs (10-10) | 10 to 30 min |
+| Write a fix guide per owner | 30 to 60 min | about 5 min to review the sourced guide (guide generated in 9 to 14 s on the 10-10 demo path) | 25 to 55 min |
 | Decide the hold | 5 min | 2 min | about 3 min |
 | **Total per held incident** | **about 1 to 2 hours** | **about 10 to 15 min** | **about 50 to 100 min** |
 
-**Basis:** the "without" column is a guess at how long a careful manual triage takes. The "with" column uses measured machine times (guides in 9 to 14 s, secret trace exact on 3 of 3 demo runs) plus an assumed review time. The timed test on the synthetic incidents should replace both columns.
+**Basis:** the "without" column is a guess at how long a careful manual triage takes. The "with" column uses measured machine times (guides in 9 to 14 s and the secret traced exactly on 3 of 3 demo runs, both on the 10-10 demo path) plus an assumed review time. The timed test on the synthetic incidents should replace both columns.
 
 **What it does not count:**
 - Holds that turn out to be false alarms still cost the review time. Every normal session was let through in our set (0 of 6 held), but real traffic is not tested.
