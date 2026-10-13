@@ -149,37 +149,15 @@ def _spellings(value: str) -> set[str]:
 _STRING_END = '"\\]},'
 
 
-def _ends_its_string(value: str, spelled: set[str]) -> bool:
+def _cut_form(value: str, spelled: set[str]) -> bool:
     """A value read as text past the end of its JSON string (`v"}`, `v",`, `\\"v\\`): one found
-    whole, as a dump spells it, then nothing but the string's end."""
+    whole, as a dump spells it, then nothing but the string's end, so dropping it uncovers
+    no text. One that ran on over more (compact JSON, an escaped newline) stays as the line
+    read hid it, which never hides less: shortcut: a written `.env` keeps cut JSON there, as
+    before; reading the dump's strings token by token would let it be dropped too."""
     core = value.removeprefix('\\"')
     whole = core.rstrip(_STRING_END)
     return whole != core and whole in spelled
-
-
-def _cut_form(value: str, spelled: set[str]) -> bool:
-    """A value read as text past the end of its JSON string, so dropping it uncovers nothing
-    a read names: either only the string's end follows the whole value, or it ran on past an
-    escape (`v\\nPORT=1"}`, a written `.env`) to the end of that same string, whose decoded
-    rest names nothing the decoded read didn't find. A rest that isn't one string body (it
-    ran into later fields) or a whole multi-line value stays as the line read hid it."""
-    if _ends_its_string(value, spelled):
-        return True
-    core = value.removeprefix('\\"')
-    cut = core.find("\\")
-    if cut <= 0 or core[:cut] not in spelled:
-        return False
-    after = core[cut:]
-    body = after.rstrip(_STRING_END)
-    if '"' not in after[len(body) :]:  # it never reached its string's closing quote
-        return False
-    try:
-        rest = json.loads('"' + body + '"')
-    except ValueError:
-        return False
-    return all(
-        v in spelled for line in _encodable(rest).splitlines() for v in _named(line)
-    )
 
 
 def _hits(text: str) -> list[tuple[str, Secret]]:
