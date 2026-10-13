@@ -20,6 +20,7 @@ from fastmcp.tools.base import ToolResult
 from mcp.shared.exceptions import MCPError
 from mcp_types.jsonrpc import INVALID_REQUEST
 
+from cressey.adapters.auth import bearer
 from cressey.adapters.broker import scoped
 from cressey.domain.acts import Act, Agent
 from cressey.domain.runs import Run
@@ -101,7 +102,7 @@ class Gateway(Middleware):
     def _run(self) -> Run | None:
         # A run is the key Cressey issued: session ids change on every call (S1).
         auth = get_http_headers(include={"authorization"}).get("authorization", "")
-        return self.engine.runs.by_key(auth.removeprefix("Bearer ").strip())
+        return self.engine.runs.by_key(bearer(auth))
 
     async def on_request(
         self,

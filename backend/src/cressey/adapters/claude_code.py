@@ -4,11 +4,10 @@ PostToolUseFailure); the agent's reasoning streamed in live (MessageDisplay); th
 prompts (UserPromptSubmit); the report taken when a turn ends (Stop); the session's start
 and end (SessionStart, SessionEnd)."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import JsonValue
 
+from cressey.adapters.auth import AuthorizationHeader, bearer
 from cressey.domain.acts import Act, Agent
 from cressey.domain.runs import Run, Step
 from cressey.engine.agent_text import note
@@ -20,7 +19,6 @@ from cressey.store.runs import Runs
 router = APIRouter()
 HOOK_PATH = "/hook/claude"
 TOOL_EVENTS = ("PreToolUse", "PostToolUse", "PostToolUseFailure")
-AuthorizationHeader = Annotated[str, Header()]
 
 
 def _act(run: Run, event: dict[str, JsonValue]) -> Act:
@@ -76,7 +74,7 @@ async def claude_hook(
     # The calls being decided (None), then let through and not yet returned:
     # (run, tool_use_id) -> step.
     pending: dict[tuple[str, str], Step | None] = request.app.state.hook_calls
-    run = runs.by_key(authorization.removeprefix("Bearer ").strip())
+    run = runs.by_key(bearer(authorization))
     if run is None:
         raise HTTPException(403)
     event = await request.json()
