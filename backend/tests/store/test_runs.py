@@ -287,3 +287,18 @@ def test_a_session_end_closes_a_message_left_streaming():
         ("I'll delete the", False),
         ("table", False),
     ]
+
+
+@pytest.mark.anyio
+async def test_a_hold_decided_while_a_stop_suspends_the_key_leaves_it_suspended():
+    """The policy's stop suspends the key from its step until an Unlock or the user's next
+    prompt: a hold decided meanwhile doesn't give it back."""
+    runs, run, calls = _held_pair()
+    wait = asyncio.create_task(runs.hold(run, calls[0], 5, 3))
+    await asyncio.sleep(0)
+    runs.stop(run, calls[1])  # a late read found step 2 under a stop response
+    assert runs.decide(run.id, 1, True)
+    assert await wait
+    assert run.revoked and run.stop_step == 2
+    runs.unlock(run)
+    assert not run.revoked and run.stop_step is None

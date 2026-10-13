@@ -972,6 +972,8 @@ export interface components {
 			 * @default false
 			 */
 			stopped: boolean;
+			/** Stop Step */
+			stop_step?: number | null;
 			/** Way Out Step */
 			way_out_step?: number | null;
 			/** Read Only Step */

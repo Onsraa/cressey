@@ -318,7 +318,7 @@ class Runs:
         """Reset the count of refused calls and give the key back, the user being back or
         having chosen to. While a call is still held the key stays suspended: that one is
         decided on the dashboard, and its rejection counts in the new turn."""
-        run.refused, run.stopped = 0, False
+        run.refused, run.stopped, run.stop_step = 0, False, None
         held = any(s.status == "held" for s in run.steps)
         run.revoked = held
         self.log.append(
@@ -429,8 +429,18 @@ class Runs:
             if step.status != "approved":
                 run.refused += 1
                 run.stopped = run.refused >= stop_after
-            run.revoked = run.stopped or any(s.status == "held" for s in run.steps)
+            run.revoked = (
+                run.stopped
+                or run.stop_step is not None
+                or any(s.status == "held" for s in run.steps)
+            )
         return step.status == "approved"
+
+    def stop(self, run: Run, step: Step) -> None:
+        """The policy's stop response to this step: the run's key is suspended until an
+        Unlock or the user's next prompt."""
+        run.revoked, run.stop_step = True, step.n
+        self.log_step(run, step, "stop")
 
     def decide(
         self, run_id: str, n: int, approve: bool, message: str | None = None
