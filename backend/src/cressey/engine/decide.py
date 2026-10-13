@@ -37,7 +37,7 @@ from cressey.engine.provenance import asked_by
 from cressey.engine.reading import read_before
 from cressey.engine.triangle import alarm, alarm_reason, legs, read_after, read_only
 from cressey.judge import Answers, Judge, NotRecorded, yes
-from cressey.scan.secrets import fingerprint, redact, scan
+from cressey.scan.secrets import fingerprint, hide, redact, scan
 from cressey.store.runs import Runs
 from cressey.tasks import Tasks
 
@@ -244,15 +244,17 @@ class Engine:
         known = self._hidden(run)
 
         def prepare() -> tuple[str, list[Asker], list[Reason]]:
-            # A reason's target is the call's own text (a recipient, a path): it hides what
-            # the arguments hide.
+            # The call is scanned once, and what it finds hides the arguments and each reason's
+            # target alike. A target is the call's own text (a recipient, a path), and only the
+            # scan of the whole call sees what a name elsewhere in it gives away (`password`).
+            seen = known | {v: s.fingerprint for v, s in scan(dumped)}
             hidden = [
-                r.model_copy(update={"target": redact(r.target, known)})
+                r.model_copy(update={"target": redact(r.target, seen)})
                 if r.target
                 else r
                 for r in floor
             ]
-            return redact(dumped, known), asked_by(run, args), hidden
+            return hide(dumped, seen), asked_by(run, args), hidden
 
         shown, asked, floor = await asyncio.to_thread(prepare)
         step = self.runs.add_step(run, act, shown, risk, floor, asked)

