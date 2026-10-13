@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import sys
 import time
 from collections.abc import Iterator
@@ -211,6 +212,41 @@ def test_concurrent_scans_do_not_lose_secrets():
 def test_scan_returns_each_value_with_its_secret():
     [(value, secret)] = scan("API_KEY=" + ENV_VALUE)
     assert value == ENV_VALUE and secret.fingerprint == fp(ENV_VALUE)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"body": "api_key: " + ENV_VALUE},
+        {"body": "api_key: " + ENV_VALUE, "to": "ops@example.test"},
+        {"stdin": "API_KEY=" + ENV_VALUE + "\nPORT=8080"},
+        {"env": ["API_KEY=" + ENV_VALUE]},
+    ],
+    ids=["ends-the-line", "ends-its-string", "before-a-newline", "in-a-list"],
+)
+def test_a_value_in_a_json_line_ends_where_its_string_does(args):
+    """A call is scanned as its JSON dump, and a tool may return JSON: read as text, the
+    value would run into its string's closing quote, or across an escaped newline."""
+    found = scan("first line\n" + json.dumps(args))
+    assert [(value, secret.line) for value, secret in found] == [(ENV_VALUE, 2)]
+
+
+def test_redact_hides_a_value_named_in_a_json_line_everywhere_in_it():
+    dumped = json.dumps(
+        {"to": ENV_VALUE + "@collector.invalid", "body": "api_key: " + ENV_VALUE}
+    )
+    marker = f"[secret:{fp(ENV_VALUE)}]"
+    assert redact(dumped) == json.dumps(
+        {"to": marker + "@collector.invalid", "body": "api_key: " + marker}
+    )
+
+
+def test_redact_hides_a_value_where_a_json_line_escapes_it():
+    value = 'FAKE-"quoted"-0001'
+    dumped = json.dumps({"command": "export API_KEY=" + value})
+    assert redact(dumped) == json.dumps(
+        {"command": f"export API_KEY=[secret:{fp(value)}]"}
+    )
 
 
 def test_redact_also_hides_values_found_elsewhere():

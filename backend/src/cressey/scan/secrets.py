@@ -11,12 +11,14 @@ line in windows; the naming rule, which is linear, reads all of it.
 """
 
 import hashlib
+import json
 import re
 import threading
 from collections.abc import Iterator, Mapping
 
 from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
+from pydantic import JsonValue
 
 from cressey.domain.runs import Secret
 from cressey.scan.trace import encoded
@@ -102,6 +104,34 @@ def _line_hits(number: int, line: str, budget: int) -> dict[str, Secret]:
     return found
 
 
+def _strings(doc: JsonValue) -> Iterator[str]:
+    """Each string or number in a JSON document, quoted and unescaped, after its key when it
+    has one, so the naming rule still reads `"password": "..."`."""
+    stack: list[tuple[str | None, JsonValue]] = [(None, doc)]
+    while stack:  # not recursive: as deep as json.loads parses, it is still read
+        key, value = stack.pop()
+        if isinstance(value, dict):
+            stack += reversed(value.items())
+        elif isinstance(value, list):
+            stack += ((key, v) for v in reversed(value))
+        elif value is not None and not isinstance(value, bool):
+            yield f'"{value}"' if key is None else f'"{key}": "{value}"'
+
+
+def _parts(line: str) -> list[str]:
+    """A line holding a JSON object or array, as its strings, each on lines of its own: read
+    as text, a value at the end of a string runs into the closing quote, or across an
+    escaped newline (a call is scanned dumped, and a tool may return JSON). Any other line
+    as it is."""
+    if not line.lstrip().startswith(("{", "[")):
+        return [line]
+    try:
+        doc: JsonValue = json.loads(line)
+    except (ValueError, RecursionError):
+        return [line]
+    return [part for string in _strings(doc) for part in string.splitlines()]
+
+
 def _hits(text: str) -> list[tuple[str, Secret]]:
     """Each (value, Secret) once per distinct value on a line."""
     hits: list[tuple[str, Secret]] = []
@@ -109,8 +139,12 @@ def _hits(text: str) -> list[tuple[str, Secret]]:
     with _LOCK, default_settings() as settings:
         settings.disable_plugins(*_ENTROPY_PLUGINS)
         for number, line in enumerate(text.splitlines(), start=1):
-            hits += _line_hits(number, line, budget).items()
-            budget = max(0, budget - len(line) - 1)
+            found: dict[str, Secret] = {}
+            for part in _parts(line):
+                for value, secret in _line_hits(number, part, budget).items():
+                    found.setdefault(value, secret)
+                budget = max(0, budget - len(part) - 1)
+            hits += found.items()
     return hits
 
 
@@ -141,6 +175,8 @@ def hide(text: str, known: Mapping[str, str]) -> str:
     markers = {value: f"[secret:{fp}]" for value, fp in known.items()}
     if not markers:
         return text
+    # A JSON line escapes a value's quotes and backslashes: that form is hidden too.
+    markers |= {json.dumps(v, ensure_ascii=False)[1:-1]: m for v, m in markers.items()}
     # One pass, longest value first: a marker is never rescanned, and a value never
     # cuts a longer one short.
     longest_first = sorted(markers, key=len, reverse=True)
