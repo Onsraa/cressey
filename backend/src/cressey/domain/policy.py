@@ -140,10 +140,11 @@ def load_profile(path: Path) -> Profile:
     return Profile.model_validate(yaml.safe_load(path.read_text()))
 
 
-def load_policy(data: Path, profile: Profile) -> Policy:
+def load_policy(data: Path, profile: Profile, overlay: Path | None = None) -> Policy:
     """The engine's settings in `data`, and each surface's tools: its catalogs', and the
     profile's for the MCP gateway. A tool listed twice for one surface would be classified by
-    whichever file came last, so it is refused; one name on two surfaces is two tools."""
+    whichever file came last, so it is refused; one name on two surfaces is two tools.
+    `overlay`: a stage's own settings over the engine's, key by key in each section."""
     tools: dict[Surface, dict[str, ToolRule]] = {s: {} for s in get_args(Surface)}
     tools["mcp"] |= profile.tools
     for catalog in sorted((data / "catalogs").glob("*.yaml")):
@@ -152,6 +153,10 @@ def load_policy(data: Path, profile: Profile) -> Policy:
             raise ValueError(f"{catalog.name} lists {sorted(twice)} again")
         tools[listed.surface] |= listed.tools
     settings = yaml.safe_load((data / "policy.yaml").read_text())
+    for section, values in (
+        yaml.safe_load(overlay.read_text()) if overlay else {}
+    ).items():
+        settings[section] = {**settings.get(section, {}), **values}
     return Policy.model_validate(
         {**settings, "tools": tools, "broker": profile.broker, "decoys": profile.decoys}
     )

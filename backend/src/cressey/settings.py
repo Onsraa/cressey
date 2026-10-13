@@ -67,6 +67,9 @@ class Settings(BaseSettings):
     # opportunity confirmed stops the agent at its next call, whatever it is, and confirms
     # rationalization there. Off, the words show on the triangle and never hold.
     thought_holds: bool = Field(False, validation_alias="CRESSEY_THOUGHT_HOLDS")
+    # A stage's own thresholds over policy.yaml's (data/stage/*.policy.yaml): a show, never
+    # the calibrated policy the evals measure.
+    policy_overlay: Path | None = Field(None, validation_alias="CRESSEY_POLICY_OVERLAY")
     # At fleet scale nobody waits on each hold: `refuse` refuses it at once, with the way out.
     holds: Literal["wait", "refuse"] = Field("wait", validation_alias="CRESSEY_HOLDS")
     # The control plane's key (Authorization: Bearer): deciding holds, unlocking, the policy
@@ -128,6 +131,7 @@ class Settings(BaseSettings):
         "decider_url",
         "admin_token",
         "state_dir",
+        "policy_overlay",
         mode="before",
     )
     @classmethod

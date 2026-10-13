@@ -1,0 +1,16 @@
+# demo-rush's own thresholds, over policy.yaml's (CRESSEY_POLICY_OVERLAY). A show, not the
+# calibrated policy: the evals and every other run keep policy.yaml.
+# Jev's irreversible label on the cleanup script sits at 0.5 itself, its threshold: on a coin
+# flip it named the hold before the triangle did. Above it, the triangle that closes holds it.
+floor:
+  irreversible: 0.6
+triangle:
+  # Pressure climbs by about 0.04 a failed or repeated call instead of 0.17, so it rises over
+  # the whole run; still confirmed (the way out) before the production key is read.
+  failures: 16
+  repeats: 10
+  # Lower floors for opportunity and the excuses, so the weaker thoughts count too and each
+  # leg rises thought by thought. P1 stays at 0.99: pressure comes from the code's facts,
+  # which climb evenly. Replaces the whole map: every indicator is listed.
+  thoughts:
+    {P1: 0.99, P3: 0.5, P4: 0.5, O1: 0.4, O2: 0.4, O3: 0.29, O4: 0.5, R: 0.3, C1: 0.14, N1: 0.5, N2: 0.5, N3: 0.5, N4: 0.5, I1: 0.5, plan: 0.5, about: 0.5}

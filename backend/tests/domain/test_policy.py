@@ -45,3 +45,16 @@ def test_a_write_given_an_argument_is_refused_as_ambiguous():
                 "tools": {"save_file": {"kind": "write", "arg": "path"}},
             }
         )
+
+
+def test_an_overlay_replaces_only_the_settings_it_names(tmp_path):
+    """A stage's own thresholds (CRESSEY_POLICY_OVERLAY): what it leaves out stays the
+    shipped policy's."""
+    write_catalogs(tmp_path)
+    shipped = {"stuck": {"rejections": 3}, "triangle": {"failures": 2, "repeats": 2}}
+    (tmp_path / "policy.yaml").write_text(yaml.safe_dump(shipped))
+    overlay = tmp_path / "stage.yaml"
+    overlay.write_text(yaml.safe_dump({"triangle": {"failures": 9}}))
+    policy = load_policy(tmp_path, Profile(upstreams="demo"), overlay)
+    assert (policy.triangle.failures, policy.triangle.repeats) == (9, 2)
+    assert policy.stuck.rejections == 3

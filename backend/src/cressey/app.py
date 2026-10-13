@@ -58,7 +58,7 @@ def create_app(
 
     given = judge
     profile = load_profile(s.profile)
-    policy = load_policy(DATA, profile)
+    policy = load_policy(DATA, profile, s.policy_overlay)
     policy.decoys |= s.decoys
     judge = judge or JevJudge.from_settings(s)
     if profile.upstreams == "demo":
