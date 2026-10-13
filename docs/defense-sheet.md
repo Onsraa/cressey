@@ -22,7 +22,7 @@ An agent with real rights (production database, repo, shell) faces a task it can
 |---|---|
 | Incident sessions held | **8/8**, each at the call it names (floor alone 7/8, one a call late; the triangle alone holds 1) |
 | Normal sessions held by mistake | **0/6** |
-| Time to stop | p50 **617 ms**, p95 749 ms (live Jev, calls back to back); **236 ms** at the stage's pace (one run, 10-10) |
+| Time to stop | p50 **629 ms**, p95 714 ms (live Jev, calls back to back); **236 ms** at the stage's pace (one run, 10-10) |
 | Time to respond after a hold (three guides) | 9 to 14 s (10-10 demo path) |
 | Misused secret traced to its source | 3/3 runs, exact match (10-10 demo path) |
 | Citation validity (guide steps) | 100% |

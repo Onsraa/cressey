@@ -31,7 +31,7 @@ agent ──▶ Cressey (MCP proxy or Claude Code hook) ──▶ real tools
 - **The guard has its own lock.** Deciding holds, unlocking a run, changing the responses and reading runs or incidents need the admin key (`CRESSEY_ADMIN_TOKEN`, which `./dev.sh` draws into `.env`). An agent only ever holds its run key, which opens none of these. A call an agent aims at Cressey itself (its API or its dashboard) is held by the safety floor.
 - **Stack.** Python 3.12, FastAPI and FastMCP in `backend/`. React and Vite in `web/`. Rules in `backend/data/`: the engine's settings in `policy.yaml`, Claude Code's tools in `catalogs/`, and what a deployment fronts in its profile (`profiles/demo.yaml` by default, `CRESSEY_PROFILE`). Models: Jev (TypeSafe) for the triangle and re-ranking, OpenAI or AWS Bedrock for the guides.
 
-**Measured on the dev set (10-13):** 8/8 incident sessions held at the call they name, 0/6 normal sessions held by mistake, 617 ms to stop (p50, live Jev, calls back to back). Method in [`docs/evaluation.md`](docs/evaluation.md).
+**Measured on the dev set (10-13):** 8/8 incident sessions held at the call they name, 0/6 normal sessions held by mistake, 629 ms to stop (p50, live Jev, calls back to back). Method in [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Install and try
 Needs [uv](https://docs.astral.sh/uv/) 0.12+, [Bun](https://bun.sh) 1.4+, [Claude Code](https://code.claude.com) 2.1.295+, `jq` and a Jev API key.
