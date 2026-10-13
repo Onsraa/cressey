@@ -150,6 +150,22 @@ async def test_an_honest_description_can_still_raise_the_floor(tmp_path):
     assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+async def test_a_command_whose_shown_args_arent_json_is_still_read_without_its_words(
+    tmp_path,
+):
+    """Redaction can cut a secret's closing quote out of the shown arguments (`KEY=value`
+    at the end of a string): the reading without the agent's words comes from the call's own
+    arguments, never from parsing what is shown."""
+    judge = SwayedFloorJudge(with_words=0.2, without=0.8)
+    said = {
+        "command": f"{ZERO_BALANCES} API_TOKEN=abcdef123456",
+        "description": REASSURING,
+    }
+    out = await bash_write(tmp_path, judge, said)
+    assert out["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert judge.floor_calls == 2
+
+
 async def test_a_command_without_words_is_labelled_once(tmp_path):
     judge = SwayedFloorJudge(with_words=0.8, without=0.8)
     out = await bash_write(tmp_path, judge, {"command": ZERO_BALANCES})

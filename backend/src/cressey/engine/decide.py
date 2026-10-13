@@ -143,6 +143,13 @@ class Engine:
             response = "stop"  # CRESSEY_HOLDS=refuse: nobody waits for a human
         return response
 
+    def _hidden(self, run: Run) -> dict[str, str]:
+        """What a call's arguments hide wherever they are shown: a copy of the secrets known
+        so far, which other calls may add to meanwhile, and the trap keys, since one the
+        agent got outside Cressey must not show in clear either."""
+        decoys = self.policy.decoys.values()
+        return dict(run.known) | {v: fingerprint(v) for v in decoys}
+
     async def _rule(self, surface: Surface, name: str) -> ToolRule | None:
         """The policy's rule for a tool of the surface the call came through, else the kind
         Jev labels from its name, asked once per surface and tool. None while Jev can't
@@ -180,7 +187,7 @@ class Engine:
         words = rule.words if rule else []
         try:
             labels = await floor_labels(
-                run, step, self.judge, self.policy.triangle, words
+                run, step, self.judge, self.policy.triangle, words, self._hidden(run)
             )
         except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []
@@ -233,12 +240,8 @@ class Engine:
         # A trap key softens only a read the floor lets through: a guarded one is still held.
         only_reads = trapped is not None and risk == "read" and not (guarded or aimed)
         # Off the event loop, like the result scan: a large argument takes a while to redact.
-        # A copy of the secrets known so far, which other calls may add to meanwhile, and the
-        # trap keys: one the agent got outside Cressey must not show in clear either.
         dumped = json.dumps(args, ensure_ascii=False)
-        known = dict(run.known) | {
-            v: fingerprint(v) for v in self.policy.decoys.values()
-        }
+        known = self._hidden(run)
 
         def prepare() -> tuple[str, list[Asker]]:
             return redact(dumped, known), asked_by(run, args)
@@ -401,7 +404,7 @@ class Engine:
         words = rule.words if rule else []
         try:
             labels = await floor_labels(
-                run, step, self.judge, self.policy.triangle, words
+                run, step, self.judge, self.policy.triangle, words, self._hidden(run)
             )
         except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []

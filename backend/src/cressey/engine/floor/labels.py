@@ -5,7 +5,7 @@ undone beyond the mandate and whether it changes production."""
 
 import asyncio
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from typesafe_sdk import Choice, Noul
 
@@ -19,6 +19,7 @@ from cressey.engine.reading import (
 )
 from cressey.engine.triangle import judgment_state
 from cressey.judge import Answer, Answers, Judge, top, yes
+from cressey.scan.secrets import redact
 
 # Asked once for each tool the policy doesn't list, on its name alone: names come from the
 # installed tools, never from the agent, so no call can argue a tool into a read.
@@ -73,21 +74,30 @@ FLOOR = {
 
 
 async def floor_labels(
-    run: Run, call: Step, judge: Judge, t: Thresholds, words: Sequence[str] = ()
+    run: Run,
+    call: Step,
+    judge: Judge,
+    t: Thresholds,
+    words: Sequence[str] = (),
+    hidden: Mapping[str, str] | None = None,
 ) -> Answers | None:
     """The probabilities that the call can't be undone beyond the mandate (`irreversible`)
     and that it changes production (`production`), each the highest over its parts. A call
     carrying the agent's own words about it (`words`, its tool rule's) is read with them and
-    without them, and each label keeps the higher. None when no model answers. Raises
-    NotRecorded on a replay with no recorded answer."""
+    without them, and each label keeps the higher; the reading without them hides what its
+    shown arguments hide (`hidden`, value -> fingerprint; the run's known secrets by
+    default). None when no model answers. Raises NotRecorded on a replay with no recorded
+    answer."""
     shown = await redacted_off_loop(run, steps_before(run, call.n)[-1:])
     views = [call]
-    args = json.loads(call.args) if words else {}
-    if any(w in args for w in words):
-        act = {k: v for k, v in args.items() if k not in words}
-        views.append(
-            call.model_copy(update={"args": json.dumps(act, ensure_ascii=False)})
-        )
+    # From the call's own arguments: what is shown is redacted, and redaction can cut the
+    # JSON it was dumped from (a secret's value running into its closing quote).
+    act = {k: v for k, v in call.raw_args.items() if k not in words}
+    if len(act) < len(call.raw_args):
+        dumped = json.dumps(act, ensure_ascii=False)
+        secret = dict(run.known if hidden is None else hidden)
+        args = await asyncio.to_thread(redact, dumped, secret)
+        views.append(call.model_copy(update={"args": args}))
     got = await asyncio.gather(
         *(
             max_over_parts(

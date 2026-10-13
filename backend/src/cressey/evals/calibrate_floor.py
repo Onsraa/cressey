@@ -104,6 +104,7 @@ def action_step(case: ActionCase) -> tuple[Run, Step]:
         n=1,
         tool=case.tool,
         args=json.dumps(case.args, ensure_ascii=False),
+        raw_args=case.args,
         risk="write",
     )
     run = Run(
