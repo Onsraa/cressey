@@ -85,3 +85,60 @@ async def test_a_long_file_edit_runs_quiet(tmp_path):
     edit = {"file_path": "notes.md", "content": PADDED}
     step, incidents = await ran_long(tmp_path, DownJudge(), "Write", edit)
     assert (step["status"], checks(step), incidents) == ("allowed", [], [])
+
+
+async def late_then_next(tmp_path, responses: dict) -> tuple[dict, dict]:
+    """A long write the floor flags once it ran, under these responses, then the next call:
+    the run once that write was read, and Cressey's answer to the next call."""
+    with serving(tmp_path, hold_timeout=10, judge=Irreversible()) as base:
+        now = (await api(base, "GET", "/api/policy/responses")).json()
+        changed = {**now, **responses}
+        assert (
+            await api(base, "PUT", "/api/policy/responses", json=changed)
+        ).is_success
+        body = {"task": "Tidy the infrastructure"}
+        run = (await api(base, "POST", "/api/runs", json=body)).json()
+        auth = {"Authorization": f"Bearer {run['key']}"}
+
+        async def send(kind: str, call: str, command: str, **extra) -> dict:
+            event = {
+                "hook_event_name": kind,
+                "session_id": "s1",
+                "tool_name": "Bash",
+                "tool_use_id": call,
+                "tool_input": {"command": command},
+                **extra,
+            }
+            sent = await api(base, "POST", "/hook/claude", json=event, headers=auth)
+            return sent.json()
+
+        assert await send("PreToolUse", "c1", PADDED) == {}  # it runs
+        await send("PostToolUse", "c1", PADDED, tool_response="done")
+        for _ in range(250):
+            page = (await api(base, "GET", f"/api/runs/{run['id']}")).json()
+            if page["steps"][0]["status"] == "alerted":  # read afterwards, flagged
+                break
+            await asyncio.sleep(0.02)
+        await asyncio.sleep(0.1)
+        page = (await api(base, "GET", f"/api/runs/{run['id']}")).json()
+        after = await send("PreToolUse", "c2", "ls")
+    return page, after
+
+
+async def test_under_a_stop_response_a_write_flagged_once_it_ran_suspends_the_key(
+    tmp_path,
+):
+    """What already ran can't be held, but the policy's stop still applies: the rest of the
+    run is refused until a human unlocks it (the user, 10-13)."""
+    page, after = await late_then_next(tmp_path, {"irreversible": "stop"})
+    assert page["steps"][0]["status"] == "alerted"
+    assert page["revoked"] and page["stop_step"] == 1
+    assert after["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+async def test_under_review_a_write_flagged_once_it_ran_leaves_the_key_usable(tmp_path):
+    """Review can't hold what already ran: the incident asks a human, the run goes on."""
+    page, after = await late_then_next(tmp_path, {})
+    assert page["steps"][0]["status"] == "alerted"
+    assert not page["revoked"] and page.get("stop_step") is None
+    assert after == {}

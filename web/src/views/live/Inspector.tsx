@@ -73,7 +73,11 @@ export function Inspector({
 				)}
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto">
-				{run?.stopped && <Stopped run={run} />}
+				{run?.stopped ? (
+					<Stopped run={run} />
+				) : (
+					run?.stop_step != null && <PolicyStop run={run} />
+				)}
 				{focusMode ? (
 					<div
 						data-pane
@@ -109,9 +113,54 @@ export function Inspector({
 }
 
 // Why the run stopped, from the turn that stopped it, and the way to let it go on.
-function Stopped({ run }: { run: Run }) {
+// Unlock gives the agent its key back; a run that ended has nothing to unlock.
+function UnlockRow({ run, note }: { run: Run; note: string }) {
 	const { refresh } = useLive();
 	const { busy, error, unlock } = useUnlock(run.id, refresh);
+	return (
+		<>
+			{!run.ended_at && (
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+					<button
+						type="button"
+						onClick={unlock}
+						disabled={busy}
+						className="btn btn-dark h-9 px-4"
+					>
+						Unlock
+					</button>
+					<span className="min-w-0 flex-1 text-[12.5px] leading-[1.4]">
+						{note}
+						{run.turn && " Your next prompt does the same."}
+					</span>
+				</div>
+			)}
+			{error && (
+				<span role="alert" className="text-[12.5px] text-held-fg">
+					{error}
+				</span>
+			)}
+		</>
+	);
+}
+
+// A check whose response is stop fired, before its call or once read after it ran: the
+// key is suspended until a human unlocks it.
+function PolicyStop({ run }: { run: Run }) {
+	return (
+		<section
+			aria-label="Why the key is suspended"
+			className="flex flex-col gap-3.5 border-held-bd border-b-[1.2px] bg-held p-5"
+		>
+			<h2 className="m-0 font-semibold text-[15px] leading-[1.3]">
+				Stopped by the policy at step {run.stop_step}
+			</h2>
+			<UnlockRow run={run} note="Gives the agent its key back." />
+		</section>
+	);
+}
+
+function Stopped({ run }: { run: Run }) {
 	const { estimate, refused, failed, said } = turnEvidence(run);
 	const calls = (steps: Step[]) => (
 		<ul className="m-0 flex list-none flex-col gap-1 p-0">
@@ -131,27 +180,10 @@ function Stopped({ run }: { run: Run }) {
 			<h2 className="m-0 font-semibold text-[15px] leading-[1.3]">
 				No path within the mandate so far
 			</h2>
-			{!run.ended_at && (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-					<button
-						type="button"
-						onClick={unlock}
-						disabled={busy}
-						className="btn btn-dark h-9 px-4"
-					>
-						Unlock
-					</button>
-					<span className="min-w-0 flex-1 text-[12.5px] leading-[1.4]">
-						Gives the agent its key back and resets the count.
-						{run.turn && " Your next prompt does the same."}
-					</span>
-				</div>
-			)}
-			{error && (
-				<span role="alert" className="text-[12.5px] text-held-fg">
-					{error}
-				</span>
-			)}
+			<UnlockRow
+				run={run}
+				note="Gives the agent its key back and resets the count."
+			/>
 			{estimate !== undefined && (
 				<Labeled label="estimated before the run">
 					<span className="text-[13px] leading-[1.4]">

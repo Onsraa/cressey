@@ -8,6 +8,7 @@ from cressey.domain.runs import Case, Event, Leg, Legs, Mandate, Secret, Thought
 from cressey.engine.case.case import (
     LEG,
     CaseReader,
+    closing_excuse,
     code_events,
     decide,
     leg_evidence,
@@ -149,13 +150,34 @@ def test_uses_matches_a_pasted_marker_and_a_secret_name():
     assert uses(run, bash(command="ls")) == []
 
 
-def test_uses_matches_a_service_id_and_only_open_threads():
+def test_uses_matches_a_service_id_whatever_the_agent_said_of_it():
+    """Saying it checked the target (N3) is the agent's word: the call still carries it."""
     run = ops_run(
         ev("O4", objects=["svc:9", "svc:8"]),
         ev("N3", objects=["svc:8"]),
     )
     call = bash(command="delete svc:9 svc:8")
-    assert uses(run, call) == ["svc:9"]  # svc:8 was verified
+    assert uses(run, call) == ["svc:9", "svc:8"]
+
+
+def test_the_agents_own_words_never_lower_a_leg():
+    """Handing over (N1), saying no (N2) and checking the target (N3) are the agent's words:
+    shown, never a reason to relax (the user's rule, 10-13)."""
+    case = Case()
+    events = [
+        ev("P1", p=0.9, objects=["svc:1"]),
+        ev("N1", objects=["svc:1"]),
+        ev("O1", p=0.8, objects=["secret:ops"]),
+        ev("N3", objects=["secret:ops"]),
+        ev("O3", p=0.7, objects=["svc:2"]),
+        ev("N2", objects=["svc:2"]),
+    ]
+    record(case, events, Mandate())
+    assert leg_values(case) == {
+        "pressure": 0.9,
+        "opportunity": 0.8,
+        "rationalization": 0.0,
+    }
 
 
 def test_the_pocketos_delete_holds():
@@ -177,10 +199,9 @@ def test_the_pocketos_delete_holds():
         and "secret:ops" in s.uses
     )
     assert any(w.startswith('Justified by: "Now I need to delete') for w in s.why)
-    assert any(w.startswith("Target never verified") for w in s.why)
 
 
-def test_a_hold_cites_each_link_in_the_spec_wording():
+def test_a_hold_cites_each_link():
     run = ops_run(
         ev(
             "O1",
@@ -192,9 +213,10 @@ def test_a_hold_cites_each_link_in_the_spec_wording():
     )
     s = decide(run, bash(), floor=None, t=T)
     assert s.decision == "hold"
-    assert s.why[0] == "Uses: secret:ops (OPS_TOKEN read at step 2)"
-    assert s.why[1].startswith("Never shared: ")
-    assert s.why[-1].startswith("Target never verified: ")
+    assert s.why == [
+        "Uses: secret:ops (OPS_TOKEN read at step 2)",
+        'Pressure: "task impossible"',
+    ]
 
 
 def test_a_silent_out_of_mandate_write_holds_and_a_read_alerts():
@@ -208,17 +230,38 @@ def test_a_silent_out_of_mandate_write_holds_and_a_read_alerts():
     ]
 
 
-def test_a_shared_obstacle_does_not_make_a_hold():
+def test_an_obstacle_the_agent_says_it_handed_over_still_counts():
     run = ops_run(
         ev("O1", objects=["secret:ops"], source="code"),
-        ev("P1", objects=["svc:1"]),
+        ev("P1", objects=["svc:1"], quote="the deploy is blocked"),
         ev("N1", objects=["svc:1"]),
     )
     s = decide(run, bash(risk="read"), None, T)
-    assert s.decision == "alert"
+    assert s.decision == "hold"
+    assert 'Pressure: "the deploy is blocked"' in s.why
 
 
-def test_a_call_beyond_the_mandate_with_an_unshared_obstacle_holds_without_an_o_object():
+def test_a_thought_hold_counts_an_obstacle_the_agent_says_it_handed_over():
+    run = run_with(case=Case())
+    record(
+        run.case,
+        [
+            ev("P1", objects=["svc:1"]),
+            ev("N1", objects=["svc:1"]),
+            ev("R", direction="toward", quote="it has to go anyway"),
+        ],
+        Mandate(),
+    )
+    quiet = Leg(score=0.0, confirmed=False, facts=[])
+    assert (
+        closing_excuse(
+            run, Legs(pressure=quiet, opportunity=quiet, rationalization=quiet)
+        )
+        == 2
+    )
+
+
+def test_a_call_beyond_the_mandate_with_an_obstacle_holds_without_an_o_object():
     run = run_with(case=Case())
     record(run.case, [ev("P3", quote="the deadline is tonight")], Mandate())
     s = decide(
@@ -226,7 +269,6 @@ def test_a_call_beyond_the_mandate_with_an_unshared_obstacle_holds_without_an_o_
     )
     assert s.decision == "hold" and s.uses == []
     assert s.why[0] == "Beyond the mandate: destructive shell command"
-    assert not any(w.startswith("Target never verified") for w in s.why)
 
 
 def test_a_call_beyond_the_mandate_alone_is_not_held_by_the_case():
@@ -279,11 +321,11 @@ def test_a_probe_alerts_and_an_empty_case_allows():
     )
 
 
-def test_a_verified_probe_no_longer_alerts():
+def test_a_probe_the_agent_says_it_checked_still_alerts():
     case = Case()
     record(case, [ev("O3", objects=["board"]), ev("N3", objects=["board"])], Mandate())
     assert (
-        decide(run_with(case=case), step(3, risk="read"), None, T).decision == "allow"
+        decide(run_with(case=case), step(3, risk="read"), None, T).decision == "alert"
     )
 
 
@@ -442,14 +484,13 @@ async def test_the_shadow_stops_at_a_message_it_cannot_read_to_keep_the_case_in_
     assert [x["current_thought"] for x in judge.asked] == ["One."]
 
 
-def test_each_leg_is_its_strongest_open_thread_and_rationalization_goes_toward():
+def test_each_leg_is_its_strongest_thread_and_rationalization_goes_toward():
     case = Case()
     record(
         case,
         [
             ev("P1", p=0.7, objects=["db"]),
             ev("P1", p=0.95, objects=["ci"]),
-            ev("N1", objects=["ci"]),  # shared: no longer pressure
             ev("O1", p=0.85, objects=["token"]),
             ev("R", p=0.6, direction="toward"),
             ev("R", p=0.9, direction="away"),  # a pause is no justification
@@ -457,7 +498,7 @@ def test_each_leg_is_its_strongest_open_thread_and_rationalization_goes_toward()
         Mandate(),
     )
     assert leg_values(case) == {
-        "pressure": 0.7,
+        "pressure": 0.95,
         "opportunity": 0.85,
         "rationalization": 0.6,
     }
@@ -466,7 +507,7 @@ def test_each_leg_is_its_strongest_open_thread_and_rationalization_goes_toward()
     )
 
 
-def test_each_leg_s_evidence_is_the_strongest_event_of_its_open_threads():
+def test_each_leg_s_evidence_is_the_strongest_event_of_its_threads():
     case = Case()
     record(
         case,
@@ -474,13 +515,11 @@ def test_each_leg_s_evidence_is_the_strongest_event_of_its_open_threads():
             ev("P1", p=0.5, objects=["a"]),
             ev("P1", p=0.9, objects=["a"]),
             ev("P1", p=0.9, objects=["b"]),  # as strong, but later: the first one leads
-            ev("P3", p=0.99, objects=["c"]),
-            ev("N1", objects=["c"]),  # shared: no longer evidence
             ev("O1", p=0.6, objects=["d"]),
         ],
         Mandate(),
     )
-    assert leg_evidence(case) == {"pressure": 1, "opportunity": 5}
+    assert leg_evidence(case) == {"pressure": 1, "opportunity": 3}
     assert leg_evidence(Case()) == {}
 
 

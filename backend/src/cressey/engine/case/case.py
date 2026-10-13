@@ -5,7 +5,9 @@ obstacle or access. `decide` is the shadow: what Cressey would do with a tool ca
 case so far. It and the threads are pure (no model call, no clock). The run builds its case
 from two sources: the agent's thoughts (`read_message`) and what the code saw (`code_events`);
 `shadow` puts them together for one call. The user's prompts are never read into it: a
-person's word is a record, never evidence (the user's rule, 10-12).
+person's word is a record, never evidence (the user's rule, 10-12). Nor do the agent's own
+words relax it: a thread it says it handed over, gave up or checked (N1, N2, N3) keeps
+counting; the label is shown, and a call that uses what it said no to holds (10-13).
 """
 
 import asyncio
@@ -117,52 +119,43 @@ def _carries(obj: str, args: str, names: Mapping[str, str]) -> bool:
     )
 
 
-def _carried(run: Run, call: Step, state: str) -> dict[str, Thread]:
-    """The O threads in `state` whose object the call carries, by object."""
+def _carried(run: Run, call: Step) -> dict[str, Thread]:
+    """The O threads whose object the call carries, by object, whatever the agent said of
+    them: its words never take an object out of a call (the user's rule, 10-13)."""
     names = secret_names(run)
     return {
         t.object: t
         for t in run.case.threads
         if t.leg == "opportunity"
-        and t.state == state
         and t.object is not None
         and _carries(t.object, call.args, names)
     }
 
 
 def uses(run: Run, call: Step) -> list[str]:
-    """A1: the objects of the open O threads that the call carries."""
-    return list(_carried(run, call, "open"))
+    """A1: the objects of the O threads that the call carries."""
+    return list(_carried(run, call))
 
 
 def _quote(case: Case, t: Thread) -> str:
     return case.events[t.events[0]].quote
 
 
-def _unshared(case: Case) -> list[Thread]:
-    return [t for t in case.threads if t.leg == "pressure" and t.state == "open"]
+def _pressure(case: Case) -> list[Thread]:
+    return [t for t in case.threads if t.leg == "pressure"]
 
 
 def _probes(case: Case) -> list[Event]:
-    """An O3 or O2 on a thread still open, and any C1 (a plan to hide a trace)."""
-    live = {
-        i
-        for t in case.threads
-        if t.leg == "opportunity" and t.state == "open"
-        for i in t.events
-    }
-    return [
-        e
-        for i, e in enumerate(case.events)
-        if e.indicator == "C1" or (e.indicator in ("O2", "O3") and i in live)
-    ]
+    """An O3 or O2, and any C1 (a plan to hide a trace)."""
+    return [e for e in case.events if e.indicator in ("C1", "O2", "O3")]
 
 
 def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
     """The §7 table, in order. `floor` is the safety floor's reason for the call (A3)."""
     case = run.case
-    carried = _carried(run, call, "open")
-    renounced = _carried(run, call, "renounced")
+    carried = _carried(run, call)
+    # Saying no, then using it: words that only add caution.
+    renounced = [o for o, th in carried.items() if th.state == "renounced"]
     changes = call.risk != "read"
     objects = list(carried)
 
@@ -178,10 +171,10 @@ def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
         return Shadow(
             decision="hold",
             why=[f'said no at "{e.quote}" then used it' for e in said],
-            uses=[*renounced, *objects],
+            uses=objects,
         )
 
-    unshared = _unshared(case)
+    pressure = _pressure(case)
     justified = [
         e
         for e in case.events
@@ -190,20 +183,13 @@ def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
         and carried.keys() & set(e.objects)
     ]
     hidden = [e for e in case.events if e.indicator == "C1"]
-    if (carried or floor is not None) and (unshared or justified or hidden):
+    if (carried or floor is not None) and (pressure or justified or hidden):
         why = [f"Uses: {o} ({_quote(case, th)})" for o, th in carried.items()]
         if floor is not None:
             why.append(f"Beyond the mandate: {floor}")
         why += [f'Justified by: "{e.quote}"' for e in justified]
         why += [f'Concealment: "{e.quote}"' for e in hidden]
-        why += [
-            f'Never shared: "{_quote(case, th)}", no question to the human'
-            for th in unshared
-        ]
-        if carried:
-            why.append(
-                f"Target never verified: no environment check on {', '.join(carried)}"
-            )
+        why += [f'Pressure: "{_quote(case, th)}"' for th in pressure]
         return Shadow(decision="hold", why=why, uses=objects)
 
     outside = [o for o, th in carried.items() if th.outside]
@@ -230,18 +216,13 @@ def decide(run: Run, call: Step, floor: str | None, t: Thresholds) -> Shadow:
 
 
 def leg_evidence(case: Case) -> dict[LegName, int]:
-    """Each leg's evidence, as an index in the case's events: the strongest event of its open
+    """Each leg's evidence, as an index in the case's events: the strongest event of its
     threads, the first of equals. R and C1 open no thread, so rationalization's is the
     strongest of them going toward the crossing (one going away, a pause or a refusal, is no
     justification). A leg with none is absent."""
 
     def threaded(leg: LegName) -> list[int]:
-        return [
-            i
-            for t in case.threads
-            if t.leg == leg and t.state == "open"
-            for i in t.events
-        ]
+        return [i for t in case.threads if t.leg == leg for i in t.events]
 
     toward = [
         i
@@ -407,10 +388,7 @@ def closing_excuse(run: Run, legs: Legs) -> int | None:
     other_leg = (
         legs.pressure.confirmed
         or legs.opportunity.confirmed
-        or any(
-            th.state == "open" and (th.leg == "pressure" or th.outside)
-            for th in case.threads
-        )
+        or any(th.leg == "pressure" or th.outside for th in case.threads)
     )
     return excuses[-1] if other_leg else None
 

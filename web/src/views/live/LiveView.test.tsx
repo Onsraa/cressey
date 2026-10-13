@@ -858,6 +858,23 @@ test("the limit shown is the policy's, not three", () => {
 	expect(html()).toContain("3 of 5 refused");
 });
 
+test("a key a stop response suspended names its step, with Unlock", () => {
+	// Its own section inside the inspector's: read from its label on.
+	const stop = (out: string) =>
+		out.slice(out.indexOf('aria-label="Why the key is suspended"'));
+	state = live([demo({}, { revoked: true, stop_step: 4 })]);
+	expect(stop(html())).toContain("Stopped by the policy at step 4");
+	expect(stop(html())).toContain(">Unlock<");
+	// Over: nothing to unlock.
+	state = live([demo({}, { revoked: true, stop_step: 4, ended_at: at(-1) })]);
+	expect(html()).toContain("Stopped by the policy at step 4");
+	expect(html()).not.toContain(">Unlock<");
+	// Stopped by its refusals too: one panel, one Unlock.
+	state = live([demo({}, { ...stopped().shown[0], stop_step: 2 })]);
+	expect(html()).toContain("No path within the mandate so far");
+	expect(html()).not.toContain("Stopped by the policy");
+});
+
 test("a run that ended while stopped reads Ended, with no Unlock", () => {
 	state = live([demo({}, { ...stopped().shown[0], ended_at: at(-1) })]);
 	const out = html();

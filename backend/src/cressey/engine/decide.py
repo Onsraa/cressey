@@ -310,7 +310,7 @@ class Engine:
                 if run.kind == "replay":
                     raise held_error
             elif response == "stop":
-                run.revoked = True  # the rest of the run is denied
+                self.runs.stop(run, step)  # the rest of the run is denied
                 self.runs.mark(run, step, "denied")
                 raise Refused(REFUSED)
             elif reasons:
@@ -385,9 +385,12 @@ class Engine:
         if run.ended_at is not None:
             self.runs.forget_results(run, list(run.steps))
 
-    async def _labelled_late(self, run: Run, step: Step) -> list[Reason]:
-        """The floor's labels for a write that ran before it could be read, as `_labelled`
-        asks them before: a file edit, whose path code checked, isn't asked."""
+    async def _labelled_late(
+        self, run: Run, step: Step
+    ) -> list[tuple[Reason, Response]]:
+        """The floor's labels for a write that ran before it could be read, each with its
+        response, as `_labelled` asks them before: a file edit, whose path code checked,
+        isn't asked."""
         assert step.surface is not None  # a live call's act named it
         if step.risk != "write" or edits_a_file(
             await self._rule(step.surface, step.tool)
@@ -398,8 +401,8 @@ class Engine:
         except NotRecorded:  # a replay miss: not asked, as on the run that was recorded
             return []
         if labels is None:
-            return [Reason(check="no_answer")]
-        return [reason for reason, _ in self._flagged(labels)]
+            return [(Reason(check="no_answer"), self.policy.responses.irreversible)]
+        return self._flagged(labels)
 
     def _draft(self, run: Run, step: Step) -> None:
         """What the human can send if they reject this hold: the fallback at once, then a
@@ -434,10 +437,23 @@ class Engine:
             return
         alarmed = self.triangle_holds and alarm(late, step.risk)
         found = [alarm_reason(late)] if alarmed else []
-        reasons = [r.model_copy(update={"afterwards": True}) for r in found + labelled]
+        flagged = found + [why for why, _ in labelled]
+        reasons = [r.model_copy(update={"afterwards": True}) for r in flagged]
         # Alarm or not, the step shows what the late read found, an unanswered model too.
         self.runs.score(run, step, late, reasons)
         if not reasons:
             return
+        # What ran can't be held, but a stop still stops the rest of the run (10-13).
+        response = self._response(
+            step.tool,
+            reasons,
+            trapped=False,
+            floor=False,
+            labelled=[r for _, r in labelled],
+            triangle=alarmed,
+            only_reads=False,
+        )
+        if response == "stop":
+            self.runs.stop(run, step)
         self.runs.mark(run, step, "alerted")
         self.incidents.open(run, step, "haute")

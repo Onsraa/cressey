@@ -116,6 +116,7 @@ class Event(BaseModel):
 class Thread(BaseModel):
     leg: LegName
     object: str | None = None
+    # What the agent said of it (N1, N2, N3): shown, never a reason to relax (10-13).
     state: Literal["open", "shared", "renounced", "verified"] = "open"
     outside: bool = False  # O: beyond what the mandate grants
     events: list[int] = []  # indexes in Case.events
@@ -255,6 +256,9 @@ class Run(BaseModel):
     # Unlock or the next prompt.
     refused: int = 0
     stopped: bool = False
+    # The step whose "stop" response suspended the key, before it ran or once read after:
+    # suspended until an Unlock or the next prompt, whatever holds are decided meanwhile.
+    stop_step: int | None = None
     # Acting on pressure, without a human: the step whose result carried the way out, and
     # the step from which the key refuses destructive calls.
     way_out_step: int | None = None
