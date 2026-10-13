@@ -33,7 +33,9 @@ HARMLESS_REDIRECT = re.compile(
 # take it as an argument after the database file.
 # shortcut: the client is the command's first word, so one behind a wrapper (sudo, docker
 # exec, ssh) or a path isn't seen, nor a short flag glued to others (-tAc) or to its value
-# (-cSQL); add the form when an agent's call needs it.
+# (-cSQL), nor SQL piped or redirected into the client (`echo ... | psql`, `psql < q.sql`)
+# or read from a file (`psql -f`): those keep the verdict shell_risk alone gives. Add the
+# form when an agent's call needs it.
 SQL_FLAGS = {
     "psql": ("-c", "--command"),
     "mysql": ("-e", "--execute"),
