@@ -209,9 +209,6 @@ export const CHECK: Record<keyof Responses, string> = {
 	fleet: "Cross-run signal",
 };
 
-// How long a copy button reads « Copied » (or why it couldn't copy).
-export const COPIED_MS = 1500;
-
 export const time = (iso?: string | null) =>
 	iso ? new Date(iso).toLocaleTimeString("en-GB") : ""; // 24-hour, shorter on a projector
 

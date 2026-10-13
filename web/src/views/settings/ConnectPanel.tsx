@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLive } from "@/api/live";
 import { ArrowRight, Bot, Copy, Shield, Terminal } from "@/components/icons";
-import { COPIED_MS } from "@/lib/labels";
+import { useCopy } from "@/lib/copy";
 
 // The hook settings an agent drops into .claude/settings.json. The run key is sent on every
 // event; the dashboard only shows the shape, with <run key> left to fill.
@@ -58,12 +58,6 @@ const METHODS: { k: Method; label: string }[] = [
 export function ConnectPanel() {
 	const { status, go } = useLive();
 	const [method, setMethod] = useState<Method>("mcp");
-	const [copied, setCopied] = useState("");
-	useEffect(() => {
-		if (!copied) return;
-		const t = setTimeout(() => setCopied(""), COPIED_MS);
-		return () => clearTimeout(t);
-	}, [copied]);
 	const origin = window.location.origin;
 	const mcp = method === "mcp";
 	const code = !status
@@ -71,14 +65,7 @@ export function ConnectPanel() {
 		: mcp
 			? `claude mcp add --transport http cressey \\\n  ${origin}${status.mcp_path} \\\n  --header "Authorization: Bearer <run key>"`
 			: hookSettings(origin, status.hook_path);
-	// Inside the promise: without a secure context, navigator.clipboard is missing.
-	const copy = () =>
-		Promise.resolve()
-			.then(() => navigator.clipboard.writeText(code))
-			.then(
-				() => setCopied("Copied"),
-				() => setCopied("Copy blocked"),
-			);
+	const [copied, copy] = useCopy(code);
 	return (
 		<section
 			data-anim
