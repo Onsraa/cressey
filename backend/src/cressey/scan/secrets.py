@@ -147,15 +147,34 @@ def _spellings(value: str) -> set[str]:
 # What a JSON string can end with: its closing quote, the escape of an escaped quote, and
 # the brackets, braces and commas after it.
 _STRING_END = '"\\]},'
+# A quote no backslash escapes: where the JSON string a value ran on in ends.
+_CLOSES = re.compile(r'(?<!\\)(?:\\\\)*"')
 
 
-def _cut_form(value: str, spelled: set[str]) -> bool:
+def _ends_its_string(value: str, spelled: set[str]) -> bool:
     """A value read as text past the end of its JSON string (`v"}`, `v",`, `\\"v\\`): one found
-    whole, as a dump spells it, then nothing but the string's end, so dropping it uncovers
-    no text. One that ran on over more (compact JSON, an escaped newline) stays."""
+    whole, as a dump spells it, then nothing but the string's end."""
     core = value.removeprefix('\\"')
     whole = core.rstrip(_STRING_END)
     return whole != core and whole in spelled
+
+
+def _cut_form(value: str, spelled: set[str]) -> bool:
+    """A value read as text past the end of its JSON string, so dropping it uncovers nothing
+    a read names: either only the string's end follows the whole value, or it ran on past an
+    escape (`v\\nPORT=1"}`, a written `.env`) to that end, over text that names nothing the
+    decoded read didn't find. A whole multi-line value never reaches its closing quote."""
+    if _ends_its_string(value, spelled):
+        return True
+    core = value.removeprefix('\\"')
+    cut = core.find("\\")
+    rest = core[cut:]
+    return (
+        cut > 0
+        and core[:cut] in spelled
+        and _CLOSES.search(rest) is not None
+        and all(v in spelled or _ends_its_string(v, spelled) for v in _named(rest))
+    )
 
 
 def _hits(text: str) -> list[tuple[str, Secret]]:

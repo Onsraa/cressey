@@ -219,9 +219,10 @@ def test_scan_returns_each_value_with_its_secret():
     [
         {"body": "api_key: " + ENV_VALUE},
         {"body": "api_key: " + ENV_VALUE, "to": "ops@example.test"},
+        {"stdin": "API_KEY=" + ENV_VALUE + "\nPORT=8080"},
         {"env": ["API_KEY=" + ENV_VALUE]},
     ],
-    ids=["ends-the-line", "ends-its-string", "in-a-list"],
+    ids=["ends-the-line", "ends-its-string", "before-a-newline", "in-a-list"],
 )
 def test_a_value_in_a_json_line_ends_where_its_string_does(args):
     """A call is scanned as its JSON dump, and a tool may return JSON: read as text, the
@@ -319,6 +320,10 @@ SEPARATED = [
             + '"tail-SECRET-9',
             ["tail-SECRET-9"],
         ),
+        (
+            '{"c":"API_KEY=' + ENV_VALUE + '\\nX=1","token":"tok-SECRET-0003"}',
+            [ENV_VALUE, "tok-SECRET-0003"],
+        ),
         *[(text, [ENV_VALUE]) for text in SEPARATED],
     ],
     ids=[
@@ -337,6 +342,7 @@ SEPARATED = [
         "named-first-line",
         "before-a-newline",
         "plain-text-quote",
+        "escape-then-a-field",
         "u2028",
         "u2029",
         "u0085",
@@ -351,21 +357,26 @@ def test_a_json_line_hides_all_its_raw_read_hid(text, hidden):
 
 
 @pytest.mark.parametrize(
-    "doc",
+    ("doc", "separators"),
     [
-        {"api_" + "k" * 20_000 + "_key": ["x"] * 10_000},
-        [f"API_KEY=value-{i:05d}-FAKE" for i in range(4_000)],
-        [f"API_KEY=value-{i:05d}-FAKE" for i in range(8_000)],
+        ({"api_" + "k" * 20_000 + "_key": ["x"] * 10_000}, (", ", ": ")),
+        ([f"API_KEY=value-{i:05d}-FAKE" for i in range(4_000)], (", ", ": ")),
+        ([f"API_KEY=value-{i:05d}-FAKE" for i in range(8_000)], (",", ":")),
     ],
     ids=["long-key-over-long-list", "many-named-values", "compact"],
 )
-def test_a_json_line_is_read_quickly(doc):
-    compact = (
-        len(doc) == 8_000
-    )  # no spaces: a value read as text runs to the line's end
+def test_a_json_line_is_read_quickly(doc, separators):
     start = time.perf_counter()
-    find_secrets(json.dumps(doc, separators=(",", ":")) if compact else json.dumps(doc))
+    find_secrets(json.dumps(doc, separators=separators))
     assert time.perf_counter() - start < 2
+
+
+def test_redact_keeps_a_written_env_file_a_call_with_its_path():
+    """A value named before an escaped newline ran on to its string's end, which cut the
+    call's JSON: the dashboard couldn't show the file it writes."""
+    content = "API_KEY=" + ENV_VALUE + "\nPORT=8080\n"
+    out = redact(json.dumps({"file_path": ".env", "content": content}))
+    assert json.loads(out)["file_path"] == ".env" and ENV_VALUE not in out
 
 
 def test_redact_also_hides_values_found_elsewhere():
