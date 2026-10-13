@@ -324,6 +324,23 @@ SEPARATED = [
             '{"c":"API_KEY=' + ENV_VALUE + '\\nX=1","token":"tok-SECRET-0003"}',
             [ENV_VALUE, "tok-SECRET-0003"],
         ),
+        (
+            '{"a":"API_KEY='
+            + ENV_VALUE
+            + '\\nX=1","pad":"'
+            + "p" * 17_000
+            + '","k":"'
+            + STRIPE
+            + '"}',
+            [STRIPE],
+        ),
+        (
+            json.dumps({"x": "API_KEY=" + ENV_VALUE})
+            + "\nPASSWORD="
+            + ENV_VALUE
+            + '\\n"tail-SECRET-8',
+            ["tail-SECRET-8"],
+        ),
         *[(text, [ENV_VALUE]) for text in SEPARATED],
     ],
     ids=[
@@ -343,6 +360,8 @@ SEPARATED = [
         "before-a-newline",
         "plain-text-quote",
         "escape-then-a-field",
+        "past-the-budget-after-an-escape",
+        "plain-text-escape-quote",
         "u2028",
         "u2029",
         "u0085",
@@ -371,12 +390,19 @@ def test_a_json_line_is_read_quickly(doc, separators):
     assert time.perf_counter() - start < 2
 
 
-def test_redact_keeps_a_written_env_file_a_call_with_its_path():
+@pytest.mark.parametrize(
+    "secrets",
+    [[ENV_VALUE], [ENV_VALUE, PROD_VALUE]],
+    ids=["one-secret", "two-secrets"],
+)
+def test_redact_keeps_a_written_env_file_a_call_with_its_path(secrets):
     """A value named before an escaped newline ran on to its string's end, which cut the
     call's JSON: the dashboard couldn't show the file it writes."""
-    content = "API_KEY=" + ENV_VALUE + "\nPORT=8080\n"
+    names = ["API_KEY", "DB_PASSWORD"]
+    content = "".join(f"{n}={v}\n" for n, v in zip(names, secrets)) + "PORT=8080\n"
     out = redact(json.dumps({"file_path": ".env", "content": content}))
-    assert json.loads(out)["file_path"] == ".env" and ENV_VALUE not in out
+    assert json.loads(out)["file_path"] == ".env"
+    assert [v for v in secrets if v in out] == []
 
 
 def test_redact_also_hides_values_found_elsewhere():
