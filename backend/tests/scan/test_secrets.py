@@ -219,10 +219,9 @@ def test_scan_returns_each_value_with_its_secret():
     [
         {"body": "api_key: " + ENV_VALUE},
         {"body": "api_key: " + ENV_VALUE, "to": "ops@example.test"},
-        {"stdin": "API_KEY=" + ENV_VALUE + "\nPORT=8080"},
         {"env": ["API_KEY=" + ENV_VALUE]},
     ],
-    ids=["ends-the-line", "ends-its-string", "before-a-newline", "in-a-list"],
+    ids=["ends-the-line", "ends-its-string", "in-a-list"],
 )
 def test_a_value_in_a_json_line_ends_where_its_string_does(args):
     """A call is scanned as its JSON dump, and a tool may return JSON: read as text, the
@@ -304,6 +303,22 @@ SEPARATED = [
             ),
             ["line-2-SECRET"],
         ),
+        (
+            json.dumps(
+                {
+                    "stdin": "API_KEY=" + ENV_VALUE + "\nPORT=8080",
+                    "to": ENV_VALUE + "@collector.invalid",
+                }
+            ),
+            [ENV_VALUE],
+        ),
+        (
+            json.dumps({"x": "API_KEY=" + ENV_VALUE})
+            + "\nPASSWORD="
+            + ENV_VALUE
+            + '"tail-SECRET-9',
+            ["tail-SECRET-9"],
+        ),
         *[(text, [ENV_VALUE]) for text in SEPARATED],
     ],
     ids=[
@@ -320,6 +335,8 @@ SEPARATED = [
         "within-the-budget",
         "compact-token",
         "named-first-line",
+        "before-a-newline",
+        "plain-text-quote",
         "u2028",
         "u2029",
         "u0085",
@@ -338,12 +355,16 @@ def test_a_json_line_hides_all_its_raw_read_hid(text, hidden):
     [
         {"api_" + "k" * 20_000 + "_key": ["x"] * 10_000},
         [f"API_KEY=value-{i:05d}-FAKE" for i in range(4_000)],
+        [f"API_KEY=value-{i:05d}-FAKE" for i in range(8_000)],
     ],
-    ids=["long-key-over-long-list", "many-named-values"],
+    ids=["long-key-over-long-list", "many-named-values", "compact"],
 )
 def test_a_json_line_is_read_quickly(doc):
+    compact = (
+        len(doc) == 8_000
+    )  # no spaces: a value read as text runs to the line's end
     start = time.perf_counter()
-    find_secrets(json.dumps(doc))
+    find_secrets(json.dumps(doc, separators=(",", ":")) if compact else json.dumps(doc))
     assert time.perf_counter() - start < 2
 
 

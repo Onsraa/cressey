@@ -144,30 +144,24 @@ def _spellings(value: str) -> set[str]:
     return {value, json.dumps(value, ensure_ascii=False)[1:-1]}
 
 
-def _cut_tail(value: str, spelled: set[str], lengths: list[int]) -> str | None:
-    """What a value read as text ran over past the end of its JSON string, when it starts
-    with a value found whole, as a dump spells it (maybe inside an escaped quote): the
-    closing quote and on, or an escape that ends it or runs on to a quote. None when the
-    value isn't such a cut form: a whole value whose first line is named elsewhere stays."""
-    quoted = value.startswith('\\"')
+# What a JSON string can end with: its closing quote, the escape of an escaped quote, and
+# the brackets, braces and commas after it.
+_STRING_END = '"\\]},'
+
+
+def _cut_form(value: str, spelled: set[str]) -> bool:
+    """A value read as text past the end of its JSON string (`v"}`, `v",`, `\\"v\\`): one found
+    whole, as a dump spells it, then nothing but the string's end, so dropping it uncovers
+    no text. One that ran on over more (compact JSON, an escaped newline) stays."""
     core = value.removeprefix('\\"')
-    for length in lengths:  # the spellings' lengths, shortest first
-        if length >= len(core):
-            break
-        rest = core[length:]
-        if core[:length] not in spelled:
-            continue
-        if rest[0] == '"' or (
-            rest[0] == "\\" and (quoted or rest == "\\" or '"' in rest)
-        ):
-            return rest
-    return None
+    whole = core.rstrip(_STRING_END)
+    return whole != core and whole in spelled
 
 
 def _hits(text: str) -> list[tuple[str, Secret]]:
     """Each (value, Secret) once per distinct value on a line. A JSON line's strings are also
-    read decoded: that adds to the text read, and replaces only the cut forms of what it finds
-    whole, which `hide` covers; what a cut form ran over after the value is read again."""
+    read decoded: that adds to the text read, and drops only the cut forms of what it finds
+    whole, which `hide` covers."""
     hits: list[tuple[str, Secret]] = []
     budget = SCAN_LIMIT
     with _LOCK, default_settings() as settings:
@@ -179,25 +173,12 @@ def _hits(text: str) -> list[tuple[str, Secret]]:
     if not named:
         return hits
     spelled = {form for whole in named for form in _spellings(whole)}
-    lengths = sorted({len(form) for form in spelled})
-    kept: dict[tuple[int, str], Secret] = {}
-    pending = list(hits)
-    for value, secret in pending:  # grows as cut forms' tails are read
-        tail = None if value in named else _cut_tail(value, spelled, lengths)
-        if tail is None:
-            kept.setdefault((secret.line, value), secret)
-        else:
-            # The naming rule resumes after a value, so a later field the cut form ran
-            # over was never read on its own.
-            pending += [
-                (v, _secret(_NAMED, name, v, secret.line))
-                for v, name in _named(tail).items()
-            ]
-    have = {value for _, value in kept}
-    return [(value, secret) for (_, value), secret in kept.items()] + [
-        (value, _secret(_NAMED, name, value, number))
-        for value, (number, name) in named.items()
-        if value not in have
+    kept = [(v, s) for v, s in hits if v in named or not _cut_form(v, spelled)]
+    have = {v for v, _ in kept}
+    return kept + [
+        (v, _secret(_NAMED, name, v, number))
+        for v, (number, name) in named.items()
+        if v not in have
     ]
 
 
