@@ -40,6 +40,7 @@ const COUNTS = [
 ] as const;
 
 export type Detection = Record<(typeof COUNTS)[number], number> & {
+	mode: string; // the report's model_mode: live Jev, or recorded answers
 	stop_ms_p50: number | null; // null when no session was held
 	stop_ms_p95: number | null;
 	misses: string[];
@@ -60,10 +61,12 @@ function readSession(v: unknown): Session | null {
 
 export function readDetection(r: unknown): Detection | null {
 	if (!isObj(r) || !hasNumbers(r, COUNTS) || !isStrings(r.misses)) return null;
+	if (typeof r.model_mode !== "string") return null;
 	const sessions = all(r.sessions, readSession);
 	if (!sessions) return null;
 	return {
 		...r,
+		mode: r.model_mode,
 		stop_ms_p50: numOrNull(r.stop_ms_p50),
 		stop_ms_p95: numOrNull(r.stop_ms_p95),
 		misses: r.misses,

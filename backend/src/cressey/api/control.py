@@ -2,7 +2,6 @@
 decide holds, read incidents and evaluations, change the responses. Behind the admin key."""
 
 import json
-from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
@@ -141,15 +140,14 @@ async def eval_reports() -> list[EvalFile]:
     for path in [*reports, DATA / "eval" / "decision-model.json"]:
         report = json.loads(path.read_text())
         kind = SESSION_REPORTS.get(path.stem, "guides")
-        # The guide reports have no date field: their file's write time stands in.
-        written = datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat()
         files.append(
             EvalFile(
                 kind=kind,
                 # The sessions are written by the team: a dev split.
                 split=report["split"] if kind == "guides" else "dev",
                 file=str(path.relative_to(DATA.parent)),
-                date=report.get("date", written),
+                # Dated by its run, never by its file: a checkout rewrites write times.
+                date=report["date"],
                 report=report,
             )
         )

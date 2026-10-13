@@ -4,6 +4,7 @@ import argparse
 import json
 import statistics
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -18,6 +19,7 @@ class BM25Baseline(Protocol):
 
 
 class EvalReport(BaseModel):
+    date: str
     split: str
     n_questions: int
     hit_at_3_bm25: float
@@ -130,11 +132,12 @@ def evaluate(
 
     n = len(answerable) or 1
     q95 = (
-        statistics.quantiles(latencies, n=20)[-1]
+        statistics.quantiles(latencies, n=20, method="inclusive")[-1]
         if len(latencies) > 1
         else (latencies or [0.0])[0]
     )
     return EvalReport(
+        date=datetime.now(UTC).isoformat(),
         split=split,
         n_questions=len(answerable),
         hit_at_3_bm25=hits["bm25"] / n,
@@ -151,8 +154,6 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    from datetime import UTC, datetime
-
     from cressey.guide.api import get_pipeline
     from cressey.guide.retrieve import Retriever
     from cressey.settings import DATA, Settings

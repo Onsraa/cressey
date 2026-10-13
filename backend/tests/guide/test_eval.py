@@ -1,9 +1,10 @@
 import json
+from datetime import datetime
 
 from cressey.domain.guides import DraftStep, GuideDraft
 from cressey.guide.eval import evaluate, same_unit
 from cressey.guide.pipeline import GuidePipeline
-from tests.guide.test_pipeline import GOOD, R9, R12, Rer, Retr, Rew, Wri
+from tests.guide.test_pipeline import GOOD, R9, R12, Rer, Retr, Rew, Wri, pipe
 
 
 class BM25Stub:
@@ -81,6 +82,7 @@ def test_report_counts_exact_hits_citations_and_unsure(tmp_path):
     )
     assert rep.unsure_correct == 0 and rep.n_out_of_scope == 1
     assert rep.citation_validity == 0.75 and rep.n_incidents == 1
+    assert datetime.fromisoformat(rep.date)
 
 
 class ScoredRer:
@@ -112,3 +114,40 @@ def test_calibration_counts_what_each_threshold_keeps(tmp_path):
     assert (high.expected_kept, high.expected_total) == (1, 1)
     assert (high.others_kept, high.others_total, low.others_kept) == (0, 1, 1)
     assert high.out_of_scope_answered == 1 and high.out_of_scope_total == 1
+
+
+class Stopwatch:
+    """Each guide takes the next given seconds: it is read at 0, then when it ends."""
+
+    def __init__(self, seconds):
+        self.reads = iter([t for s in seconds for t in (0.0, s)])
+
+    def perf_counter(self):
+        return next(self.reads)
+
+
+def test_the_guide_p95_never_exceeds_the_slowest_guide(tmp_path, monkeypatch):
+    # The slowest alone: an extrapolated p95 would pass it.
+    seconds = [1] * 7 + [9]
+    rset = tmp_path / "r.json"
+    rset.write_text("[]")
+    iset = tmp_path / "i.json"
+    iset.write_text(
+        json.dumps(
+            [
+                {
+                    "id": f"i{k}",
+                    "leg": "opportunity",
+                    "owner_role": "key_owner",
+                    "summary": "s",
+                    "source": "x",
+                    "split": "dev",
+                }
+                for k in range(len(seconds))
+            ]
+        )
+    )
+    monkeypatch.setattr("cressey.guide.eval.time", Stopwatch(seconds))
+    rep = evaluate(pipe(), BM25Stub([]), rset, iset, "dev")
+    assert rep.n_incidents == len(seconds)
+    assert rep.latency_p50_ms <= rep.latency_p95_ms <= 1000 * max(seconds)
