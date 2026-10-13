@@ -470,13 +470,15 @@ class Engine:
         found = [alarm_reason(late)] if alarmed else []
         flagged = found + [why for why, _ in labelled]
         reasons = [r.model_copy(update={"afterwards": True}) for r in flagged]
-        # Alarm or not, the step shows what the late read found, an unanswered model too.
-        self.runs.score(run, step, late, reasons)
         if not reasons:
+            # Alarm or not, the step shows what the late read found, an unanswered model too.
+            self.runs.score(run, step, late, reasons)
             return
-        # The incident hides what the call was hidden with: scanned again, off the loop.
+        # The incident hides what the call was hidden with: scanned again, off the loop, and
+        # before the step shows what was found, so it shows its alert at the same time.
         dumped = json.dumps(step.raw_args, ensure_ascii=False)
         seen = await asyncio.to_thread(_seen, self._hidden(run), dumped)
+        self.runs.score(run, step, late, reasons)
         # What ran can't be held, but a stop still stops the rest of the run (10-13).
         response = self._response(
             step.tool,

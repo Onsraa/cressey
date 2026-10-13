@@ -57,11 +57,20 @@ async def ran_long(tmp_path, judge: Judge, tool: str, args: dict) -> tuple[dict,
         for _ in range(500):
             page = (await api(base, "GET", f"/api/runs/{run['id']}")).json()
             [step] = page["steps"]
-            if step["legs"] is not None:  # read afterwards
+            if read_afterwards(step):
                 break
             await asyncio.sleep(0.02)
         incidents = (await api(base, "GET", "/api/incidents")).json()
     return step, incidents
+
+
+def read_afterwards(step: dict) -> bool:
+    """The legs the call came in with said it was too long to read; the late read's replace
+    them, its alert and incident with them."""
+    legs = step["legs"]
+    return legs is not None and not any(
+        "read afterwards" in fact for fact in legs["rationalization"]["facts"]
+    )
 
 
 def checks(step: dict) -> list[tuple[str, bool]]:
