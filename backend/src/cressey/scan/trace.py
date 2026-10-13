@@ -20,6 +20,7 @@ Reads = Sequence[tuple[int, str]]  # (step, tool output), in step order
 
 _WORD_BREAK = re.compile(r"""[\s"',;()\[\]{}<>]+""")
 _PART_BREAK = re.compile(r"[=:&@]")
+_COARSE_BREAK = re.compile(r"[=:&]")  # without the `@`, which may sit inside a value
 # Strict on purpose: invalid input must fail, not be dropped or repaired.
 _DECODERS: tuple[tuple[How, Callable[[str], str]], ...] = (
     ("base64", lambda t: base64.b64decode(t, altchars=b"-_", validate=True).decode()),
@@ -44,11 +45,12 @@ def strings(value: JsonValue) -> list[str]:
 
 
 def tokens(call: str) -> list[str]:
-    # The whole word stays too: base64 padding and URLs contain `=` and `:`.
+    # The whole word stays too: base64 padding and URLs contain `=` and `:`. So do the parts
+    # cut without the `@`: a value may hold one, and a decoding of the word fails on another.
     tokens = [
         token
         for word in _WORD_BREAK.split(call)
-        for token in (word, *_PART_BREAK.split(word))
+        for token in (word, *_COARSE_BREAK.split(word), *_PART_BREAK.split(word))
         if len(token) >= MIN_TOKEN
     ]
     return list(dict.fromkeys(tokens))

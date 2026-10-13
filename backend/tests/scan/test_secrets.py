@@ -239,6 +239,13 @@ def test_redact_hides_a_known_secret_in_base64_hex_or_url_encoding(encoded):
     assert out.endswith(" fin")
 
 
+def test_redact_hides_a_value_holding_an_at_in_a_partly_encoded_url():
+    """The `@` cuts a part in two, yet the part stays whole: the word's own decoding fails
+    on the bad escape after it."""
+    out = redact("pw=p@ss/w0rd%20%C3%A9&junk=%FF", {"p@ss/w0rd é": "fp1"})
+    assert out == "pw=[secret:fp1]&junk=%FF"
+
+
 def test_redact_leaves_encoded_text_without_a_secret_alone():
     plain = base64.b64encode(b"bonjour tout le monde").decode()
     assert redact(f"body: {plain}", KNOWN) == f"body: {plain}"

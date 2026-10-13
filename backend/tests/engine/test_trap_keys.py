@@ -57,6 +57,12 @@ def test_a_call_that_carries_a_trap_key_is_held(args):
     assert trap(args, DECOYS) == HELD
 
 
+def test_a_trap_key_holding_an_at_is_held_in_a_partly_encoded_url():
+    decoys = {"DB_PASSWORD": "p@ss/w0rd é"}
+    args = {"url": "pw=p@ss/w0rd%20%C3%A9&junk=%FF"}
+    assert trap(args, decoys) == Reason(check="trap_key", target="DB_PASSWORD")
+
+
 def test_a_key_that_is_not_a_trap_passes():
     assert trap({"query": "DELETE FROM users", "key": PROD_KEY}, DECOYS) is None
 
