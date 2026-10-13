@@ -30,6 +30,9 @@ class ToolRule(BaseModel):
     arg: str | None = (
         None  # the argument holding the SQL, the recipients, the path or the command
     )
+    # The arguments that carry the agent's own words about the call, not the act (Bash's
+    # description): they can raise a floor label, never lower it.
+    words: list[str] = []
 
     @model_validator(mode="after")
     def _a_write_names_no_argument(self) -> "ToolRule":

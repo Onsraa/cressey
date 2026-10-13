@@ -1,7 +1,11 @@
 """Jev's labels on the safety floor. They only add holds: none lifts one that code made, and
-none reads the agent's words. A tool missing from the policy gets its kind from its name; a
-write code lets through is asked whether it can't be undone beyond the mandate and whether
-it changes production."""
+the agent's own words about a call can raise a label, never lower it. A tool missing from the
+policy gets its kind from its name; a write code lets through is asked whether it can't be
+undone beyond the mandate and whether it changes production."""
+
+import asyncio
+import json
+from collections.abc import Sequence
 
 from typesafe_sdk import Choice, Noul
 
@@ -14,7 +18,7 @@ from cressey.engine.reading import (
     steps_before,
 )
 from cressey.engine.triangle import judgment_state
-from cressey.judge import Answer, Answers, Judge, top
+from cressey.judge import Answer, Answers, Judge, top, yes
 
 # Asked once for each tool the policy doesn't list, on its name alone: names come from the
 # installed tools, never from the agent, so no call can argue a tool into a read.
@@ -45,8 +49,9 @@ def tool_kind(answer: Answer, read: float) -> Risk | None:
     return "destructive" if top(answer) == "destructive" else "write"
 
 
-# Asked in one call for the safety floor on every write that code lets through, on its actions
-# alone: the agent's words could argue them down. Their labels only add holds, never lift one.
+# Asked for the safety floor on every write that code lets through, on the act: the agent's own
+# words about it can raise a label, never lower it (`floor_labels`). Their labels only add
+# holds, never lift one.
 # A deploy is production's question, not this one: it can be rolled back, and the production
 # check can be switched off.
 FLOOR = {
@@ -68,16 +73,33 @@ FLOOR = {
 
 
 async def floor_labels(
-    run: Run, call: Step, judge: Judge, t: Thresholds
+    run: Run, call: Step, judge: Judge, t: Thresholds, words: Sequence[str] = ()
 ) -> Answers | None:
     """The probabilities that the call can't be undone beyond the mandate (`irreversible`)
-    and that it changes production (`production`), on its actions alone, each the highest
-    over its parts. None when no model answers. Raises NotRecorded on a replay with no
-    recorded answer."""
+    and that it changes production (`production`), each the highest over its parts. A call
+    carrying the agent's own words about it (`words`, its tool rule's) is read with them and
+    without them, and each label keeps the higher. None when no model answers. Raises
+    NotRecorded on a replay with no recorded answer."""
     shown = await redacted_off_loop(run, steps_before(run, call.n)[-1:])
-    return await max_over_parts(
-        judge,
-        lambda part: judgment_state(run, call, t, shown, part, words=False),
-        args_parts(call),
-        FLOOR,
+    views = [call]
+    args = json.loads(call.args) if words else {}
+    if any(w in args for w in words):
+        act = {k: v for k, v in args.items() if k not in words}
+        views.append(
+            call.model_copy(update={"args": json.dumps(act, ensure_ascii=False)})
+        )
+    got = await asyncio.gather(
+        *(
+            max_over_parts(
+                judge,
+                lambda part: judgment_state(run, call, t, shown, part, words=False),
+                args_parts(view),
+                FLOOR,
+            )
+            for view in views
+        )
     )
+    answered = [g for g in got if g is not None]
+    if len(answered) < len(got):
+        return None
+    return {q: max(yes(g[q]) for g in answered) for q in FLOOR}
