@@ -476,12 +476,12 @@ def test_inline_sql_is_read_from_each_client(command, sql):
             "destructive",
             Reason(check="destructive_sql", target="accounts"),
         ),
-        # Inside the mandate the reason is the shell's own: none for an UPDATE, which the
-        # destructive-command regex doesn't know...
+        # Inside the mandate the SQL adds nothing: the call stays what the shell rule makes
+        # of it, a write for an UPDATE (Jev's labels still judge it)...
         (
             'psql -c "UPDATE accounts SET balance = 0"',
             Mandate(may_destroy=["accounts"]),
-            "destructive",
+            "write",
             None,
         ),
         (
@@ -490,12 +490,19 @@ def test_inline_sql_is_read_from_each_client(command, sql):
             "destructive",
             Reason(check="destructive_sql", target="users"),
         ),
-        # ...and destructive_shell for a DELETE, which it does.
+        # ...and a destructive_shell hold for a DELETE, which its regex holds.
         (
             'psql -c "DELETE FROM users"',
             Mandate(may_destroy=["users"]),
             "destructive",
             Reason(check="destructive_shell"),
+        ),
+        # One table beyond the mandate holds the whole line, the regex or not.
+        (
+            'psql -c "DELETE FROM sessions; DROP TABLE users"',
+            Mandate(may_destroy=["sessions"]),
+            "destructive",
+            Reason(check="destructive_sql", target="users"),
         ),
         (
             'mysql -e "UPDATE t SET x = 1"',

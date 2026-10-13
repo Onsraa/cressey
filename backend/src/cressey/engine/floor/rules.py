@@ -12,7 +12,7 @@ from cressey.domain.policy import ToolRule
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate, Risk
 from cressey.engine.floor.shell import inline_sql, shell_risk
-from cressey.engine.floor.sql import RANK, sql_risk
+from cressey.engine.floor.sql import sql_risk
 
 
 def _may_send(address: str, mandate: Mandate) -> bool:
@@ -75,19 +75,18 @@ def check(
             # shortcut: protected and frozen paths aren't matched inside a command, add it
             # when a mandate guards paths from a shell agent
             command = value if isinstance(value, str) else ""
-            risk = shell_risk(command)
-            reason = (
-                Reason(check="destructive_shell") if risk == "destructive" else None
-            )
-            # The SQL a client is given inline is read by the SQL rule, like run_sql's; what
-            # it can't classify adds nothing.
+            # The SQL a client is given inline is held like run_sql's when it destroys beyond
+            # the mandate. Inside it, it adds nothing, so Jev's labels still judge a shell
+            # write; SQL that can't be classified adds nothing either.
             destroyed: set[str] = set()
             for sql in inline_sql(command):
-                sql_level, touched = sql_risk(sql)
-                if touched is not None:
-                    risk = max(risk, sql_level, key=RANK.index)
-                    destroyed |= touched
-            return risk, _destructive_sql(destroyed, mandate) or reason
+                destroyed |= sql_risk(sql)[1] or set()
+            if beyond := _destructive_sql(destroyed, mandate):
+                return "destructive", beyond
+            risk = shell_risk(command)
+            return risk, Reason(
+                check="destructive_shell"
+            ) if risk == "destructive" else None
         case "sql":
             risk, tables = sql_risk(value if isinstance(value, str) else "")
             if risk != "destructive":
