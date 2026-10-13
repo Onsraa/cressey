@@ -23,6 +23,7 @@ const words = {
 	thoughts: [],
 	read: 0,
 	scores: {},
+	points: [],
 };
 
 const step = (
@@ -223,17 +224,17 @@ describe("a thought on the triangle", () => {
 				text: "Still failing. Nobody checks scripts. We can modify it! But no.",
 				role: "agent",
 				streaming: false,
-				thoughts: [
-					"Still failing.",
-					"Nobody checks scripts.",
-					"We can modify it! But no.",
-				],
-				scores: {
-					0: { P1: 0.97, O1: 0.1, R: 0.2, N1: 0.9 },
-					1: { O2: 0.95, R: 0.7, C1: 0.68 },
-					2: { O3: 0.39, R: 0.1, C1: 0.57 },
-				},
 				legs,
+				points: [
+					{
+						thought: 0,
+						pressure: 0.97,
+						opportunity: 0.1,
+						rationalization: 0.2,
+					},
+					{ thought: 1, pressure: 0, opportunity: 0.95, rationalization: 0.7 },
+					{ thought: 2, pressure: 0, opportunity: 0.39, rationalization: 0.1 },
+				],
 			},
 		],
 		case: {
@@ -254,7 +255,7 @@ describe("a thought on the triangle", () => {
 			evidence: {},
 		},
 	});
-	test("each read thought is its own dot, a concealment going away counting for nothing", () => {
+	test("each thought the case served a point for is its own dot, among the calls", () => {
 		expect(thoughtDots(said)).toEqual([
 			{ id: "m0.0", at: 1.5, legs: { p: 0.97, o: 0.1, r: 0.2 } },
 			{ id: "m0.1", at: 1.5, legs: { p: 0, o: 0.95, r: 0.7 } },

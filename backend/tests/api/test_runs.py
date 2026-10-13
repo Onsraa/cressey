@@ -69,3 +69,8 @@ async def test_a_run_serves_what_the_dashboard_draws_from_its_case(served_scored
             "facts": [f"“{must}” 0.90"],
         },
     }
+    # And each thought on its own: a dot on the triangle.
+    assert message["points"] == [
+        {"thought": 0, "pressure": 0.0, "opportunity": 0.9, "rationalization": 0.0},
+        {"thought": 1, "pressure": 0.0, "opportunity": 0.0, "rationalization": 0.9},
+    ]

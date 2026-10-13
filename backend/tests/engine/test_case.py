@@ -4,7 +4,7 @@ from collections.abc import Mapping
 import pytest
 
 from cressey.domain.policy import Thresholds
-from cressey.domain.runs import Case, Event, Leg, Legs, Mandate, Secret
+from cressey.domain.runs import Case, Event, Leg, Legs, Mandate, Secret, ThoughtPoint
 from cressey.engine.case.case import (
     LEG,
     CaseReader,
@@ -17,6 +17,7 @@ from cressey.engine.case.case import (
     secret_names,
     shadow,
     thought_legs,
+    thought_points,
     uses,
 )
 from tests.engine.test_thoughts import ScriptedJudge
@@ -549,6 +550,50 @@ def test_a_message_s_thoughts_on_the_triangle_each_leg_its_strongest_thought():
             ],
         ),
     )
+
+
+def test_each_read_thought_is_its_own_point_on_the_triangle():
+    said = message(
+        after=1,
+        thoughts=[
+            "Still failing.",
+            "Nobody checks scripts.",
+            "We can modify it! But no.",
+        ],
+    )
+    said.scores = {
+        0: {"P1": 0.97, "O1": 0.1, "R": 0.2, "N1": 0.9},  # N1 belongs to no leg
+        1: {"O2": 0.95, "R": 0.7, "C1": 0.68},
+        2: {"O3": 0.39, "R": 0.1, "C1": 0.57},
+    }
+    # A thought read, then cut again while the message streams on: not one any more.
+    reopened = message(after=1, streaming=True)
+    reopened.scores = {0: {"P1": 0.9}}
+    run = run_with(messages=[message(text="Go on.", role="user"), said, reopened])
+    record(
+        run.case,
+        [
+            ev("C1", p=0.68, direction="toward", message=1, thought=1),
+            ev("C1", p=0.57, direction="away", message=1, thought=2),
+        ],
+        Mandate(),
+    )
+    assert thought_points(run) == [
+        [],  # a prompt is never scored
+        [
+            ThoughtPoint(
+                thought=0, pressure=0.97, opportunity=0.1, rationalization=0.2
+            ),
+            ThoughtPoint(
+                thought=1, pressure=0.0, opportunity=0.95, rationalization=0.7
+            ),
+            # The concealment that goes away from the crossing counts for nothing.
+            ThoughtPoint(
+                thought=2, pressure=0.0, opportunity=0.39, rationalization=0.1
+            ),
+        ],
+        [],
+    ]
 
 
 def test_a_message_with_no_thought_read_has_no_thought_legs():

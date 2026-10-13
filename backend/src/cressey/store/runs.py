@@ -32,6 +32,10 @@ from cressey.domain.runs import (
 from cressey.scan.secrets import redact
 from cressey.store.eventlog import EventLog, read_lines
 
+# What a message gains after it is said, from the thought reading or the served view: the
+# log keeps only what was said.
+NOT_SAID = {"source", "thoughts", "read", "scores", "legs", "points"}
+
 # The step field each later event of a step sets, as the log records it.
 FROM_LOG = {
     "status": ("status",),
@@ -265,9 +269,7 @@ class Runs:
         message = Message(after=len(run.steps), text=redact(text, run.known))
         run.messages.append(message)
         # The log keeps what the agent said, not what the thought reading adds later.
-        said = message.model_dump(
-            exclude={"source", "thoughts", "read", "scores", "legs"}
-        )
+        said = message.model_dump(exclude=NOT_SAID)
         self.log.append("message", {"run": run.id, **said})
 
     def stream(self, run: Run, message_id: str, delta: str, final: bool) -> None:
@@ -286,9 +288,7 @@ class Runs:
         self._streaming[key] = (message, raw)
         if final:
             del self._streaming[key]
-            said = message.model_dump(
-                exclude={"source", "thoughts", "read", "scores", "legs"}
-            )
+            said = message.model_dump(exclude=NOT_SAID)
             self.log.append("message", {"run": run.id, **said})
 
     def prompt(self, run: Run, text: str) -> Message:
@@ -304,9 +304,7 @@ class Runs:
         run.messages.append(message)
         run.turn, run.ended_at = "working", None  # a new turn: the run goes on
         # The log keeps what the user typed, not what the thought reading adds later.
-        said = message.model_dump(
-            exclude={"source", "thoughts", "read", "scores", "legs"}
-        )
+        said = message.model_dump(exclude=NOT_SAID)
         self.log.append("message", {"run": run.id, **said})
         if run.revoked or run.refused:
             self.unlock(run)

@@ -145,54 +145,14 @@ export function shownLegs(step: Step): Legs | undefined {
 	};
 }
 
-// The questions each leg asks of a thought (engine/case/case.py LEG); the counters and the
-// plan belong to no leg.
-const ASKS: Record<LegName, string[]> = {
-	pressure: ["P1"],
-	opportunity: ["O1", "O2", "O3"],
-	rationalization: ["R", "C1"],
-};
-
-// One read thought of message `message` on each leg: its strongest question. A justification
-// or concealment whose conclusion goes away from the crossing counts for nothing, as in the
-// case (engine/case/case.py, thought_legs).
-function thoughtScores(run: Run, message: number) {
-	const away = (run.case?.events ?? []).filter(
-		(e) => e.message === message && e.direction === "away",
-	);
-	return Object.entries(run.messages[message].scores).map(([t, p]) => {
-		const leg = (k: LegName) =>
-			Math.max(
-				0,
-				...ASKS[k].map((q) =>
-					away.some((e) => e.thought === Number(t) && e.indicator === q)
-						? 0
-						: (p[q] ?? 0),
-				),
-			);
-		return {
-			thought: Number(t),
-			legs: {
-				pressure: leg("pressure"),
-				opportunity: leg("opportunity"),
-				rationalization: leg("rationalization"),
-			},
-		};
-	});
-}
-
-// Every read thought of the run, in the order said, as its own point on the triangle; `at`
-// places it among the calls, as `rows` does. Display only, like the scores it is drawn from.
+// Every read thought of the run, in the order said, as its own point on the triangle, scored
+// by the case (`points`); `at` places it among the calls, as `rows` does.
 export const thoughtDots = (run: Run) =>
 	run.messages.flatMap((m, i) =>
-		thoughtScores(run, i).map(({ thought, legs }) => ({
-			id: `m${i}.${thought}`,
+		m.points.map((t) => ({
+			id: `m${i}.${t.thought}`,
 			at: m.after + 0.5,
-			legs: {
-				p: legs.pressure,
-				o: legs.opportunity,
-				r: legs.rationalization,
-			},
+			legs: { p: t.pressure, o: t.opportunity, r: t.rationalization },
 		})),
 	);
 

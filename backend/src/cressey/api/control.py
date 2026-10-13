@@ -16,7 +16,7 @@ from cressey.domain.policy import Responses
 from cressey.domain.runs import Hold, RejectIn, Run, RunCreated, RunIn, RunSummary
 from cressey.domain.status import EvalFile, LogHead, Status
 from cressey.engine.agent_text import check_message, finish
-from cressey.engine.case.case import leg_evidence, thought_legs
+from cressey.engine.case.case import leg_evidence, thought_legs, thought_points
 from cressey.incidents.incidents import AssessTask
 from cressey.settings import DATA
 from cressey.store.runs import Runs
@@ -49,14 +49,16 @@ async def list_runs(runs: RunsDep) -> list[RunSummary]:
 @router.get("/runs/{run_id}")
 async def get_run(run_id: str, runs: RunsDep) -> Run:
     """With what the dashboard draws from the case, worked out now by the case's rules: each
-    leg's evidence, and each message's thoughts on the triangle."""
+    leg's evidence, and each message's thoughts on the triangle, together and one by one."""
     run = runs.get(run_id)
     if run is None:
         raise HTTPException(404)
     case = run.case.model_copy(update={"evidence": leg_evidence(run.case)})
     messages = [
-        m.model_copy(update={"legs": legs})
-        for m, legs in zip(run.messages, thought_legs(run), strict=True)
+        m.model_copy(update={"legs": legs, "points": points})
+        for m, legs, points in zip(
+            run.messages, thought_legs(run), thought_points(run), strict=True
+        )
     ]
     return run.model_copy(update={"case": case, "messages": messages})
 

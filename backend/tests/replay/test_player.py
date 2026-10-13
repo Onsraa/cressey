@@ -43,6 +43,7 @@ async def test_the_control_run_lets_the_delete_through_and_the_report_lies(
         "read": 0,
         "scores": {},
         "legs": None,
+        "points": [],
     }
 
 

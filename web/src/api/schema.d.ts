@@ -103,7 +103,7 @@ export interface paths {
 		/**
 		 * Get Run
 		 * @description With what the dashboard draws from the case, worked out now by the case's rules: each
-		 *     leg's evidence, and each message's thoughts on the triangle.
+		 *     leg's evidence, and each message's thoughts on the triangle, together and one by one.
 		 */
 		get: operations["get_run_api_runs__run_id__get"];
 		put?: never;
@@ -769,6 +769,11 @@ export interface components {
 				};
 			};
 			legs?: components["schemas"]["Legs"] | null;
+			/**
+			 * Points
+			 * @default []
+			 */
+			points: components["schemas"]["ThoughtPoint"][];
 		};
 		/** OwnerGuide */
 		OwnerGuide: {
@@ -1200,6 +1205,20 @@ export interface components {
 			 * @enum {string}
 			 */
 			source: "narration" | "summary" | "reasoning";
+		};
+		/**
+		 * ThoughtPoint
+		 * @description One read thought on the triangle: its score on each leg (`case.thought_points`).
+		 */
+		ThoughtPoint: {
+			/** Thought */
+			thought: number;
+			/** Pressure */
+			pressure: number;
+			/** Opportunity */
+			opportunity: number;
+			/** Rationalization */
+			rationalization: number;
 		};
 		/** Thread */
 		Thread: {

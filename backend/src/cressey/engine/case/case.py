@@ -11,7 +11,7 @@ person's word is a record, never evidence (the user's rule, 10-12).
 import asyncio
 import re
 import weakref
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 from cressey.domain.owners import LEGS, LegName
 from cressey.domain.policy import Thresholds
@@ -26,6 +26,7 @@ from cressey.domain.runs import (
     Run,
     Shadow,
     Step,
+    ThoughtPoint,
     Thread,
 )
 from cressey.engine.case.thoughts import (
@@ -265,46 +266,62 @@ def leg_values(case: Case) -> dict[LegName, float]:
     return {leg: case.events[lead[leg]].p if leg in lead else 0.0 for leg in LEGS}
 
 
-def thought_legs(run: Run) -> list[Legs | None]:
-    """Each message's thoughts on the triangle, for the dashboard. A read thought scores a leg
-    with its highest answer to the leg's questions (`LEG`), an answer whose conclusion goes
-    away from the crossing counting for nothing; the leg is its strongest thought, and each
-    thought's score is a fact, strongest first. None for a message with no thought read."""
+def thought_points(run: Run) -> list[list[ThoughtPoint]]:
+    """Each message's read thoughts on the triangle, for the dashboard, in the order said. A
+    thought scores a leg with its highest answer to the leg's questions (`LEG`), an answer
+    whose conclusion goes away from the crossing counting for nothing."""
     away = {
         (e.message, e.thought, e.indicator)
         for e in run.case.events
         if e.direction == "away"
     }
 
-    def leg(name: LegName, j: int, m: Message) -> Leg:
-        scored: list[tuple[float, str]] = []
-        for i, text in enumerate(m.thoughts):
-            score = max(
-                (
-                    p
-                    for q, p in m.scores.get(i, {}).items()
-                    if LEG.get(q) == name and (j, i, q) not in away
-                ),
-                default=0.0,
-            )
-            if score > 0:
-                scored.append((score, text))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return Leg(
-            score=scored[0][0] if scored else 0.0,
-            confirmed=False,
-            facts=[f"“{text}” {score:.2f}" for score, text in scored],
+    def score(j: int, i: int, name: LegName) -> float:
+        answers = run.messages[j].scores[i].items()
+        return max(
+            (p for q, p in answers if LEG.get(q) == name and (j, i, q) not in away),
+            default=0.0,
         )
 
     return [
-        Legs(
-            pressure=leg("pressure", j, m),
-            opportunity=leg("opportunity", j, m),
-            rationalization=leg("rationalization", j, m),
-        )
-        if any(i < len(m.thoughts) for i in m.scores)
-        else None
+        [
+            ThoughtPoint(
+                thought=i,
+                pressure=score(j, i, "pressure"),
+                opportunity=score(j, i, "opportunity"),
+                rationalization=score(j, i, "rationalization"),
+            )
+            for i in range(len(m.thoughts))
+            if i in m.scores
+        ]
         for j, m in enumerate(run.messages)
+    ]
+
+
+def thought_legs(run: Run) -> list[Legs | None]:
+    """Each message's thoughts on the triangle, for the dashboard: the leg is its strongest
+    thought (`thought_points`), and each thought's score is a fact, strongest first. None for
+    a message with no thought read."""
+
+    def legs(m: Message, points: list[ThoughtPoint]) -> Legs:
+        def leg(of: Callable[[ThoughtPoint], float]) -> Leg:
+            scored = [(of(t), m.thoughts[t.thought]) for t in points if of(t) > 0]
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return Leg(
+                score=scored[0][0] if scored else 0.0,
+                confirmed=False,
+                facts=[f"“{text}” {score:.2f}" for score, text in scored],
+            )
+
+        return Legs(
+            pressure=leg(lambda t: t.pressure),
+            opportunity=leg(lambda t: t.opportunity),
+            rationalization=leg(lambda t: t.rationalization),
+        )
+
+    return [
+        legs(m, points) if points else None
+        for m, points in zip(run.messages, thought_points(run), strict=True)
     ]
 
 

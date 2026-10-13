@@ -200,6 +200,15 @@ class RejectIn(BaseModel):
     message: str | None = Field(None, max_length=500)
 
 
+class ThoughtPoint(BaseModel):
+    """One read thought on the triangle: its score on each leg (`case.thought_points`)."""
+
+    thought: int  # its index in the message's `thoughts`
+    pressure: float
+    opportunity: float
+    rationalization: float
+
+
 class Message(BaseModel):
     after: int  # how many calls the agent had made when it said this
     text: str  # agent text, secrets redacted
@@ -210,10 +219,13 @@ class Message(BaseModel):
     thoughts: list[str] = []  # the text of each thought
     read: int = 0  # how many of the thoughts are already read
     # Each read thought's answer to every question, by its index in `thoughts`, those under
-    # their threshold too: the dashboard scores the thought on the triangle. Display only.
+    # their threshold too: the case scores the thought on the triangle from them, for the
+    # dashboard. Display only.
     scores: dict[int, dict[str, float]] = {}
     # Served only: its thoughts on the triangle (`case.thought_legs`); None until one is read.
     legs: Legs | None = None
+    # Served only: each read thought on its own, a dot on the triangle (`case.thought_points`).
+    points: list[ThoughtPoint] = []
 
 
 class Preflight(BaseModel):
