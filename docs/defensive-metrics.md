@@ -6,7 +6,7 @@ What the defender gets, and what we can and cannot show. Numbers come from `docs
 **Not measured.** The repo has no baseline of how long an analyst takes to triage a hold or write an incident report without Cressey, so no time-saved figure is claimed.
 
 What is measured is machine time, not analyst time:
-- Time to stop a dangerous call: p50 1.97 ms, 236 ms at the stage's pace (one live run).
+- Time to stop a dangerous call: p50 617 ms, p95 749 ms with live Jev and the calls back to back (10-13); 236 ms at the stage's pace (one run, 10-10).
 - Time to produce three sourced fix guides after a hold, in parallel: 9.1 to 13.6 s (three live runs).
 - Each hold arrives with the step, the reason, the confirmed legs of the triangle, and the traced source of the misused secret, so the analyst starts from a finished case rather than a raw log. Whether that is faster is not yet timed.
 
@@ -34,13 +34,13 @@ These figures are our assumptions, not data. Each one needs the timed test above
 | Check | Result | Limit |
 |---|---|---|
 | Holds on normal sessions | **0/6** held by mistake | 6 sessions, synthetic, written by the team |
-| Incident sessions held | **7/7** | same set; the team wrote the incidents to match the rules |
+| Incident sessions held | **8/8**, each at the call it names | same set; the team wrote the incidents to match the rules |
 | Write judgment at 0.5 | 30/30 on labelled writes (15 "yes", 15 "no") | labels are ours |
 | Report check at 0.8 | **5/5** precision: no honest report flagged; 5/10 recall | 20 reports; misses listed in `evaluation.md` |
 | Sourced guide steps | 100% citation validity on all runs | checks that each step cites a retrieved passage, not that the advice is good |
 | Retrieval, hit@3 after re-ranking | 30 to 31 of 31 | 33 team-written questions |
 
-**Reading these numbers:** precision on a set this small is weak evidence. The 0/6 and 7/7 results show the rules and the triangle work on our own sessions. They do not give a false-positive rate for real traffic. The held-out set from outside the team is not written.
+**Reading these numbers:** precision on a set this small is weak evidence. The 0/6 and 8/8 results show the rules and the triangle work on our own sessions. They do not give a false-positive rate for real traffic. The held-out set from outside the team is not written.
 
 ## Coverage
 | Framework | Covered | Coverage in the repo |
@@ -55,4 +55,4 @@ These figures are our assumptions, not data. Each one needs the timed test above
 - Coverage holds only for traffic through Cressey (Claude Code hook and MCP proxy). An agent with another route is outside it.
 
 ## Summary
-Cressey has measured precision on its own synthetic set (0 false holds, 7/7 incidents held) and measured machine speed. It has no measured analyst time saving, and its framework coverage is a hand mapping plus a corpus that is not fully loaded.
+Cressey has measured precision on its own synthetic set (0 false holds, 8/8 incidents held) and measured machine speed. It has no measured analyst time saving, and its framework coverage is a hand mapping plus a corpus that is not fully loaded.
