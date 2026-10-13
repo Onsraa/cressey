@@ -253,15 +253,15 @@ DIRECTION = Choice(
         "neither": "neither",
     },
 )
-CASE_LINES = 10  # open threads the window shows, newest first
+CASE_LINES = 10  # threads the window shows, newest first
 CASE_QUOTE = 200  # characters of a thread's latest quote
 ABOUT = 12  # candidate objects a flagged thought is checked against
 
 
-def _open_threads(case: Case) -> list[Thread]:
-    """The open threads, newest first, at most CASE_LINES: a fixed size, whatever the run."""
-    open_ = [t for t in case.threads if t.state == "open"]
-    return sorted(open_, key=lambda t: t.events[-1], reverse=True)[:CASE_LINES]
+def _threads(case: Case) -> list[Thread]:
+    """The threads, newest first, at most CASE_LINES: a fixed size, whatever the run. Each
+    shows what the agent said of it, and none is left out for what it said (10-13)."""
+    return sorted(case.threads, key=lambda t: t.events[-1], reverse=True)[:CASE_LINES]
 
 
 def _previous(run: Run, j: int, i: int) -> list[tuple[Message, int]]:
@@ -303,7 +303,7 @@ async def read_thought(
     j = next(n for n, x in enumerate(run.messages) if x is m)
     text = m.thoughts[i]
     previous = _previous(run, j, i)
-    threads = _open_threads(run.case)
+    threads = _threads(run.case)
     last = next((s for s in run.steps if s.n == m.after), None)
     shown = await redacted_off_loop(run, [last]) if last else {}
     window: dict[str, JsonValue] = {
