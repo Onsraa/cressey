@@ -19,7 +19,7 @@ MIN_TOKEN = 8  # shorter tokens match by chance
 Reads = Sequence[tuple[int, str]]  # (step, tool output), in step order
 
 _WORD_BREAK = re.compile(r"""[\s"',;()\[\]{}<>]+""")
-_PART_BREAK = re.compile(r"[=:&]")
+_PART_BREAK = re.compile(r"[=:&@]")
 # Strict on purpose: invalid input must fail, not be dropped or repaired.
 _DECODERS: tuple[tuple[How, Callable[[str], str]], ...] = (
     ("base64", lambda t: base64.b64decode(t, altchars=b"-_", validate=True).decode()),

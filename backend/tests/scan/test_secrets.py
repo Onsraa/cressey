@@ -229,6 +229,7 @@ KNOWN = {"FAKE-DB-PROD-KEY-0000": "fp1", "p@ss/w0rd!xyz": "fp2"}
         base64.urlsafe_b64encode(b"FAKE-DB-PROD-KEY-0000").decode(),
         b"FAKE-DB-PROD-KEY-0000".hex(),
         "p%40ss%2Fw0rd%21xyz",
+        base64.b64encode(b"FAKE-DB-PROD-KEY-0000").decode() + "@collector.invalid",
     ],
 )
 def test_redact_hides_a_known_secret_in_base64_hex_or_url_encoding(encoded):

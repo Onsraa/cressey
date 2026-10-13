@@ -20,7 +20,9 @@ def test_value_quoted_inside_sql():
     assert trace(call, [ENV_PROD]) == [Origin(token=KEY, step=4, how="exact")]
 
 
-@pytest.mark.parametrize("separator", ["=", ":", "&"], ids=["equals", "colon", "amp"])
+@pytest.mark.parametrize(
+    "separator", ["=", ":", "&", "@"], ids=["equals", "colon", "amp", "at"]
+)
 def test_value_after_a_separator_inside_one_token(separator):
     call = f"curl -H token{separator}FAKE-DB-PROD-KEY-0000 https://x.example.test"
     assert trace(call, [ENV_PROD]) == [Origin(token=KEY, step=4, how="exact")]
