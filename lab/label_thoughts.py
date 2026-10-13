@@ -288,6 +288,10 @@ async def run_all(a) -> None:
     scores: list[dict] = []
     judge = Recording(JevJudge.from_settings(s), scores)
     app = create_app(s, judge=judge)
+    # Every source plays through the hook (through the gateway a recording's calls would run),
+    # but the demo's tools in S9 and the sessions keep the rules the profile gives them.
+    tools = app.state.policy.tools
+    tools["hook"] = tools["mcp"] | tools["hook"]
     if a.thresholds:
         app.state.thresholds.thoughts.update(json.loads(Path(a.thresholds).read_text()))
     sources = [
