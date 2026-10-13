@@ -55,6 +55,18 @@ def test_sql_risk(sql, risk):
     assert sql_risk(sql)[0] == risk
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "DELETE FROM users WHERE a->1e9 = 1",
+        "SELECT " + "(" * 5000 + "1" + ")" * 5000,
+    ],
+    ids=["a ValueError", "a RecursionError"],
+)
+def test_sql_that_makes_the_parser_raise_cant_be_classified(sql):
+    assert sql_risk(sql) == ("destructive", None)
+
+
 def test_destructive_sql_outside_the_mandate_is_held():
     risk, reason = check(SQL, {"query": "DELETE FROM users"}, NONE)
     assert (risk, reason) == (

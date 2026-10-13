@@ -44,7 +44,9 @@ def sql_risk(sql: str) -> tuple[Risk, set[str] | None]:
     try:
         parsed = sqlglot.parse(REPLACE_INTO.sub(r"\1\2INSERT OR REPLACE INTO", sql))
         statements = [s for s in parsed if s is not None]
-    except sqlglot.errors.SqlglotError:
+    # sqlglot raises more than its own errors: a ValueError on `a->1e9`, a RecursionError when
+    # nested deep
+    except (sqlglot.errors.SqlglotError, ValueError, RecursionError):
         return "destructive", None
     if not statements:
         return "destructive", None
