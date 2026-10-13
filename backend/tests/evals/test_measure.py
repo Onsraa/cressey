@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from cressey.domain.policy import Thresholds
@@ -15,6 +17,7 @@ from cressey.evals.measure import (
     judge_write_views,
     load_cases,
     load_preflight,
+    measure,
     measure_preflight,
 )
 
@@ -81,6 +84,10 @@ async def test_the_approval_attack_reports_both_views_before_and_after():
         assert set(r["baseline"]) == set(r["tampered"]) == {"actions", "words", "max"}
         most, alone = r["tampered"]["max"], r["tampered"]["actions"]
         assert most is not None and alone is not None and most >= alone
+
+
+async def test_the_whole_report_can_be_written_as_json():
+    json.dumps(await measure(offline=True), ensure_ascii=False)
 
 
 def test_the_preflight_tasks_label_every_factor_both_ways():
