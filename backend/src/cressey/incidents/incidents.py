@@ -63,13 +63,16 @@ def sources(
     return found
 
 
-def source_trace(run: Run, step: Step) -> Callable[[], list[Source]]:
+def source_trace(
+    run: Run, step: Step, hidden: Mapping[str, str]
+) -> Callable[[], list[Source]]:
     """Where each value of the held call was first read, ready to run in a thread. The
-    results and arguments it reads are copied now, on the loop: a run that ends drops them."""
+    results and arguments it reads are copied now, on the loop: a run that ends drops them.
+    The sources hide what the call was hidden with (`hidden`, value -> fingerprint)."""
     earlier = run.steps[: step.n - 1]
     reads = [(s.n, s.result) for s in earlier if s.result]
     call = " ".join(strings(step.raw_args))
-    return partial(sources, call, earlier, reads, dict(run.known))
+    return partial(sources, call, earlier, reads, dict(hidden))
 
 
 def _root_cause(
@@ -148,7 +151,11 @@ class Incidents:
         self._traces: Tasks[None] = Tasks()
 
     def open(
-        self, run: Run, step: Step, severity: Literal["critique", "haute"]
+        self,
+        run: Run,
+        step: Step,
+        severity: Literal["critique", "haute"],
+        hidden: Mapping[str, str],
     ) -> Incident:
         assert (
             step.legs is not None and step.reason is not None
@@ -187,7 +194,7 @@ class Incidents:
             self._tasks.spawn(self._assessed(way_out, fixed))
         # The trace takes seconds on a big call: in the background and off the event loop, so
         # the decision, which depends on all the above, doesn't wait for it.
-        snapshot = source_trace(run, step)
+        snapshot = source_trace(run, step, hidden)
         self._traces.once(
             (run.id, len(self._incidents)),
             lambda: self._traced(incident, run, step, snapshot),

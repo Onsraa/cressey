@@ -3,12 +3,14 @@ import json
 import time
 from collections.abc import Callable
 from itertools import pairwise
+from typing import Literal
 
 import pytest
 from pydantic import JsonValue
 
 from cressey.demo.tools import PROD_KEY
 from cressey.domain.guides import Guide, GuideIncident
+from cressey.domain.incidents import Incident
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import Leg, Legs, Run, RunIn, Step
 from cressey.incidents.incidents import Incidents
@@ -65,6 +67,14 @@ def demo_run(runs: Runs, legs: Legs) -> tuple[Run, Step]:
     return run, call
 
 
+def open_held(
+    incidents: Incidents, held: tuple[Run, Step], severity: Literal["critique", "haute"]
+) -> Incident:
+    """The incident of a held call, hidden as the engine hides it: by what its run knows."""
+    run, call = held
+    return incidents.open(run, call, severity, run.known)
+
+
 async def until(done: Callable[[], bool]) -> None:
     for _ in range(200):
         if done():
@@ -77,7 +87,7 @@ async def test_an_incident_traces_the_key_to_where_it_was_read():
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide)
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
-    incident = incidents.open(run, call, "critique")
+    incident = incidents.open(run, call, "critique", run.known)
     await incidents.settled(run.id)
     [source] = incident.sources
     assert (source.step, source.tool, source.how, source.secret) == (
@@ -112,7 +122,7 @@ async def test_opening_an_incident_never_blocks_the_event_loop(monkeypatch):
 
     ticker = asyncio.create_task(tick())
     await asyncio.sleep(0.05)  # ticking before the call, so a stall shows as a gap
-    incident = incidents.open(run, call, "critique")
+    incident = incidents.open(run, call, "critique", run.known)
     assert incident.tracing  # open came back before the trace ended
     await incidents.settled(run.id)
     ticker.cancel()
@@ -137,8 +147,8 @@ async def test_two_incidents_opened_at_once_both_get_their_sources():
     second.legs = legs
     incidents = Incidents(runs, guide)
     opened = [
-        incidents.open(run, first, "critique"),
-        incidents.open(run, second, "critique"),
+        incidents.open(run, first, "critique", run.known),
+        incidents.open(run, second, "critique", run.known),
     ]
     assert all(i.tracing for i in opened)
     await incidents.settled(run.id)
@@ -159,7 +169,7 @@ async def test_a_trace_that_raises_leaves_no_sources_and_the_guides_are_still_wr
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide)
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=OFF))
-    incident = incidents.open(run, call, "critique")
+    incident = incidents.open(run, call, "critique", run.known)
     await incidents.settled(run.id)
     assert (incident.tracing, incident.sources) == (False, [])
     assert f"source trace of incident {incident.id} failed" in caplog.text
@@ -170,7 +180,7 @@ async def test_a_step_that_opens_several_incidents_has_each_of_them_traced():
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide)
     run, call = held_by_floor(runs)
-    opened = [incidents.open(run, call, "critique") for _ in range(2)]
+    opened = [incidents.open(run, call, "critique", run.known) for _ in range(2)]
     await incidents.settled(run.id)
     assert [i.tracing for i in opened] == [False, False]
 
@@ -181,7 +191,7 @@ async def test_a_run_that_ends_meanwhile_does_not_cost_the_incident_its_sources(
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide)
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
-    incident = incidents.open(run, call, "critique")
+    incident = incidents.open(run, call, "critique", run.known)
     runs.forget_results(run, list(run.steps))
     await incidents.settled(run.id)
     [source] = incident.sources
@@ -191,7 +201,7 @@ async def test_a_run_that_ends_meanwhile_does_not_cost_the_incident_its_sources(
 async def test_each_confirmed_leg_gets_a_guide_for_its_owner():
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=OFF))
-    incident = Incidents(runs, guide).open(run, call, "critique")
+    incident = Incidents(runs, guide).open(run, call, "critique", run.known)
     assert [(g.leg, g.owner_role) for g in incident.guides] == [
         ("pressure", "task_author"),
         ("opportunity", "key_owner"),
@@ -201,7 +211,7 @@ async def test_each_confirmed_leg_gets_a_guide_for_its_owner():
 async def test_a_safety_floor_hit_without_a_confirmed_leg_goes_to_the_soc():
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=OFF, rationalization=OFF))
-    incident = Incidents(runs, guide).open(run, call, "critique")
+    incident = Incidents(runs, guide).open(run, call, "critique", run.known)
     assert [(g.leg, g.owner_role) for g in incident.guides] == [
         ("rationalization", "soc")
     ]
@@ -216,7 +226,7 @@ async def test_guides_are_written_in_the_background_and_never_see_a_secret():
 
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=OFF))
-    incident = Incidents(runs, spy).open(run, call, "critique")
+    incident = Incidents(runs, spy).open(run, call, "critique", run.known)
     assert {g.status for g in incident.guides} == {"pending"}
     await until(lambda: all(g.status == "ok" for g in incident.guides))
     assert [g.guide_id for g in incident.guides] == [
@@ -232,7 +242,7 @@ async def test_a_guide_that_fails_is_marked_unavailable():
 
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=OFF, rationalization=OFF))
-    incident = Incidents(runs, broken).open(run, call, "critique")
+    incident = Incidents(runs, broken).open(run, call, "critique", run.known)
     await until(lambda: incident.guides[0].status == "unavailable")
 
 
@@ -240,9 +250,9 @@ async def test_the_queue_puts_critical_incidents_first_then_the_oldest():
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide)
     legs = Legs(pressure=ON, opportunity=ON, rationalization=OFF)
-    first = incidents.open(*demo_run(runs, legs), "haute")
-    second = incidents.open(*demo_run(runs, legs), "critique")
-    third = incidents.open(*demo_run(runs, legs), "haute")
+    first = open_held(incidents, demo_run(runs, legs), "haute")
+    second = open_held(incidents, demo_run(runs, legs), "critique")
+    third = open_held(incidents, demo_run(runs, legs), "haute")
     assert [i.id for i in incidents.all()] == [second.id, first.id, third.id]
 
 
@@ -250,7 +260,7 @@ async def test_the_incident_shows_the_decision_on_its_call():
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide)
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=OFF))
-    incident = incidents.open(run, call, "critique")
+    incident = incidents.open(run, call, "critique", run.known)
     call.status = "approved"
     shown = incidents.get(incident.id)
     assert shown is not None and shown.decision == "approved"
@@ -265,7 +275,7 @@ async def test_each_guide_gets_a_root_cause_sentence_for_its_leg():
 
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=ON))
-    Incidents(runs, spy).open(run, call, "critique")
+    Incidents(runs, spy).open(run, call, "critique", run.known)
     await until(lambda: len(seen) == 3)
     drift = seen["rationalization"].summary
     assert (
@@ -284,7 +294,7 @@ async def test_each_leg_cressey_can_fix_gets_a_fix_for_a_human_to_approve():
 
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=ON))
-    incident = Incidents(runs, guide).open(run, call, "critique")
+    incident = Incidents(runs, guide).open(run, call, "critique", run.known)
     fixes = {f.leg: f for f in incident.fixes}
     assert set(fixes) == {"pressure", "opportunity"}  # rationalization: its guide only
     key, task = fixes["opportunity"], fixes["pressure"]
@@ -301,7 +311,7 @@ async def test_each_leg_cressey_can_fix_gets_a_fix_for_a_human_to_approve():
 async def test_a_leg_left_unconfirmed_gets_no_fix():
     runs = Runs(EventLog())
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
-    incident = Incidents(runs, guide).open(run, call, "critique")
+    incident = Incidents(runs, guide).open(run, call, "critique", run.known)
     assert [f.leg for f in incident.fixes] == ["opportunity"]
 
 
@@ -319,7 +329,7 @@ async def test_runs_going_after_the_same_target_raise_a_fleet_signal():
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide, fleet=Fleet(runs=3, window_minutes=15))
     first, second, third = (
-        incidents.open(*held_by_floor(runs), "critique") for _ in range(3)
+        open_held(incidents, held_by_floor(runs), "critique") for _ in range(3)
     )
     [signal] = incidents.fleet()
     assert signal.checks == ["destructive_sql"]
@@ -335,9 +345,10 @@ async def test_one_run_held_again_and_again_is_not_a_fleet():
     incidents = Incidents(runs, guide, fleet=Fleet(runs=3, window_minutes=15))
     run, call = held_by_floor(runs)
     for _ in range(3):
-        incidents.open(run, call, "critique")
-    incidents.open(
-        *held_by_floor(runs, Reason(check="egress", target="x@prestataire.example")),
+        incidents.open(run, call, "critique", run.known)
+    open_held(
+        incidents,
+        held_by_floor(runs, Reason(check="egress", target="x@prestataire.example")),
         "critique",
     )
     assert incidents.fleet() == []
@@ -351,9 +362,9 @@ async def test_holds_older_than_the_window_dont_count():
     runs = Runs(EventLog())
     incidents = Incidents(runs, guide, fleet=Fleet(runs=2, window_minutes=15))
     incidents.clock = lambda: datetime(2026, 10, 10, 12, 0, tzinfo=UTC)
-    incidents.open(*held_by_floor(runs), "critique")
+    open_held(incidents, held_by_floor(runs), "critique")
     incidents.clock = lambda: (
         datetime(2026, 10, 10, 12, 0, tzinfo=UTC) + timedelta(minutes=16)
     )
-    incidents.open(*held_by_floor(runs), "critique")
+    open_held(incidents, held_by_floor(runs), "critique")
     assert incidents.fleet() == []
