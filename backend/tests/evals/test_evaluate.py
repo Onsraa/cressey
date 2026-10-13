@@ -1,8 +1,10 @@
+import json
+
 import pytest
 from pydantic import ValidationError
 
 from cressey.demo.tools import PROD_KEY
-from cressey.evals.evaluate import evaluate
+from cressey.evals.evaluate import REPORT, evaluate
 from cressey.replay.importers import load_sessions
 from cressey.replay.trajectory import Call, Session
 from cressey.settings import Settings
@@ -33,6 +35,11 @@ def test_every_shipped_incident_names_the_call_it_must_be_held_at():
     sessions = load_sessions()
     unnamed = [s.id for s in sessions if s.expect == "held" and s.held_at is None]
     assert unnamed == []
+
+
+def test_the_served_detection_report_covers_every_shipped_session():
+    served = {r["session"] for r in json.loads(REPORT.read_text())["sessions"]}
+    assert served == {s.id for s in load_sessions()}
 
 
 async def test_the_ablation_shows_what_only_the_triangle_holds():
