@@ -73,8 +73,9 @@ async def claude_hook(
     """
     runs: Runs = request.app.state.runs
     engine: Engine = request.app.state.engine
-    # The calls let through and not yet returned: (run, tool_use_id) -> step.
-    pending: dict[tuple[str, str], Step] = request.app.state.hook_calls
+    # The calls being decided (None), then let through and not yet returned:
+    # (run, tool_use_id) -> step.
+    pending: dict[tuple[str, str], Step | None] = request.app.state.hook_calls
     run = runs.by_key(authorization.removeprefix("Bearer ").strip())
     if run is None:
         raise HTTPException(403)
@@ -92,8 +93,10 @@ async def claude_hook(
         runs.model(run, str(event["to_model"]), str(event.get("source", "")))
         return {}
     if kind == "SessionEnd":
+        # Killed mid-call: no result comes, for a call let through or still being decided.
         for call in [c for c in pending if c[0] == run.id]:
-            pending.pop(call).running = False  # killed mid-call: its result never comes
+            if (step := pending.pop(call)) is not None:
+                step.running = False
         runs.disconnect(run)
         engine.ended(run)
         return {}
@@ -126,10 +129,16 @@ async def claude_hook(
         return {}
     call = (run.id, str(event.get("tool_use_id", "")))
     if kind == "PreToolUse":
+        pending[call] = None
         try:
-            pending[call] = await engine.before(run, _act(run, event))
+            step = await engine.before(run, _act(run, event))
         except Refused as refused:
+            pending.pop(call, None)
             return _deny(str(refused))
+        if call in pending:
+            pending[call] = step
+        else:  # its session ended while it was decided: its result never comes
+            step.running = False
         return {}
     step = pending.pop(call, None)
     if step is None:  # a call Cressey refused: Claude Code never ran it

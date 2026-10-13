@@ -109,6 +109,8 @@ class Engine:
         self._ending: Tasks[None] = (
             Tasks()
         )  # ended runs, waiting for their reads to end
+        # The calls each run is still deciding: its end drops nothing they read.
+        self._deciding: dict[str, set[asyncio.Event]] = {}
         # Jev's labels, per surface and tool name
         self._kinds: dict[tuple[Surface, str], ToolRule] = {}
 
@@ -206,6 +208,18 @@ class Engine:
         agent that ends its own run can't go on with the trail of its reads dropped."""
         if run.ended_at is not None:
             raise Refused(ENDED)
+        decided = asyncio.Event()
+        calls = self._deciding.setdefault(run.id, set())
+        calls.add(decided)
+        try:
+            return await self._decide(run, act)
+        finally:
+            decided.set()
+            calls.discard(decided)
+            if not calls:
+                del self._deciding[run.id]
+
+    async def _decide(self, run: Run, act: Act) -> Step:
         start = time.perf_counter()
         name, args = act.tool, act.args
         rule = await self._rule(act.surface, name)
@@ -359,15 +373,17 @@ class Engine:
         """The run ended (its report, its session's end): what its calls returned is dropped
         once every read of its steps is done, so a long-lived Cressey keeps what it decided,
         not all its agents read. A session resumed meanwhile keeps it all."""
-        self._ending.spawn(self._forget_results(run, list(run.steps)))
+        self._ending.spawn(self._forget_results(run))
 
-    async def _forget_results(self, run: Run, steps: list[Step]) -> None:
-        # The shadows and late reads may still ask the ledger for labels: they settle first.
+    async def _forget_results(self, run: Run) -> None:
+        # A call that came in before the end is decided on what the run had read, and adds
+        # its step; then the shadows and late reads, which may still ask the ledger, settle.
+        await asyncio.gather(*(d.wait() for d in self._deciding.get(run.id, ())))
         await self.case.settled(run)
         await self._late.settled(run.id)
         await self.ledger.settled(run)
         if run.ended_at is not None:
-            self.runs.forget_results(run, steps)
+            self.runs.forget_results(run, list(run.steps))
 
     async def _labelled_late(self, run: Run, step: Step) -> list[Reason]:
         """The floor's labels for a write that ran before it could be read, as `_labelled`
