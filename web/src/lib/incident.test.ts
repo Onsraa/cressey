@@ -34,6 +34,7 @@ const incident = (over: Partial<Incident>): Incident => ({
 	created_at: "2026-10-10T20:41:43Z",
 	decision: "rejected",
 	sources: [],
+	tracing: false,
 	legs: { pressure: leg, opportunity: leg, rationalization: leg },
 	guides: [],
 	fixes: [fix("pressure", false), fix("opportunity", false)],

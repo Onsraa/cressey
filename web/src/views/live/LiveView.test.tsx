@@ -150,6 +150,7 @@ const incident: Incident = {
 	created_at: at(-40),
 	decision: "held",
 	sources: [],
+	tracing: false,
 	legs: held,
 	guides: [],
 	fixes: [],
@@ -882,4 +883,19 @@ test("a run that ended while stopped reads Ended, with no Unlock", () => {
 	expect(out).not.toContain("Stopped");
 	expect(out).toContain("No path within the mandate so far");
 	expect(out).not.toContain("Unlock");
+});
+
+test("an incident still being traced says so, instead of claiming it has no source", async () => {
+	const { default: App } = await import("@/App");
+	const page = (i: Incident) => {
+		state = { ...live([demo({})]), view: "inc", incidents: [i] };
+		return renderToStaticMarkup(<App />).replaceAll("<!-- -->", "");
+	};
+	const NONE = "No value in the held call comes from an earlier read.";
+	const tracing = page({ ...incident, tracing: true });
+	expect(tracing).toContain("Tracing where the values came from…");
+	expect(tracing).not.toContain(NONE);
+	const traced = page(incident);
+	expect(traced).toContain(NONE);
+	expect(traced).not.toContain("Tracing where the values came from");
 });

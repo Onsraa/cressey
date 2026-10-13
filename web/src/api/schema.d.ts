@@ -663,6 +663,11 @@ export interface components {
 			decision: string;
 			/** Sources */
 			sources: components["schemas"]["Source"][];
+			/**
+			 * Tracing
+			 * @default false
+			 */
+			tracing: boolean;
 			legs: components["schemas"]["Legs"];
 			/** Guides */
 			guides: components["schemas"]["OwnerGuide"][];

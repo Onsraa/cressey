@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+import time
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
@@ -14,7 +15,16 @@ from cressey.engine import decide
 from cressey.engine.agent_text import WAY_OUT, fallback, finish
 from cressey.llm.clients import ModelUnavailable
 from cressey.scan.secrets import hide, scan
-from cressey.testing import QuietJudge, agent, api, next_hold, no_to_all, serving, users
+from cressey.testing import (
+    QuietJudge,
+    agent,
+    api,
+    next_hold,
+    no_to_all,
+    serving,
+    traced_incidents,
+    users,
+)
 
 pytestmark = pytest.mark.anyio
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -377,7 +387,7 @@ async def test_the_demo_incident_from_hold_to_guides(served):
         await a.call_tool("read_file", {"path": ".env.prod"})
         call = asyncio.create_task(a.call_tool("run_sql", DELETE, raise_on_error=False))
         hold = await next_hold(served)
-        [incident] = (await api(served, "GET", "/api/incidents")).json()
+        [incident] = await traced_incidents(served)
         n = hold["step"]["n"]
         await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
         await call
@@ -674,6 +684,35 @@ async def test_on_fleet_stop_a_target_several_runs_went_after_is_refused_at_once
     assert r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     [step] = await steps(served, third)
     assert step["status"] == "denied"
+
+
+async def test_on_fleet_stop_a_parallel_call_of_the_run_that_raised_the_signal_is_refused(
+    served, monkeypatch
+):
+    """The signal, the stop and the run's suspension are one step with the incident's
+    opening: a call in parallel can't slip through while the incident's trace runs."""
+    await responses(served, fleet="stop")
+    read = {"query": "SELECT * FROM users", "key": TRAP_KEY}  # flagged, not held
+    for _ in range(2):  # two runs flagged for it: the fleet is one short
+        run = await new_run(served)
+        async with agent(served, run["key"]) as a:
+            await a.call_tool("run_sql", read, raise_on_error=False)
+
+    def slow(call, reads):
+        time.sleep(0.3)  # the trace of the third run's incident, a big call's
+        return []
+
+    monkeypatch.setattr("cressey.incidents.incidents.trace", slow)
+    third = await new_run(served)
+    async with agent(served, third["key"]) as a:
+        results = await asyncio.gather(
+            a.call_tool("run_sql", read, raise_on_error=False),
+            a.call_tool("run_sql", read, raise_on_error=False),
+        )
+    assert all(r.is_error for r in results)
+    assert [s["status"] for s in await steps(served, third)] == ["denied", "denied"]
+    incidents = await traced_incidents(served)
+    assert len([i for i in incidents if i["run_id"] == third["id"]]) == 1  # one per key
 
 
 async def test_on_stop_a_trap_key_is_refused_at_once(served):

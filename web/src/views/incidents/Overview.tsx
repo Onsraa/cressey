@@ -2,7 +2,7 @@ import { useLive } from "@/api/live";
 import type { Incident, Run, Source } from "@/api/types";
 import { ArrowRight, Search, Triangle } from "@/components/icons";
 import { LEGS } from "@/lib/labels";
-import { Box } from "./ui";
+import { Box, Pending } from "./ui";
 import { argPath, secretNames, unmask } from "./util";
 
 const HOW: { k: Source["how"]; label: string; tip: string }[] = [
@@ -96,11 +96,16 @@ export function Overview({
 							</div>
 						);
 					})}
-					{!i.sources.length && (
-						<p className="p-5 text-[13px] text-mute">
-							No value in the held call comes from an earlier read.
-						</p>
-					)}
+					{!i.sources.length &&
+						(i.tracing ? (
+							<div className="p-5">
+								<Pending>Tracing where the values came from…</Pending>
+							</div>
+						) : (
+							<p className="p-5 text-[13px] text-mute">
+								No value in the held call comes from an earlier read.
+							</p>
+						))}
 				</div>
 			</Box>
 			<Box Icon={Triangle} title="LEGS INVOLVED">

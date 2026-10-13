@@ -1,6 +1,8 @@
 import asyncio
 import json
+import time
 from collections.abc import Callable
+from itertools import pairwise
 
 import pytest
 from pydantic import JsonValue
@@ -11,6 +13,7 @@ from cressey.domain.reasons import Reason
 from cressey.domain.runs import Leg, Legs, Run, RunIn, Step
 from cressey.incidents.incidents import Incidents
 from cressey.scan.secrets import redact, scan
+from cressey.scan.trace import Origin, Reads
 from cressey.store.eventlog import EventLog
 from cressey.store.runs import Runs
 from tests.helpers import act
@@ -72,8 +75,10 @@ async def until(done: Callable[[], bool]) -> None:
 
 async def test_an_incident_traces_the_key_to_where_it_was_read():
     runs = Runs(EventLog())
+    incidents = Incidents(runs, guide)
     run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
-    incident = Incidents(runs, guide).open(run, call, "critique")
+    incident = incidents.open(run, call, "critique")
+    await incidents.settled(run.id)
     [source] = incident.sources
     assert (source.step, source.tool, source.how, source.secret) == (
         1,
@@ -82,6 +87,105 @@ async def test_an_incident_traces_the_key_to_where_it_was_read():
         "DB_PROD_KEY",
     )
     assert PROD_KEY not in incident.model_dump_json()
+
+
+async def test_opening_an_incident_never_blocks_the_event_loop(monkeypatch):
+    """The trace reads every earlier result for each token of a held call: seconds for a big
+    one. It runs in a thread after open has returned, so no other agent nor the dashboard
+    waits for it."""
+
+    def slow(call: str, reads: Reads) -> list[Origin]:
+        time.sleep(0.3)
+        return []
+
+    monkeypatch.setattr("cressey.incidents.incidents.trace", slow)
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide)
+    run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
+    loop = asyncio.get_running_loop()
+    ticks: list[float] = []
+
+    async def tick() -> None:
+        while True:
+            ticks.append(loop.time())
+            await asyncio.sleep(0.01)
+
+    ticker = asyncio.create_task(tick())
+    await asyncio.sleep(0.05)  # ticking before the call, so a stall shows as a gap
+    incident = incidents.open(run, call, "critique")
+    assert incident.tracing  # open came back before the trace ended
+    await incidents.settled(run.id)
+    ticker.cancel()
+    ticks.append(loop.time())  # a stall that ends with the trace is a gap to this tick
+    assert not incident.tracing
+    assert max(b - a for a, b in pairwise(ticks)) < 0.1
+
+
+async def test_two_incidents_opened_at_once_both_get_their_sources():
+    runs = Runs(EventLog())
+    legs = Legs(pressure=OFF, opportunity=ON, rationalization=OFF)
+    run, first = demo_run(runs, legs)
+    delete: dict[str, JsonValue] = {"query": "DELETE FROM orders", "key": PROD_KEY}
+    second = runs.add_step(
+        run,
+        act("run_sql", delete),
+        redact(json.dumps(delete), run.known),
+        "destructive",
+        [SQL_USERS],
+        ["agent"],
+    )
+    second.legs = legs
+    incidents = Incidents(runs, guide)
+    opened = [
+        incidents.open(run, first, "critique"),
+        incidents.open(run, second, "critique"),
+    ]
+    assert all(i.tracing for i in opened)
+    await incidents.settled(run.id)
+    assert [[(s.step, s.tool, s.secret) for s in i.sources] for i in opened] == [
+        [(1, "read_file", "DB_PROD_KEY")]
+    ] * 2
+    assert sorted(i.step for i in incidents.all()) == [2, 3]
+    await until(lambda: all(g.status == "ok" for i in opened for g in i.guides))
+
+
+async def test_a_trace_that_raises_leaves_no_sources_and_the_guides_are_still_written(
+    monkeypatch, caplog
+):
+    def broken(call: str, reads: Reads) -> list[Origin]:
+        raise RuntimeError("trace down")
+
+    monkeypatch.setattr("cressey.incidents.incidents.trace", broken)
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide)
+    run, call = demo_run(runs, Legs(pressure=ON, opportunity=ON, rationalization=OFF))
+    incident = incidents.open(run, call, "critique")
+    await incidents.settled(run.id)
+    assert (incident.tracing, incident.sources) == (False, [])
+    assert f"source trace of incident {incident.id} failed" in caplog.text
+    await until(lambda: all(g.status == "ok" for g in incident.guides))
+
+
+async def test_a_step_that_opens_several_incidents_has_each_of_them_traced():
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide)
+    run, call = held_by_floor(runs)
+    opened = [incidents.open(run, call, "critique") for _ in range(2)]
+    await incidents.settled(run.id)
+    assert [i.tracing for i in opened] == [False, False]
+
+
+async def test_a_run_that_ends_meanwhile_does_not_cost_the_incident_its_sources():
+    """The trace reads the results as they were when the call was held: the end of a run
+    drops them (Engine.ended) while the trace may still be running."""
+    runs = Runs(EventLog())
+    incidents = Incidents(runs, guide)
+    run, call = demo_run(runs, Legs(pressure=OFF, opportunity=ON, rationalization=OFF))
+    incident = incidents.open(run, call, "critique")
+    runs.forget_results(run, list(run.steps))
+    await incidents.settled(run.id)
+    [source] = incident.sources
+    assert (source.step, source.secret) == (1, "DB_PROD_KEY")
 
 
 async def test_each_confirmed_leg_gets_a_guide_for_its_owner():

@@ -44,9 +44,9 @@ The interface is in English (since 10-10). One theme, readable on a projector.
   - two or more legs confirmed by facts is « high »;
   - a single leg shows on its gauge only.
 - **Lifecycle:** held → decided → fix approved → replay passed.
-  - The guides start when the incident fires, before the decision (« writing the guide… », then ready).
+  - The guides start once the trace of the sources ends, right after the incident opens and before the decision (« writing the guide… », then ready).
   - An approved call keeps its incident, marked « action approved », because what it revealed (a key within reach, for example) is still real.
-- **Source:** « DB_PROD_KEY read in .env.prod at step 3 ». It shows the step, the tool, the file, and how the value matched (exact, lowercase, base64, hex or URL), and links to that step.
+- **Source:** « DB_PROD_KEY read in .env.prod at step 3 ». It shows the step, the tool, the file, and how the value matched (exact, lowercase, base64, hex or URL), and links to that step. While the trace runs (`tracing`), it reads « Tracing where the values came from… » instead of « No value in the held call comes from an earlier read. »
 - **Legs involved**, with their facts.
 - **Three inboxes**, one per owner, each with its guide:
   - status: ok, « I don't know — ask the security team », unavailable (sources still shown), or « writing the guide… »;

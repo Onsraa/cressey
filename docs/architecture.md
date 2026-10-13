@@ -151,9 +151,9 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
   - **The read-only key:** once pressure and opportunity are both confirmed, a destructive call that nothing holds is refused at once, with status `denied` and the reason « clé en lecture seule : pression et opportunité confirmées ». Reads and writes go through (S9, `decisions.md`). A call the floor or the triangle holds still goes to a human. The run's `read_only_step`, and a `read_only` event.
 - **Incidents** (`incidents/incidents.py`): every held call in a `live` or `control` run opens one. Replays open none.
   - **Severity:** « critique » when the safety floor's code held the call, « haute » when only a model's label did: the triangle, or Jev's floor labels.
-  - **Sources:** each value of the call is traced to the first step that read it (`scan/trace.py`), with how it matched. A secret shows by name only.
+  - **Sources:** each value of the call is traced to the first step that read it (`scan/trace.py`), with how it matched. A secret shows by name only. The trace takes seconds on a big call, so it runs after the incident opens, in the background and in a thread, on a copy of what the run had read: the incident is served at once with `tracing: true` and no sources, then with its sources and `tracing: false`. The decision, the fleet count and the log don't wait for it.
   - **Guides:** one per confirmed leg, for its owner. Pressure goes to the task author, opportunity to the key owner, rationalization to the platform owner. A floor hit with no confirmed leg goes to the SOC.
-    - They start in the background as soon as the call is held. Each owner's status reads `pending`, then the guide's status and id.
+    - They start in the background once the sources are traced, since the summaries name where the secret was read. Each owner's status reads `pending`, then the guide's status and id.
     - Each summary is one root-cause sentence built by code from the facts, with secrets redacted.
   - **Decision:** the incident shows the held call's current status (`approved` stays visible).
   - **Fixes:** code proposes one per confirmed leg it can change itself, and a human approves it:

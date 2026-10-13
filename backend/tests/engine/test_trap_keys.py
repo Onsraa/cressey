@@ -14,7 +14,7 @@ from cressey.engine.floor.tripwires import trap
 from cressey.replay.importers import load_sessions
 from cressey.replay.player import play
 from cressey.replay.trajectory import Call, Session
-from cressey.testing import ADMIN, api, next_hold, users
+from cressey.testing import ADMIN, api, next_hold, traced_incidents, users
 
 pytestmark = pytest.mark.anyio
 DECOYS = {"DB_ADMIN_KEY": TRAP_KEY}
@@ -109,7 +109,7 @@ async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(s
         play(served, trap_session(), kind="live", admin=ADMIN)
     )
     hold = await next_hold(served)
-    [incident] = (await api(served, "GET", "/api/incidents")).json()
+    [incident] = await traced_incidents(served)
     n = hold["step"]["n"]
     await api(served, "POST", f"/api/runs/{hold['run_id']}/steps/{n}/reject")
     played = await playing
