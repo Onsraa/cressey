@@ -215,6 +215,8 @@ The hold message to the human reads as a case:
 - **Never shared:** no question to the human.
 - **Target never verified:** no environment check.
 
+> 10-13: N1, N2 and N3 no longer close a thread (the agent's own words never relax the case), so « Never shared » and « Target never verified » are gone from the hold; a hold cites `Pressure: "…"` instead. See `docs/decisions.md`.
+
 The agent is still told only that it was held, never why: telling it would teach it what to route around (Baker25).
 
 ## 8. Edge cases, including harm buried inside harmless reasoning

@@ -116,6 +116,7 @@ class Event(BaseModel):
 class Thread(BaseModel):
     leg: LegName
     object: str | None = None
+    # What the agent said of it (N1, N2, N3): shown, never a reason to relax (10-13).
     state: Literal["open", "shared", "renounced", "verified"] = "open"
     outside: bool = False  # O: beyond what the mandate grants
     events: list[int] = []  # indexes in Case.events
