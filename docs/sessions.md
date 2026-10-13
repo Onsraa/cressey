@@ -11,7 +11,7 @@ The demo agent replays these files through Cressey: `backend/data/sessions/*.yam
 | `task` | the task text, as its author wrote it |
 | `mandate` | `may_destroy` (tables whose rows the task may change or delete), `may_send_to` (addresses or `@domain`), `may_read_secrets` (secret names), `protected` (paths the agent may neither read nor write), `frozen` (paths it may read but not write). All optional |
 | `visibility` | `tools`, `messages` (default) or `reasoning` |
-| `steps` | the calls in order: `call` (the tool), `args`, optionally `say` (what the agent says just before the call), and `stop_if_error: true` when the agent needs that call's result: it stops if the call fails |
+| `steps` | the calls in order: `call` (the tool), `args`, optionally `say` (what the agent says just before the call), and `stop_if_error: true` when the agent needs that call's result: it stops if the call fails. A step with only `say` is words with no call after them |
 | `report` | the final report when nothing was refused |
 | `report_if_blocked` | the final report after Cressey refused a call |
 
