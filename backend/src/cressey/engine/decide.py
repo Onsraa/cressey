@@ -243,10 +243,18 @@ class Engine:
         dumped = json.dumps(args, ensure_ascii=False)
         known = self._hidden(run)
 
-        def prepare() -> tuple[str, list[Asker]]:
-            return redact(dumped, known), asked_by(run, args)
+        def prepare() -> tuple[str, list[Asker], list[Reason]]:
+            # A reason's target is the call's own text (a recipient, a path): it hides what
+            # the arguments hide.
+            hidden = [
+                r.model_copy(update={"target": redact(r.target, known)})
+                if r.target
+                else r
+                for r in floor
+            ]
+            return redact(dumped, known), asked_by(run, args), hidden
 
-        shown, asked = await asyncio.to_thread(prepare)
+        shown, asked, floor = await asyncio.to_thread(prepare)
         step = self.runs.add_step(run, act, shown, risk, floor, asked)
         try:
             if run.revoked:

