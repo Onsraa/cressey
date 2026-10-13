@@ -147,3 +147,22 @@ async def test_a_message_the_api_refuses_stops_the_replay(served):
     )
     with pytest.raises(httpx2.HTTPStatusError):
         await play(served, too_long, kind="control", admin=ADMIN)
+
+
+@pytest.mark.parametrize(
+    "given",
+    ['{"may_destroy": ["users"', '["users"]', '{"may_destroy": "users"}'],
+)
+def test_a_mandate_the_command_line_cant_read_is_a_usage_error(
+    given, monkeypatch, capsys
+):
+    """Not JSON, not an object, or a field of the wrong type: said plainly, no traceback."""
+    from cressey.replay import player
+
+    monkeypatch.setenv("CRESSEY_ADMIN_TOKEN", ADMIN)
+    argv = ["player", "run.jsonl", "--task", "Reset staging", "--mandate", given]
+    monkeypatch.setattr("sys.argv", argv)
+    with pytest.raises(SystemExit) as stopped:
+        player.main()
+    assert stopped.value.code == 2
+    assert "--mandate" in capsys.readouterr().err

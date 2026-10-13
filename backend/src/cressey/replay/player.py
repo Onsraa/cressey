@@ -21,7 +21,7 @@ import mcp_types
 import yaml
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, JsonValue, ValidationError
 
 from cressey.adapters.claude_code import HOOK_PATH
 from cressey.adapters.mcp import MCP_PATH
@@ -271,11 +271,13 @@ def main() -> None:
         p.error("a scripted session holds its own task and mandate")
     mandate = None
     if a.mandate:
-        given = json.loads(a.mandate)
-        unknown = set(given) - set(Mandate.model_fields)
+        try:
+            mandate = Mandate.model_validate_json(a.mandate)
+        except ValidationError as e:
+            p.error(f"--mandate: {e}")
+        unknown = set(json.loads(a.mandate)) - set(Mandate.model_fields)
         if unknown:
             p.error(f"--mandate: unknown fields {sorted(unknown)}")
-        mandate = Mandate.model_validate(given)
     trajectory = (
         load_transcript(a.source, a.task, mandate)
         if transcript
