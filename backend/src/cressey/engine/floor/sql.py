@@ -1,11 +1,15 @@
 """What a SQL string does, as code reads it, and the tables its destructive statements touch."""
 
+import logging
 import re
 
 import sqlglot
 from sqlglot import exp
 
 from cressey.domain.runs import Risk
+
+# sqlglot's warnings quote the raw SQL, passwords included: only its errors are logged.
+logging.getLogger("sqlglot").setLevel(logging.ERROR)
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.

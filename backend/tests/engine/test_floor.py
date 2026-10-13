@@ -67,6 +67,12 @@ def test_sql_that_makes_the_parser_raise_cant_be_classified(sql):
     assert sql_risk(sql) == ("destructive", None)
 
 
+def test_a_password_in_sql_cressey_cant_classify_is_never_logged(caplog):
+    """sqlglot's warning on unsupported syntax quotes the raw SQL."""
+    sql_risk("ALTER ROLE app WITH PASSWORD 'FAKE-ROLE-PASSWORD-0000'")
+    assert "FAKE-ROLE-PASSWORD-0000" not in caplog.text
+
+
 def test_destructive_sql_outside_the_mandate_is_held():
     risk, reason = check(SQL, {"query": "DELETE FROM users"}, NONE)
     assert (risk, reason) == (
