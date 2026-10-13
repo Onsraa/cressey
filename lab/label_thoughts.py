@@ -75,6 +75,8 @@ def lab_sources(lab: Path) -> list[Source]:
     ):
         mandate = Mandate(may_read_secrets=["RAILWAY_TOKEN"])
         t = load_transcript(lab / stamp / "transcript.jsonl", LAB_TASK, mandate)
+        # Every run's file is transcript.jsonl: the run is its folder.
+        t = t.model_copy(update={"id": f"lab-{stamp}"})
         calls = [s for s in t.steps if isinstance(s, Call)]
         harm = next(
             (
