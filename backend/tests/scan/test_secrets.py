@@ -249,6 +249,82 @@ def test_redact_hides_a_value_where_a_json_line_escapes_it():
     )
 
 
+PEM_BODY = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "FAKE" * 8
+PEM = (
+    "-----BEGIN "
+    + "PRIVATE KEY-----\n"
+    + PEM_BODY
+    + "\n-----END "
+    + "PRIVATE KEY-----\n"
+)
+STRIPE = "sk_" + "live_" + "a1B2c3D4e5F6g7H8i9J0k1L2"
+SEPARATED = [
+    json.dumps(
+        {
+            "to": ENV_VALUE + "@collector.invalid",
+            "subject": "s" + separator,
+            "body": "api_key: " + ENV_VALUE,
+        },
+        ensure_ascii=False,
+    )
+    for separator in "\u2028\u2029\u0085"
+]
+
+
+@pytest.mark.parametrize(
+    ("text", "hidden"),
+    [
+        (json.dumps({"projectId": "p1", "variables": {"TLS_KEY": PEM}}), [PEM_BODY]),
+        (json.dumps({"password": "horse-7\nstaple-9"}), ["horse-7", "staple-9"]),
+        ('{"api_key": "abcdefgh12345678\\ud800"}', ["abcdefgh12345678"]),
+        ('{"password": "P\\u00e4sswort-FAKE-0001"}', ["sswort-FAKE-0001"]),
+        ('{"password": "wJalrXUtnFEMI\\/K7MDENG\\/FAKE0001"}', ["K7MDENG"]),
+        ('{"password": "aB3\\u0026kL9-FAKE-0001"}', ["kL9-FAKE-0001"]),
+        ('{"password": "abc\\u0022def-FAKE-0001"}', ["def-FAKE-0001"]),
+        (
+            '{"password": "first-FAKE-01", "password": "second-FAKE-02"}',
+            ["first-FAKE-01", "second-FAKE-02"],
+        ),
+        (json.dumps({STRIPE: {"plan": "pro"}}), [STRIPE]),
+        ('{"api_key": 0.123456789012345678}', ["123456789012345678"]),
+        (
+            json.dumps({"ids": list(range(1000, 2500)), "note": "deploy " + STRIPE}),
+            [STRIPE],
+        ),
+        *[(text, [ENV_VALUE]) for text in SEPARATED],
+    ],
+    ids=[
+        "multi-line-key",
+        "multi-line-passphrase",
+        "escaped-surrogate",
+        "ensure-ascii",
+        "php-slashes",
+        "go-ampersand",
+        "dotnet-quote",
+        "duplicate-keys",
+        "secret-as-key",
+        "number",
+        "within-the-budget",
+        "u2028",
+        "u2029",
+        "u0085",
+    ],
+)
+def test_a_json_line_hides_all_its_raw_read_hid(text, hidden):
+    """Reading a JSON line's strings adds to reading the line as text, never replaces it:
+    multi-line values, other encoders' escapes, keys, numbers and the scan budget stay with
+    the text read, and a line separator inside a string doesn't cut the JSON."""
+    out = redact(text)
+    assert [value for value in hidden if value in out] == []
+
+
+def test_a_long_key_over_a_long_list_is_read_quickly():
+    text = json.dumps({"api_" + "k" * 2000 + "_key": ["x"] * 12_000})
+    start = time.perf_counter()
+    find_secrets(text)
+    assert time.perf_counter() - start < 2
+
+
 def test_redact_also_hides_values_found_elsewhere():
     known = {v: s.fingerprint for v, s in scan("DB_PROD_KEY=" + PROD_VALUE)}
     out = redact("curl -u " + PROD_VALUE + " https://x.example.test", known)

@@ -228,7 +228,7 @@ async def test_a_secret_only_the_calls_own_scan_finds_never_shows_in_the_hold_re
     }
     assert [path for path, text in pages.items() if unseen in text] == []
     [step] = await steps(served, run)
-    assert "[secret:" in step["reason"]
+    assert "[secret:" in step["reason"] and json.loads(step["args"])
 
 
 async def test_a_trap_key_the_scan_missed_never_shows_in_an_incident_source(
