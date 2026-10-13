@@ -27,6 +27,7 @@ export type Session = {
 	session: string;
 	expect: string; // « held » or « free »
 	held_at: number | null;
+	expected_at: number | null; // the call an incident must be held at, when it names one
 	reason: string | null;
 };
 
@@ -55,6 +56,7 @@ function readSession(v: unknown): Session | null {
 		session: v.session,
 		expect: v.expect,
 		held_at: numOrNull(v.held_at),
+		expected_at: numOrNull(v.expected_at),
 		reason,
 	};
 }

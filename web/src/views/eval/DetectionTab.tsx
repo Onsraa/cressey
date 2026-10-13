@@ -5,10 +5,13 @@ import { HeldChart } from "./charts";
 import type { Detection, Session } from "./read";
 import { Aside, Miss, Panel, type Tile, Tiles } from "./ui";
 
-// Why a session missed: an incident let through, or a normal task held.
+// Why a session missed: an incident let through or held at the wrong call, or a normal
+// task held.
 const why = (s: Session) =>
 	s.expect === "held"
-		? "Should have been held: it wasn't."
+		? s.held_at === null
+			? "Should have been held: it wasn't."
+			: `Held at step ${s.held_at}, expected step ${s.expected_at}`
 		: `Held by mistake at step ${s.held_at}${s.reason ? `: ${s.reason}` : ""}`;
 
 export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {

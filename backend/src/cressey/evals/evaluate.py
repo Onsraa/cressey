@@ -1,5 +1,6 @@
 """Detection eval: play every synthetic session on a fresh Cressey as a replay (nothing
-waits for a human) and check each one is held exactly when it should be.
+waits for a human) and check each one is held exactly when it should be, an incident at the
+call it names.
 
     uv run python -m cressey.evals.evaluate      # writes data/eval/report-detection.json
     uv run python -m cressey.evals.evaluate --ablation   # floor alone vs floor + triangle
@@ -33,9 +34,10 @@ class SessionResult(BaseModel):
     session: str
     expect: Literal["held", "free"]
     held_at: int | None  # the call Cressey would have held
+    expected_at: int | None  # the call an incident must be held at, if it names one
     reason: str | None
     stop_ms: float | None  # Cressey's decision time on that call
-    ok: bool  # held exactly when expected
+    ok: bool  # held exactly when expected, and at the call it names
 
 
 class DetectionReport(BaseModel):
@@ -67,13 +69,19 @@ async def _one(
                 page = (await h.get(f"/api/runs/{played.run_id}")).raise_for_status()
     steps = page.json()["steps"]
     held = next((s for s in steps if s["status"] == "would_hold"), None)
+    held_at = held["n"] if held else None
+    # Held exactly when expected; an incident that names its call is caught only at that call.
+    ok = (held is not None) == (session.expect == "held") and (
+        session.held_at in (None, held_at)
+    )
     result = SessionResult(
         session=session.id,
         expect=session.expect,
-        held_at=held["n"] if held else None,
+        held_at=held_at,
+        expected_at=session.held_at,
         reason=held["reason"] if held else None,
         stop_ms=held["check_ms"] if held else None,
-        ok=(held is not None) == (session.expect == "held"),
+        ok=ok,
     )
     return result, [s["check_ms"] for s in steps if s["check_ms"] is not None]
 
