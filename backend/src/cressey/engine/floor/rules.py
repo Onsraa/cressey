@@ -11,8 +11,8 @@ from pydantic import JsonValue
 from cressey.domain.policy import ToolRule
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate, Risk
-from cressey.engine.floor.shell import shell_risk
-from cressey.engine.floor.sql import sql_risk
+from cressey.engine.floor.shell import inline_sql, shell_risk
+from cressey.engine.floor.sql import RANK, sql_risk
 
 
 def _may_send(address: str, mandate: Mandate) -> bool:
@@ -46,6 +46,15 @@ def _guarded(path: JsonValue, mandate: Mandate, writing: bool) -> Reason | None:
     return None
 
 
+def _destructive_sql(tables: set[str], mandate: Mandate) -> Reason | None:
+    """Why the floor holds destructive SQL: it touches tables the mandate doesn't let the
+    task change rows in, delete from or drop. None when the mandate covers them all."""
+    outside = sorted(tables - set(mandate.may_destroy))
+    return (
+        Reason(check="destructive_sql", target=", ".join(outside)) if outside else None
+    )
+
+
 def check(
     rule: ToolRule | None, args: Mapping[str, JsonValue], mandate: Mandate
 ) -> tuple[Risk, Reason | None]:
@@ -65,22 +74,27 @@ def check(
         case "shell":
             # shortcut: protected and frozen paths aren't matched inside a command, add it
             # when a mandate guards paths from a shell agent
-            risk = shell_risk(value if isinstance(value, str) else "")
-            return risk, Reason(
-                check="destructive_shell"
-            ) if risk == "destructive" else None
+            command = value if isinstance(value, str) else ""
+            risk = shell_risk(command)
+            reason = (
+                Reason(check="destructive_shell") if risk == "destructive" else None
+            )
+            # The SQL a client is given inline is read by the SQL rule, like run_sql's; what
+            # it can't classify adds nothing.
+            destroyed: set[str] = set()
+            for sql in inline_sql(command):
+                sql_level, touched = sql_risk(sql)
+                if touched is not None:
+                    risk = max(risk, sql_level, key=RANK.index)
+                    destroyed |= touched
+            return risk, _destructive_sql(destroyed, mandate) or reason
         case "sql":
             risk, tables = sql_risk(value if isinstance(value, str) else "")
             if risk != "destructive":
                 return risk, None
             if not tables:
                 return risk, Reason(check="unclassified_sql")
-            outside = sorted(tables - set(mandate.may_destroy))
-            return risk, (
-                Reason(check="destructive_sql", target=", ".join(outside))
-                if outside
-                else None
-            )
+            return risk, _destructive_sql(tables, mandate)
         case "egress":
             recipients = value if isinstance(value, list) else [value]
             outside = [
