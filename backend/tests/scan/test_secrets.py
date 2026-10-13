@@ -291,6 +291,19 @@ SEPARATED = [
             json.dumps({"ids": list(range(1000, 2500)), "note": "deploy " + STRIPE}),
             [STRIPE],
         ),
+        (
+            '{"msg":"secret: abcdefgh12345678","token":"tok-SECRET-0002"}',
+            ["abcdefgh12345678", "tok-SECRET-0002"],
+        ),
+        (
+            json.dumps(
+                {
+                    "note": "API_KEY=" + ENV_VALUE,
+                    "password": ENV_VALUE + "\nline-2-SECRET",
+                }
+            ),
+            ["line-2-SECRET"],
+        ),
         *[(text, [ENV_VALUE]) for text in SEPARATED],
     ],
     ids=[
@@ -305,6 +318,8 @@ SEPARATED = [
         "secret-as-key",
         "number",
         "within-the-budget",
+        "compact-token",
+        "named-first-line",
         "u2028",
         "u2029",
         "u0085",
@@ -318,10 +333,17 @@ def test_a_json_line_hides_all_its_raw_read_hid(text, hidden):
     assert [value for value in hidden if value in out] == []
 
 
-def test_a_long_key_over_a_long_list_is_read_quickly():
-    text = json.dumps({"api_" + "k" * 2000 + "_key": ["x"] * 12_000})
+@pytest.mark.parametrize(
+    "doc",
+    [
+        {"api_" + "k" * 20_000 + "_key": ["x"] * 10_000},
+        [f"API_KEY=value-{i:05d}-FAKE" for i in range(4_000)],
+    ],
+    ids=["long-key-over-long-list", "many-named-values"],
+)
+def test_a_json_line_is_read_quickly(doc):
     start = time.perf_counter()
-    find_secrets(text)
+    find_secrets(json.dumps(doc))
     assert time.perf_counter() - start < 2
 
 
