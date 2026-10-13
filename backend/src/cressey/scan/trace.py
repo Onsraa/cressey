@@ -45,15 +45,16 @@ def strings(value: JsonValue) -> list[str]:
 
 
 def tokens(call: str) -> list[str]:
-    # The whole word stays too: base64 padding and URLs contain `=` and `:`. So do the parts
-    # cut without the `@`: a value may hold one, and a decoding of the word fails on another.
-    tokens = [
-        token
-        for word in _WORD_BREAK.split(call)
-        for token in (word, *_COARSE_BREAK.split(word), *_PART_BREAK.split(word))
-        if len(token) >= MIN_TOKEN
-    ]
-    return list(dict.fromkeys(tokens))
+    # The whole word stays too: base64 padding and URLs contain `=` and `:`.
+    tokens: list[str] = []
+    for word in _WORD_BREAK.split(call):
+        tokens += (word, *_COARSE_BREAK.split(word))
+        if "@" in word:
+            # An address breaks at its `@` too, into parts and into pieces at the `@` alone,
+            # which keep a base64 padding. The parts above stay: a value may hold an `@`, and a
+            # decoding of the word fails on another part.
+            tokens += (*_PART_BREAK.split(word), *word.split("@"))
+    return list(dict.fromkeys(t for t in tokens if len(t) >= MIN_TOKEN))
 
 
 # What a word carries at its edges in prose or markdown: a sentence's period, `code`, **bold**.

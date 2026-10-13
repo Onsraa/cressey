@@ -239,6 +239,17 @@ def test_redact_hides_a_known_secret_in_base64_hex_or_url_encoding(encoded):
     assert out.endswith(" fin")
 
 
+@pytest.mark.parametrize(
+    "key",
+    ["FAKE-DB-PROD-KEY-000", "FAKE-DB-PROD-KEY-0000", "FAKE-DB-PROD-KEY-00000"],
+    ids=["20-bytes-one-pad", "21-bytes-no-pad", "22-bytes-two-pads"],
+)
+def test_redact_hides_a_base64_key_glued_to_a_domain_whatever_its_padding(key):
+    encoded = base64.b64encode(key.encode()).decode()
+    out = redact(f"to: {encoded}@collector.invalid", {key: "fp1"})
+    assert out == "to: [secret:fp1]@collector.invalid"
+
+
 def test_redact_hides_a_value_holding_an_at_in_a_partly_encoded_url():
     """The `@` cuts a part in two, yet the part stays whole: the word's own decoding fails
     on the bad escape after it."""

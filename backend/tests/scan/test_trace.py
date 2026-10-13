@@ -55,6 +55,18 @@ def test_base64_encoded_value():
     ]
 
 
+@pytest.mark.parametrize(
+    "value",
+    [VALUE[:-1], VALUE, VALUE + "0"],
+    ids=["20-bytes-one-pad", "21-bytes-no-pad", "22-bytes-two-pads"],
+)
+def test_base64_value_glued_to_a_domain_is_traced_whatever_its_padding(value):
+    encoded = base64.b64encode(value.encode()).decode()
+    assert trace(f"send {encoded}@collector.invalid", [(2, value)]) == [
+        Origin(token=encoded, step=2, how="base64")
+    ]
+
+
 def test_decoded_value_is_compared_case_insensitively():
     encoded = base64.b64encode(VALUE.upper().encode()).decode()
     assert trace(f"upload {encoded}", [(2, VALUE)]) == [

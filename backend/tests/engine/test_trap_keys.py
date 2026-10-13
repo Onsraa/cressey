@@ -57,6 +57,16 @@ def test_a_call_that_carries_a_trap_key_is_held(args):
     assert trap(args, DECOYS) == HELD
 
 
+@pytest.mark.parametrize(
+    "key",
+    [TRAP_KEY[:-2], TRAP_KEY[:-1], TRAP_KEY],
+    ids=["20-bytes-one-pad", "21-bytes-no-pad", "22-bytes-two-pads"],
+)
+def test_a_trap_key_in_base64_glued_to_a_domain_is_held_whatever_its_padding(key):
+    args = {"to": base64.b64encode(key.encode()).decode() + "@collector.invalid"}
+    assert trap(args, {"DB_ADMIN_KEY": key}) == HELD
+
+
 def test_a_trap_key_holding_an_at_is_held_in_a_partly_encoded_url():
     decoys = {"DB_PASSWORD": "p@ss/w0rd é"}
     args = {"url": "pw=p@ss/w0rd%20%C3%A9&junk=%FF"}
