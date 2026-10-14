@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import json
 import sys
 import time
 from collections.abc import Iterator
@@ -211,6 +212,211 @@ def test_concurrent_scans_do_not_lose_secrets():
 def test_scan_returns_each_value_with_its_secret():
     [(value, secret)] = scan("API_KEY=" + ENV_VALUE)
     assert value == ENV_VALUE and secret.fingerprint == fp(ENV_VALUE)
+
+
+@pytest.mark.parametrize(
+    "args",
+    [
+        {"body": "api_key: " + ENV_VALUE},
+        {"body": "api_key: " + ENV_VALUE, "to": "ops@example.test"},
+        {"env": ["API_KEY=" + ENV_VALUE]},
+    ],
+    ids=["ends-the-line", "ends-its-string", "in-a-list"],
+)
+def test_a_value_in_a_json_line_ends_where_its_string_does(args):
+    """A call is scanned as its JSON dump, and a tool may return JSON: read as text, the
+    value would run into its string's closing quote, or across an escaped newline."""
+    found = scan("first line\n" + json.dumps(args))
+    assert [(value, secret.line) for value, secret in found] == [(ENV_VALUE, 2)]
+
+
+def test_redact_hides_a_value_named_in_a_json_line_everywhere_in_it():
+    dumped = json.dumps(
+        {"to": ENV_VALUE + "@collector.invalid", "body": "api_key: " + ENV_VALUE}
+    )
+    marker = f"[secret:{fp(ENV_VALUE)}]"
+    assert redact(dumped) == json.dumps(
+        {"to": marker + "@collector.invalid", "body": "api_key: " + marker}
+    )
+
+
+def test_redact_hides_a_value_where_a_json_line_escapes_it():
+    value = 'FAKE-"quoted"-0001'
+    dumped = json.dumps({"command": "export API_KEY=" + value})
+    assert redact(dumped) == json.dumps(
+        {"command": f"export API_KEY=[secret:{fp(value)}]"}
+    )
+
+
+PEM_BODY = "MIIEvQIBADANBgkqhkiG9w0BAQEFAASC" + "FAKE" * 8
+PEM = (
+    "-----BEGIN "
+    + "PRIVATE KEY-----\n"
+    + PEM_BODY
+    + "\n-----END "
+    + "PRIVATE KEY-----\n"
+)
+STRIPE = "sk_" + "live_" + "a1B2c3D4e5F6g7H8i9J0k1L2"
+SEPARATED = [
+    json.dumps(
+        {
+            "to": ENV_VALUE + "@collector.invalid",
+            "subject": "s" + separator,
+            "body": "api_key: " + ENV_VALUE,
+        },
+        ensure_ascii=False,
+    )
+    for separator in "\u2028\u2029\u0085"
+]
+
+
+@pytest.mark.parametrize(
+    ("text", "hidden"),
+    [
+        (json.dumps({"projectId": "p1", "variables": {"TLS_KEY": PEM}}), [PEM_BODY]),
+        (json.dumps({"password": "horse-7\nstaple-9"}), ["horse-7", "staple-9"]),
+        ('{"api_key": "abcdefgh12345678\\ud800"}', ["abcdefgh12345678"]),
+        ('{"password": "P\\u00e4sswort-FAKE-0001"}', ["sswort-FAKE-0001"]),
+        ('{"password": "wJalrXUtnFEMI\\/K7MDENG\\/FAKE0001"}', ["K7MDENG"]),
+        ('{"password": "aB3\\u0026kL9-FAKE-0001"}', ["kL9-FAKE-0001"]),
+        ('{"password": "abc\\u0022def-FAKE-0001"}', ["def-FAKE-0001"]),
+        (
+            '{"password": "first-FAKE-01", "password": "second-FAKE-02"}',
+            ["first-FAKE-01", "second-FAKE-02"],
+        ),
+        (json.dumps({STRIPE: {"plan": "pro"}}), [STRIPE]),
+        ('{"api_key": 0.123456789012345678}', ["123456789012345678"]),
+        (
+            json.dumps({"ids": list(range(1000, 2500)), "note": "deploy " + STRIPE}),
+            [STRIPE],
+        ),
+        (
+            '{"msg":"secret: abcdefgh12345678","token":"tok-SECRET-0002"}',
+            ["abcdefgh12345678", "tok-SECRET-0002"],
+        ),
+        (
+            json.dumps(
+                {
+                    "note": "API_KEY=" + ENV_VALUE,
+                    "password": ENV_VALUE + "\nline-2-SECRET",
+                }
+            ),
+            ["line-2-SECRET"],
+        ),
+        (
+            json.dumps(
+                {
+                    "stdin": "API_KEY=" + ENV_VALUE + "\nPORT=8080",
+                    "to": ENV_VALUE + "@collector.invalid",
+                }
+            ),
+            [ENV_VALUE],
+        ),
+        (
+            json.dumps({"x": "API_KEY=" + ENV_VALUE})
+            + "\nPASSWORD="
+            + ENV_VALUE
+            + '"tail-SECRET-9',
+            ["tail-SECRET-9"],
+        ),
+        (
+            '{"c":"API_KEY=' + ENV_VALUE + '\\nX=1","token":"tok-SECRET-0003"}',
+            [ENV_VALUE, "tok-SECRET-0003"],
+        ),
+        (
+            '{"a":"API_KEY='
+            + ENV_VALUE
+            + '\\nX=1","pad":"'
+            + "p" * 17_000
+            + '","k":"'
+            + STRIPE
+            + '"}',
+            [STRIPE],
+        ),
+        (
+            json.dumps({"x": "API_KEY=" + ENV_VALUE})
+            + "\nPASSWORD="
+            + ENV_VALUE
+            + '\\n"tail-SECRET-8',
+            ["tail-SECRET-8"],
+        ),
+        (
+            '{"content":"API_KEY='
+            + ENV_VALUE
+            + '\\nPASSWORD=caf\\u00e9-FAKE-0001\\n"}',
+            ["-FAKE-0001"],
+        ),
+        (
+            '{"content":"API_KEY='
+            + ENV_VALUE
+            + "\\n"
+            + "x" * 17_000
+            + "\\nSTRIPE="
+            + STRIPE
+            + '\\n"}',
+            [STRIPE],
+        ),
+        *[(text, [ENV_VALUE]) for text in SEPARATED],
+    ],
+    ids=[
+        "multi-line-key",
+        "multi-line-passphrase",
+        "escaped-surrogate",
+        "ensure-ascii",
+        "php-slashes",
+        "go-ampersand",
+        "dotnet-quote",
+        "duplicate-keys",
+        "secret-as-key",
+        "number",
+        "within-the-budget",
+        "compact-token",
+        "named-first-line",
+        "before-a-newline",
+        "plain-text-quote",
+        "escape-then-a-field",
+        "past-the-budget-after-an-escape",
+        "plain-text-escape-quote",
+        "escaped-spelling-after-an-escape",
+        "past-the-budget-in-one-string",
+        "u2028",
+        "u2029",
+        "u0085",
+    ],
+)
+def test_a_json_line_hides_all_its_raw_read_hid(text, hidden):
+    """Reading a JSON line's strings adds to reading the line as text, never replaces it:
+    multi-line values, other encoders' escapes, keys, numbers and the scan budget stay with
+    the text read, and a line separator inside a string doesn't cut the JSON."""
+    out = redact(text)
+    assert [value for value in hidden if value in out] == []
+
+
+@pytest.mark.parametrize(
+    ("doc", "separators"),
+    [
+        ({"api_" + "k" * 20_000 + "_key": ["x"] * 10_000}, (", ", ": ")),
+        ([f"API_KEY=value-{i:05d}-FAKE" for i in range(4_000)], (", ", ": ")),
+        ([f"API_KEY=value-{i:05d}-FAKE" for i in range(8_000)], (",", ":")),
+    ],
+    ids=["long-key-over-long-list", "many-named-values", "compact"],
+)
+def test_a_json_line_is_read_quickly(doc, separators):
+    start = time.perf_counter()
+    find_secrets(json.dumps(doc, separators=separators))
+    assert time.perf_counter() - start < 2
+
+
+@pytest.mark.parametrize(
+    "secrets",
+    [[ENV_VALUE], [ENV_VALUE, PROD_VALUE]],
+    ids=["one-secret", "two-secrets"],
+)
+def test_redact_hides_every_secret_of_a_written_env_file(secrets):
+    names = ["API_KEY", "DB_PASSWORD"]
+    content = "".join(f"{n}={v}\n" for n, v in zip(names, secrets)) + "PORT=8080\n"
+    out = redact(json.dumps({"file_path": ".env", "content": content}))
+    assert [v for v in secrets if v in out] == []
 
 
 def test_redact_also_hides_values_found_elsewhere():

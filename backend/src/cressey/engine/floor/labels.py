@@ -90,8 +90,8 @@ async def floor_labels(
     answer."""
     shown = await redacted_off_loop(run, steps_before(run, call.n)[-1:])
     views = [call]
-    # From the call's own arguments: what is shown is redacted, and redaction can cut the
-    # JSON it was dumped from (a secret's value running into its closing quote).
+    # From the call's own arguments, without the agent's words: the shown ones, redacted,
+    # can't always be parsed back.
     act = {k: v for k, v in call.raw_args.items() if k not in words}
     if len(act) < len(call.raw_args):
         dumped = json.dumps(act, ensure_ascii=False)

