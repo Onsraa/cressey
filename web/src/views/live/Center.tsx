@@ -242,8 +242,8 @@ export function Center({
 				)}
 			</div>
 			{hold?.open && (
-				// Over the field and the gauges, see-through: the triangle stays in sight.
-				<div className="absolute inset-x-0 top-[34px] bottom-0 z-10 overflow-auto bg-surface/85">
+				// Over the field and the gauges, centred, the triangle blurred behind it.
+				<div className="absolute inset-x-0 top-[34px] bottom-0 z-10 flex overflow-auto bg-surface/30 backdrop-blur-md">
 					<button
 						type="button"
 						aria-label="Hide the hold"
@@ -252,7 +252,7 @@ export function Center({
 					>
 						<X size={14} />
 					</button>
-					<div className="mx-auto max-w-[460px]">{hold.pane}</div>
+					<div className="m-auto w-full max-w-[460px]">{hold.pane}</div>
 				</div>
 			)}
 			<div

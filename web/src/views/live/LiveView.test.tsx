@@ -249,6 +249,9 @@ test("a held call: trace, gauges and the hold with its countdown", () => {
 	expect(out).not.toContain(" of 3 refused");
 	expect(out).not.toContain("No path within the mandate so far");
 	expect(out).toMatch(/aria-current="true"[^>]*>\+ Messages</);
+	// The levels add up: a run that sees messages sees the tool calls too.
+	expect(out).toMatch(/bg-ink text-surface"[^>]*>Tool calls</);
+	expect(out).toMatch(/text-mute-3"[^>]*>\+ Reasoning</);
 	// Agent text is plain text, never markup.
 	expect(out).toContain("users &lt;b&gt;vide&lt;/b&gt;.");
 	expect(out).not.toContain("<b>vide</b>");

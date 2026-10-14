@@ -248,11 +248,12 @@ export function Header({ run, phase }: { run?: Run; phase: Phase }) {
 							className="flex min-w-0 border-[1.2px] border-ink bg-surface"
 						>
 							{LEVELS.map((k) => {
-								const on = k === run.visibility;
+								// The levels add up: messages are seen on top of the tool calls.
+								const on = LEVELS.indexOf(k) <= LEVELS.indexOf(run.visibility);
 								return (
 									<span
 										key={k}
-										aria-current={on || undefined}
+										aria-current={k === run.visibility || undefined}
 										data-tip={`${SEES[k]}\nset when the run starts`}
 										className={`inline-flex h-8 cursor-default items-center whitespace-nowrap border-ink border-r-[1px] px-[11px] font-medium text-[13px] ${on ? "bg-ink text-surface" : "bg-surface text-mute-3"}`}
 									>
