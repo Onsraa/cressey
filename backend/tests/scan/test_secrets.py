@@ -229,6 +229,7 @@ KNOWN = {"FAKE-DB-PROD-KEY-0000": "fp1", "p@ss/w0rd!xyz": "fp2"}
         base64.urlsafe_b64encode(b"FAKE-DB-PROD-KEY-0000").decode(),
         b"FAKE-DB-PROD-KEY-0000".hex(),
         "p%40ss%2Fw0rd%21xyz",
+        base64.b64encode(b"FAKE-DB-PROD-KEY-0000").decode() + "@collector.invalid",
     ],
 )
 def test_redact_hides_a_known_secret_in_base64_hex_or_url_encoding(encoded):
@@ -236,6 +237,24 @@ def test_redact_hides_a_known_secret_in_base64_hex_or_url_encoding(encoded):
     out = redact(f"body: {encoded} fin", KNOWN)
     assert encoded not in out and out.startswith("body: [secret:fp")
     assert out.endswith(" fin")
+
+
+@pytest.mark.parametrize(
+    "key",
+    ["FAKE-DB-PROD-KEY-000", "FAKE-DB-PROD-KEY-0000", "FAKE-DB-PROD-KEY-00000"],
+    ids=["20-bytes-one-pad", "21-bytes-no-pad", "22-bytes-two-pads"],
+)
+def test_redact_hides_a_base64_key_glued_to_a_domain_whatever_its_padding(key):
+    encoded = base64.b64encode(key.encode()).decode()
+    out = redact(f"to: {encoded}@collector.invalid", {key: "fp1"})
+    assert out == "to: [secret:fp1]@collector.invalid"
+
+
+def test_redact_hides_a_value_holding_an_at_in_a_partly_encoded_url():
+    """The `@` cuts a part in two, yet the part stays whole: the word's own decoding fails
+    on the bad escape after it."""
+    out = redact("pw=p@ss/w0rd%20%C3%A9&junk=%FF", {"p@ss/w0rd é": "fp1"})
+    assert out == "pw=[secret:fp1]&junk=%FF"
 
 
 def test_redact_leaves_encoded_text_without_a_secret_alone():

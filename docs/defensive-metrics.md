@@ -6,8 +6,8 @@ What the defender gets, and what we can and cannot show. Numbers come from `docs
 **Not measured.** The repo has no baseline of how long an analyst takes to triage a hold or write an incident report without Cressey, so no time-saved figure is claimed.
 
 What is measured is machine time, not analyst time:
-- Time to stop a dangerous call: p50 1.97 ms, 236 ms at the stage's pace (one live run).
-- Time to produce three sourced fix guides after a hold, in parallel: 9.1 to 13.6 s (three live runs).
+- Time to stop a dangerous call: p50 617 ms, p95 749 ms with live Jev and the calls back to back (10-13); 236 ms at the stage's pace (one run, 10-10).
+- Time to produce three sourced fix guides after a hold, in parallel: 9.1 to 13.6 s (three live runs, 10-10).
 - Each hold arrives with the step, the reason, the confirmed legs of the triangle, and the traced source of the misused secret, so the analyst starts from a finished case rather than a raw log. Whether that is faster is not yet timed.
 
 To measure it: time the same triage task with and without Cressey on the same synthetic incidents, with an analyst who has not seen them before.
@@ -18,12 +18,12 @@ These figures are our assumptions, not data. Each one needs the timed test above
 | Step per held incident | Without Cressey (assumed) | With Cressey (assumed) | Saved (assumed) |
 |---|---|---|---|
 | Find out what the agent did and why | 15 to 30 min: read the transcript, find the call | 2 to 5 min: the hold shows the step, the reason and the legs of the triangle | 10 to 25 min |
-| Find where the misused secret came from | 10 to 30 min: search the repo and the session for the key | under 1 min: traced by Cressey, exact match on the first try in 3 of 3 demo runs | 10 to 30 min |
-| Write a fix guide per owner | 30 to 60 min | about 5 min to review the sourced guide (guide generated in 9 to 14 s) | 25 to 55 min |
+| Find where the misused secret came from | 10 to 30 min: search the repo and the session for the key | under 1 min: traced by Cressey, exact match on the first try in 3 of 3 demo runs (10-10) | 10 to 30 min |
+| Write a fix guide per owner | 30 to 60 min | about 5 min to review the sourced guide (guide generated in 9 to 14 s on the 10-10 demo path) | 25 to 55 min |
 | Decide the hold | 5 min | 2 min | about 3 min |
 | **Total per held incident** | **about 1 to 2 hours** | **about 10 to 15 min** | **about 50 to 100 min** |
 
-**Basis:** the "without" column is a guess at how long a careful manual triage takes. The "with" column uses measured machine times (guides in 9 to 14 s, secret trace exact on 3 of 3 demo runs) plus an assumed review time. The timed test on the synthetic incidents should replace both columns.
+**Basis:** the "without" column is a guess at how long a careful manual triage takes. The "with" column uses measured machine times (guides in 9 to 14 s and the secret traced exactly on 3 of 3 demo runs, both on the 10-10 demo path) plus an assumed review time. The timed test on the synthetic incidents should replace both columns.
 
 **What it does not count:**
 - Holds that turn out to be false alarms still cost the review time. Every normal session was let through in our set (0 of 6 held), but real traffic is not tested.
@@ -34,13 +34,13 @@ These figures are our assumptions, not data. Each one needs the timed test above
 | Check | Result | Limit |
 |---|---|---|
 | Holds on normal sessions | **0/6** held by mistake | 6 sessions, synthetic, written by the team |
-| Incident sessions held | **7/7** | same set; the team wrote the incidents to match the rules |
+| Incident sessions held | **8/8**, each at the call it names | same set; the team wrote the incidents to match the rules |
 | Write judgment at 0.5 | 30/30 on labelled writes (15 "yes", 15 "no") | labels are ours |
 | Report check at 0.8 | **5/5** precision: no honest report flagged; 5/10 recall | 20 reports; misses listed in `evaluation.md` |
 | Sourced guide steps | 100% citation validity on all runs | checks that each step cites a retrieved passage, not that the advice is good |
 | Retrieval, hit@3 after re-ranking | 30 to 31 of 31 | 33 team-written questions |
 
-**Reading these numbers:** precision on a set this small is weak evidence. The 0/6 and 7/7 results show the rules and the triangle work on our own sessions. They do not give a false-positive rate for real traffic. The held-out set from outside the team is not written.
+**Reading these numbers:** precision on a set this small is weak evidence. The 0/6 and 8/8 results show the rules and the triangle work on our own sessions. They do not give a false-positive rate for real traffic. The held-out set from outside the team is not written.
 
 ## Coverage
 | Framework | Covered | Coverage in the repo |
@@ -55,4 +55,4 @@ These figures are our assumptions, not data. Each one needs the timed test above
 - Coverage holds only for traffic through Cressey (Claude Code hook and MCP proxy). An agent with another route is outside it.
 
 ## Summary
-Cressey has measured precision on its own synthetic set (0 false holds, 7/7 incidents held) and measured machine speed. It has no measured analyst time saving, and its framework coverage is a hand mapping plus a corpus that is not fully loaded.
+Cressey has measured precision on its own synthetic set (0 false holds, 8/8 incidents held) and measured machine speed. It has no measured analyst time saving, and its framework coverage is a hand mapping plus a corpus that is not fully loaded.

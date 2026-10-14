@@ -23,7 +23,7 @@ export function GuidesTab({ file, g }: { file: EvalFile; g: Guides }) {
 		{
 			label: "Latency · p50 / p95",
 			value: `${seconds(g.latency_p50_ms)} / ${seconds(g.latency_p95_ms)} s`,
-			sub: `${sample(n)} questions`,
+			sub: `${sample(g.n_incidents)} guides`,
 			reading: "watch, lower is better",
 			watch: true,
 		},

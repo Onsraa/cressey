@@ -149,7 +149,9 @@ async def test_the_pressure_fix_carries_the_fixed_tasks_assessment():
         asked.append(task)
         return after
 
-    incident = Incidents(runs, guide, assess_task=assess_task).open(run, call, "haute")
+    incident = Incidents(runs, guide, assess_task=assess_task).open(
+        run, call, "haute", run.known
+    )
     [fix] = incident.fixes
     await until(lambda: fix.preflight is not None)
     assert fix.preflight == after and asked == [f"{run.task} {TASK_WAY_OUT}"]
@@ -165,7 +167,9 @@ async def test_a_replayed_runs_fix_is_not_assessed():
         asked.append(task)
         return Preflight(scores={}, facts=[])
 
-    incident = Incidents(runs, guide, assess_task=assess_task).open(run, call, "haute")
+    incident = Incidents(runs, guide, assess_task=assess_task).open(
+        run, call, "haute", run.known
+    )
     await until(lambda: all(g.status != "pending" for g in incident.guides))
     assert asked == []
 

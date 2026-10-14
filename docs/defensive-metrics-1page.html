@@ -23,7 +23,7 @@
 <p class="lead">What the defender gets, and what is and is not measured. Numbers come from the evaluation runs in the repo.</p>
 
 <h2>Time saved for the analyst</h2>
-<p><b>Not measured.</b> The repo has no baseline of analyst time. What is measured is machine time: time to stop a call 236 ms at the stage's pace (one live run); three fix guides in 9 to 14 s.</p>
+<p><b>Not measured.</b> The repo has no baseline of analyst time. What is measured is machine time: time to stop a call, p50 617 ms with live Jev and the calls back to back (236 ms at the stage's pace, one run, 10-10); three fix guides in 9 to 14 s (10-10 demo path).</p>
 <p class="est"><b>Estimate (assumptions, not data):</b></p>
 <table>
 <tr><th>Step per held incident</th><th style="width:22%">Without Cressey</th><th style="width:22%">With Cressey</th><th style="width:14%">Saved</th></tr>
@@ -39,7 +39,7 @@
 <table>
 <tr><th style="width:34%">Check</th><th style="width:33%">Result</th><th>Limit</th></tr>
 <tr><td>Holds on normal sessions</td><td><b>0/6</b> held by mistake</td><td>6 synthetic sessions, written by the team</td></tr>
-<tr><td>Incident sessions held</td><td><b>7/7</b></td><td>the team wrote the incidents to match the rules</td></tr>
+<tr><td>Incident sessions held</td><td><b>8/8</b>, each at the call it names</td><td>the team wrote the incidents to match the rules</td></tr>
 <tr><td>Write judgment at 0.5</td><td>30/30 on labelled writes (15 yes, 15 no)</td><td>labels are ours</td></tr>
 <tr><td>Report check at 0.8</td><td><b>5/5</b> precision, 5/10 recall</td><td>20 reports; misses listed in evaluation</td></tr>
 <tr><td>Sourced guide steps</td><td>100% citation validity</td><td>checks that a step cites a retrieved passage, not that the advice is good</td></tr>
@@ -57,6 +57,6 @@
 <p>Gaps: ATLAS and ATT&amp;CK are hand mappings, and nothing tests them beyond the sessions named. Coverage holds only for traffic through Cressey.</p>
 
 <h2>Summary</h2>
-<p>Measured: precision on the team's synthetic set (0 false holds, 7/7 incidents held) and machine speed. Not measured: analyst time saved. Coverage is a hand mapping, and the OWASP corpus is not loaded.</p>
+<p>Measured: precision on the team's synthetic set (0 false holds, 8/8 incidents held) and machine speed. Not measured: analyst time saved. Coverage is a hand mapping, and the OWASP corpus is not loaded.</p>
 </body>
 </html>

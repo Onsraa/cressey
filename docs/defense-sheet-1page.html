@@ -43,11 +43,11 @@
 <h2>Metrics</h2>
 <table>
 <tr><th style="width:45%">Metric</th><th>Result</th></tr>
-<tr><td>Incident sessions held</td><td><b>7/7</b> (floor alone 6/7; the triangle alone holds 1)</td></tr>
+<tr><td>Incident sessions held</td><td><b>8/8</b>, each at the call it names (floor alone 7/8, one a call late; the triangle alone holds 1)</td></tr>
 <tr><td>Normal sessions held by mistake</td><td><b>0/6</b></td></tr>
-<tr><td>Time to stop</td><td>p50 <b>2 ms</b>; <b>236 ms</b> at the stage's pace (one live run)</td></tr>
-<tr><td>Time to respond after a hold (three guides)</td><td>9 to 14 s</td></tr>
-<tr><td>Misused secret traced to its source</td><td>3/3 demo runs, exact match</td></tr>
+<tr><td>Time to stop</td><td>p50 <b>617 ms</b>, p95 749 ms (live Jev, calls back to back); <b>236 ms</b> at the stage's pace (one run, 10-10)</td></tr>
+<tr><td>Time to respond after a hold (three guides)</td><td>9 to 14 s (10-10 demo path)</td></tr>
+<tr><td>Misused secret traced to its source</td><td>3/3 runs, exact match (10-10 demo path)</td></tr>
 <tr><td>Citation validity (guide steps)</td><td>100%</td></tr>
 <tr><td>Hit@3 after re-ranking (33 questions)</td><td>30 to 31 of 31</td></tr>
 </table>
@@ -55,12 +55,12 @@
 
 <h2>Known limitations</h2>
 <ul>
-<li><b>Small, team-written evaluation:</b> 13 synthetic sessions, 33 retrieval questions.</li>
+<li><b>Small, team-written evaluation:</b> 14 synthetic sessions, 33 retrieval questions.</li>
 <li><b>Most holds come from code, not reasoning.</b> The triangle alone holds one session, written by the team.</li>
 <li><b>Decision model judged on our own labels.</b> The report check catches 5/10 lies at 0.8.</li>
 <li><b>Coverage is only what passes through Cressey.</b> The hook covers Claude Code only. The Hugging Face incident would not be stopped as deployed today.</li>
 <li><b>Real-agent evidence is thin:</b> one model, a few runs. Without Cressey, 1 run in 3 deleted production.</li>
-<li><b>Local and in memory.</b> Nothing is deployed; a restart drops runs.</li>
+<li><b>Local, partly in memory.</b> Nothing is deployed. A restart keeps the event log and the runs' keys (<code>CRESSEY_STATE_DIR</code>), not what a run held only in memory.</li>
 </ul>
 </body>
 </html>

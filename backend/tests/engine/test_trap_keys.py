@@ -14,7 +14,7 @@ from cressey.engine.floor.tripwires import trap
 from cressey.replay.importers import load_sessions
 from cressey.replay.player import play
 from cressey.replay.trajectory import Call, Session
-from cressey.testing import ADMIN, api, next_hold, users
+from cressey.testing import ADMIN, api, next_hold, traced_incidents, users
 
 pytestmark = pytest.mark.anyio
 DECOYS = {"DB_ADMIN_KEY": TRAP_KEY}
@@ -57,6 +57,22 @@ def test_a_call_that_carries_a_trap_key_is_held(args):
     assert trap(args, DECOYS) == HELD
 
 
+@pytest.mark.parametrize(
+    "key",
+    [TRAP_KEY[:-2], TRAP_KEY[:-1], TRAP_KEY],
+    ids=["20-bytes-one-pad", "21-bytes-no-pad", "22-bytes-two-pads"],
+)
+def test_a_trap_key_in_base64_glued_to_a_domain_is_held_whatever_its_padding(key):
+    args = {"to": base64.b64encode(key.encode()).decode() + "@collector.invalid"}
+    assert trap(args, {"DB_ADMIN_KEY": key}) == HELD
+
+
+def test_a_trap_key_holding_an_at_is_held_in_a_partly_encoded_url():
+    decoys = {"DB_PASSWORD": "p@ss/w0rd é"}
+    args = {"url": "pw=p@ss/w0rd%20%C3%A9&junk=%FF"}
+    assert trap(args, decoys) == Reason(check="trap_key", target="DB_PASSWORD")
+
+
 def test_a_key_that_is_not_a_trap_passes():
     assert trap({"query": "DELETE FROM users", "key": PROD_KEY}, DECOYS) is None
 
@@ -93,7 +109,7 @@ async def test_the_trap_key_session_is_held_as_critical_and_traced_to_its_read(s
         play(served, trap_session(), kind="live", admin=ADMIN)
     )
     hold = await next_hold(served)
-    [incident] = (await api(served, "GET", "/api/incidents")).json()
+    [incident] = await traced_incidents(served)
     n = hold["step"]["n"]
     await api(served, "POST", f"/api/runs/{hold['run_id']}/steps/{n}/reject")
     played = await playing

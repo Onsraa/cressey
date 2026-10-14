@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Literal, Protocol
 
 from cressey.domain.acts import Act, Asker, Surface
@@ -37,7 +37,7 @@ from cressey.engine.provenance import asked_by
 from cressey.engine.reading import read_before
 from cressey.engine.triangle import alarm, alarm_reason, legs, read_after, read_only
 from cressey.judge import Answers, Judge, NotRecorded, yes
-from cressey.scan.secrets import fingerprint, redact, scan
+from cressey.scan.secrets import fingerprint, hide, redact, scan
 from cressey.store.runs import Runs
 from cressey.tasks import Tasks
 
@@ -56,8 +56,15 @@ class IncidentDesk(Protocol):
     """Where the engine opens an incident for a call it holds or alerts on (incidents/)."""
 
     def open(
-        self, run: Run, step: Step, severity: Literal["critique", "haute"]
-    ) -> Incident: ...
+        self,
+        run: Run,
+        step: Step,
+        severity: Literal["critique", "haute"],
+        hidden: Mapping[str, str],
+    ) -> Incident:
+        """`hidden`: what the engine hides the call with (value -> fingerprint): the incident
+        hides it wherever it shows the call's values."""
+        ...
 
     def has(self, run_id: str, reasons: Sequence[Reason]) -> bool:
         """Has this run an incident for these checks on these targets?"""
@@ -81,6 +88,12 @@ def act_on_pressure(runs: Runs, run: Run, step: Step, legs: Legs) -> None:
 
 def _ms_since(start: float) -> float:
     return (time.perf_counter() - start) * 1000
+
+
+def _seen(known: dict[str, str], dumped: str) -> dict[str, str]:
+    """What hides a call wherever it shows: `known` and every value the scan of the whole
+    call finds, which sees what a name elsewhere in it gives away (`password`)."""
+    return known | {v: s.fingerprint for v, s in scan(dumped)}
 
 
 class Engine:
@@ -243,10 +256,20 @@ class Engine:
         dumped = json.dumps(args, ensure_ascii=False)
         known = self._hidden(run)
 
-        def prepare() -> tuple[str, list[Asker]]:
-            return redact(dumped, known), asked_by(run, args)
+        def prepare() -> tuple[str, list[Asker], list[Reason], dict[str, str]]:
+            # The call is scanned once, and what it finds hides the arguments, each reason's
+            # target and the incident's sources alike. A target is the call's own text (a
+            # recipient, a path).
+            seen = _seen(known, dumped)
+            hidden = [
+                r.model_copy(update={"target": redact(r.target, seen)})
+                if r.target
+                else r
+                for r in floor
+            ]
+            return hide(dumped, seen), asked_by(run, args), hidden, seen
 
-        shown, asked = await asyncio.to_thread(prepare)
+        shown, asked, floor, seen = await asyncio.to_thread(prepare)
         step = self.runs.add_step(run, act, shown, risk, floor, asked)
         try:
             if run.revoked:
@@ -290,7 +313,7 @@ class Engine:
                 and run.kind != "replay"
                 and not (only_reads and self.incidents.has(run.id, reasons))
             ):
-                self.incidents.open(run, step, "critique" if floor else "haute")
+                self.incidents.open(run, step, "critique" if floor else "haute", seen)
             step.check_ms = _ms_since(start)  # the time to stop, when the call is held
             # A call that would be held still goes to a human: only the others are refused.
             if not reasons and run.read_only_step and risk == "destructive":
@@ -447,10 +470,15 @@ class Engine:
         found = [alarm_reason(late)] if alarmed else []
         flagged = found + [why for why, _ in labelled]
         reasons = [r.model_copy(update={"afterwards": True}) for r in flagged]
-        # Alarm or not, the step shows what the late read found, an unanswered model too.
-        self.runs.score(run, step, late, reasons)
         if not reasons:
+            # Alarm or not, the step shows what the late read found, an unanswered model too.
+            self.runs.score(run, step, late, reasons)
             return
+        # The incident hides what the call was hidden with: scanned again, off the loop, and
+        # before the step shows what was found, so it shows its alert at the same time.
+        dumped = json.dumps(step.raw_args, ensure_ascii=False)
+        seen = await asyncio.to_thread(_seen, self._hidden(run), dumped)
+        self.runs.score(run, step, late, reasons)
         # What ran can't be held, but a stop still stops the rest of the run (10-13).
         response = self._response(
             step.tool,
@@ -464,4 +492,4 @@ class Engine:
         if response == "stop":
             self.runs.stop(run, step)
         self.runs.mark(run, step, "alerted")
-        self.incidents.open(run, step, "haute")
+        self.incidents.open(run, step, "haute", seen)

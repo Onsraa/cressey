@@ -116,6 +116,16 @@ async def next_hold(base: str) -> dict:
     raise AssertionError("no hold appeared")
 
 
+async def traced_incidents(base: str) -> list[dict]:
+    """The served incidents, once none is still tracing where its values came from."""
+    for _ in range(250):
+        incidents = (await api(base, "GET", "/api/incidents")).json()
+        if not any(i["tracing"] for i in incidents):
+            return incidents
+        await asyncio.sleep(0.02)
+    raise AssertionError("an incident is still being traced")
+
+
 def users(demo: Path) -> int:
     """The users left in the demo's production database."""
     with closing(sqlite3.connect(demo / "prod.sqlite")) as c:

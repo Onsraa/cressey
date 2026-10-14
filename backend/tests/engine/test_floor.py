@@ -4,7 +4,7 @@ from cressey.domain.policy import ToolRule
 from cressey.domain.reasons import Reason
 from cressey.domain.runs import Mandate
 from cressey.engine.floor.rules import check
-from cressey.engine.floor.shell import shell_risk
+from cressey.engine.floor.shell import inline_sql, shell_risk
 from cressey.engine.floor.sql import sql_risk
 from cressey.engine.floor.tripwires import at_cressey, origin
 
@@ -53,6 +53,24 @@ TEAM = Mandate(may_send_to=["@example.test"])
 )
 def test_sql_risk(sql, risk):
     assert sql_risk(sql)[0] == risk
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "DELETE FROM users WHERE a->1e9 = 1",
+        "SELECT " + "(" * 5000 + "1" + ")" * 5000,
+    ],
+    ids=["a ValueError", "a RecursionError"],
+)
+def test_sql_that_makes_the_parser_raise_cant_be_classified(sql):
+    assert sql_risk(sql) == ("destructive", None)
+
+
+def test_a_password_in_sql_cressey_cant_classify_is_never_logged(caplog):
+    """sqlglot's warning on unsupported syntax quotes the raw SQL."""
+    sql_risk("ALTER ROLE app WITH PASSWORD 'FAKE-ROLE-PASSWORD-0000'")
+    assert "FAKE-ROLE-PASSWORD-0000" not in caplog.text
 
 
 def test_destructive_sql_outside_the_mandate_is_held():
@@ -414,6 +432,137 @@ def test_a_destructive_shell_command_is_held_whatever_the_mandate():
         "write",
         None,
     )
+
+
+@pytest.mark.parametrize(
+    ("command", "sql"),
+    [
+        ('psql -h db -c "SELECT 1"', ["SELECT 1"]),
+        ("psql --command 'SELECT 1'", ["SELECT 1"]),
+        ("psql --command='SELECT 1'", ["SELECT 1"]),
+        ('PGPASSWORD=x psql -c "SELECT 1"', ["SELECT 1"]),
+        ('mysql -u root -e "SELECT 1"', ["SELECT 1"]),
+        ("mysql --execute='SELECT 1'", ["SELECT 1"]),
+        ('mariadb -e "SELECT 1"', ["SELECT 1"]),
+        ("mariadb --execute 'SELECT 1'", ["SELECT 1"]),
+        ('clickhouse-client -q "SELECT 1"', ["SELECT 1"]),
+        ("clickhouse-client --query='SELECT 1'", ["SELECT 1"]),
+        # sqlite3 and duckdb take the SQL after the database file; options come before it.
+        ('sqlite3 app.db "SELECT 1"', ["SELECT 1"]),
+        ('sqlite3 -header app.db "SELECT 1" "SELECT 2"', ["SELECT 1", "SELECT 2"]),
+        ('duckdb app.duckdb "SELECT 1"', ["SELECT 1"]),
+        # Each simple command, and each SQL a client is given.
+        ('cd db && psql -c "SELECT 1"; mysql -e "SELECT 2"', ["SELECT 1", "SELECT 2"]),
+        ('psql -c "SELECT 1" -c "SELECT 2"', ["SELECT 1", "SELECT 2"]),
+        # Nothing to read: no SQL given inline, a flag without its SQL, another command, a
+        # line the splitter can't tell (a here-document).
+        ("sqlite3 app.db", []),
+        ("psql -f script.sql", []),
+        ("psql -c", []),
+        ("ls -la", []),
+        ("psql <<EOF\nSELECT 1;\nEOF", []),
+    ],
+)
+def test_inline_sql_is_read_from_each_client(command, sql):
+    assert inline_sql(command) == sql
+
+
+@pytest.mark.parametrize(
+    ("command", "mandate", "risk", "reason"),
+    [
+        (
+            'psql -h prod -c "UPDATE accounts SET balance = 0"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="accounts"),
+        ),
+        (
+            'PGPASSWORD=x psql -c "UPDATE accounts SET balance = 0"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="accounts"),
+        ),
+        # Inside the mandate the SQL adds nothing: the call stays what the shell rule makes
+        # of it, a write for an UPDATE (Jev's labels still judge it)...
+        (
+            'psql -c "UPDATE accounts SET balance = 0"',
+            Mandate(may_destroy=["accounts"]),
+            "write",
+            None,
+        ),
+        (
+            'psql -c "DELETE FROM users"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="users"),
+        ),
+        # ...and a destructive_shell hold for a DELETE, which its regex holds.
+        (
+            'psql -c "DELETE FROM users"',
+            Mandate(may_destroy=["users"]),
+            "destructive",
+            Reason(check="destructive_shell"),
+        ),
+        # One table beyond the mandate holds the whole line, the regex or not.
+        (
+            'psql -c "DELETE FROM sessions; DROP TABLE users"',
+            Mandate(may_destroy=["sessions"]),
+            "destructive",
+            Reason(check="destructive_sql", target="users"),
+        ),
+        (
+            'mysql -e "UPDATE t SET x = 1"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="t"),
+        ),
+        (
+            'sqlite3 app.db "UPDATE t SET x = 1"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="t"),
+        ),
+        # SQL that reads, can't be classified or can't be read adds nothing: the client
+        # stays a write...
+        ('psql -c "SELECT 1"', NONE, "write", None),
+        (r'psql -c "\dt"', NONE, "write", None),
+        ('psql -c "$QUERY"', NONE, "write", None),
+        # ...and lifts no hold the shell already gave, even when the parser raises on it.
+        (
+            'psql -c "DELETE FROM users WHERE a->1e9 = 1"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_shell"),
+        ),
+        # What can't be classified hides nothing beside it, and the tables of every SQL in
+        # the line count.
+        (
+            r'psql -c "\dt" -c "UPDATE accounts SET balance = 0"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="accounts"),
+        ),
+        (
+            'psql -c "UPDATE users SET a = 1" && mysql -e "UPDATE accounts SET a = 1"',
+            NONE,
+            "destructive",
+            Reason(check="destructive_sql", target="accounts, users"),
+        ),
+        # A here-document can't be read: the destructive-command regex alone holds it.
+        (
+            "psql <<EOF\nDELETE FROM users;\nEOF",
+            NONE,
+            "destructive",
+            Reason(check="destructive_shell"),
+        ),
+        ("rm notes.txt", NONE, "destructive", Reason(check="destructive_shell")),
+    ],
+)
+def test_sql_sent_through_a_shell_client_gets_the_sql_rule(
+    command, mandate, risk, reason
+):
+    shell = ToolRule(kind="shell", arg="command")
+    assert check(shell, {"command": command}, mandate) == (risk, reason)
 
 
 # Cressey's API and dashboard, as the app derives them from its settings.

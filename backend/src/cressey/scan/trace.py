@@ -19,7 +19,8 @@ MIN_TOKEN = 8  # shorter tokens match by chance
 Reads = Sequence[tuple[int, str]]  # (step, tool output), in step order
 
 _WORD_BREAK = re.compile(r"""[\s"',;()\[\]{}<>]+""")
-_PART_BREAK = re.compile(r"[=:&]")
+_PART_BREAK = re.compile(r"[=:&@]")
+_COARSE_BREAK = re.compile(r"[=:&]")  # without the `@`, which may sit inside a value
 # Strict on purpose: invalid input must fail, not be dropped or repaired.
 _DECODERS: tuple[tuple[How, Callable[[str], str]], ...] = (
     ("base64", lambda t: base64.b64decode(t, altchars=b"-_", validate=True).decode()),
@@ -45,13 +46,15 @@ def strings(value: JsonValue) -> list[str]:
 
 def tokens(call: str) -> list[str]:
     # The whole word stays too: base64 padding and URLs contain `=` and `:`.
-    tokens = [
-        token
-        for word in _WORD_BREAK.split(call)
-        for token in (word, *_PART_BREAK.split(word))
-        if len(token) >= MIN_TOKEN
-    ]
-    return list(dict.fromkeys(tokens))
+    tokens: list[str] = []
+    for word in _WORD_BREAK.split(call):
+        tokens += (word, *_COARSE_BREAK.split(word))
+        if "@" in word:
+            # An address breaks at its `@` too, into parts and into pieces at the `@` alone,
+            # which keep a base64 padding. The parts above stay: a value may hold an `@`, and a
+            # decoding of the word fails on another part.
+            tokens += (*_PART_BREAK.split(word), *word.split("@"))
+    return list(dict.fromkeys(t for t in tokens if len(t) >= MIN_TOKEN))
 
 
 # What a word carries at its edges in prose or markdown: a sentence's period, `code`, **bold**.

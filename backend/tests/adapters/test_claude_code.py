@@ -24,8 +24,12 @@ def anyio_backend():
     return "asyncio"
 
 
-async def new_run(base: str, visibility: str = "messages") -> dict:
+async def new_run(
+    base: str, visibility: str = "messages", mandate: dict | None = None
+) -> dict:
     body = {"task": TASK, "visibility": visibility}
+    if mandate is not None:
+        body["mandate"] = mandate
     r = await api(base, "POST", "/api/runs", json=body)
     assert r.status_code == 201
     return r.json()
@@ -131,7 +135,9 @@ class SwayedFloorJudge:
 async def bash_write(tmp_path, judge: SwayedFloorJudge, tool_input: dict) -> dict:
     """A Bash write code lets through, its floor labels from `judge`: the hook's answer."""
     with serving(tmp_path, hold_timeout=0.3, judge=judge) as base:
-        run = await new_run(base)
+        # Beyond the mandate, the SQL rule holds the shell UPDATE by itself and Jev isn't
+        # asked; inside it, code lets the write through and the labels judge it.
+        run = await new_run(base, mandate={"may_destroy": ["accounts"]})
         body = event("PreToolUse", "Bash", tool_input=tool_input)
         return (await hook(base, run["key"], body)).json()
 

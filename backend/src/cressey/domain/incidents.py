@@ -80,6 +80,7 @@ class Incident(BaseModel):
     created_at: str
     decision: str  # the held call's status when served
     sources: list[Source]
+    tracing: bool = False  # True from open until the trace of the sources ends
     legs: Legs
     guides: list[OwnerGuide]
     fixes: list[Fix] = []

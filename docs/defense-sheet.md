@@ -20,20 +20,20 @@ An agent with real rights (production database, repo, shell) faces a task it can
 ## Metrics
 | Metric | Result |
 |---|---|
-| Incident sessions held | **7/7** (floor alone 6/7; the triangle alone holds 1) |
+| Incident sessions held | **8/8**, each at the call it names (floor alone 7/8, one a call late; the triangle alone holds 1) |
 | Normal sessions held by mistake | **0/6** |
-| Time to stop | p50 **2 ms**; **236 ms** at the stage's pace (one live run) |
-| Time to respond after a hold (three guides) | 9 to 14 s |
-| Misused secret traced to its source | 3/3 demo runs, exact match |
+| Time to stop | p50 **617 ms**, p95 749 ms (live Jev, calls back to back); **236 ms** at the stage's pace (one run, 10-10) |
+| Time to respond after a hold (three guides) | 9 to 14 s (10-10 demo path) |
+| Misused secret traced to its source | 3/3 runs, exact match (10-10 demo path) |
 | Citation validity (guide steps) | 100% |
 | Hit@3 after re-ranking (33 questions) | 30 to 31 of 31 |
 
 **Not measured:** a held-out set written outside the team, and false positives on real traffic.
 
 ## Known limitations
-- **Small, team-written evaluation:** 13 synthetic sessions, 33 retrieval questions.
+- **Small, team-written evaluation:** 14 synthetic sessions, 33 retrieval questions.
 - **Most holds come from code, not reasoning.** The triangle alone holds one session, written by the team.
 - **Decision model judged on our own labels.** The report check catches 5/10 lies at 0.8.
 - **Coverage is only what passes through Cressey.** The hook covers Claude Code only. The Hugging Face incident would not be stopped as deployed today.
 - **Real-agent evidence is thin:** one model, a few runs. Without Cressey, 1 run in 3 deleted production.
-- **Local and in memory.** Nothing is deployed; a restart drops runs.
+- **Local, partly in memory.** Nothing is deployed. A restart keeps the event log and the runs' keys (`CRESSEY_STATE_DIR`), not what a run held only in memory.

@@ -4,13 +4,14 @@ they flag, or one no model answers, alerts with its incident open: it never runs
 in silence. A file edit, whose path code checked, is the exception, as before it runs."""
 
 import asyncio
+import json
 from collections.abc import Mapping
 
 import pytest
 
 from cressey.engine import reading
 from cressey.judge import Judge
-from cressey.testing import DownJudge, api, no_to_all, serving
+from cressey.testing import DownJudge, api, no_to_all, serving, traced_incidents
 
 pytestmark = pytest.mark.anyio
 PADDED = "terraform destroy -auto-approve\n" + "# keep the plan for later\n" * 600
@@ -56,11 +57,20 @@ async def ran_long(tmp_path, judge: Judge, tool: str, args: dict) -> tuple[dict,
         for _ in range(500):
             page = (await api(base, "GET", f"/api/runs/{run['id']}")).json()
             [step] = page["steps"]
-            if step["legs"] is not None:  # read afterwards
+            if read_afterwards(step):
                 break
             await asyncio.sleep(0.02)
         incidents = (await api(base, "GET", "/api/incidents")).json()
     return step, incidents
+
+
+def read_afterwards(step: dict) -> bool:
+    """The legs the call came in with said it was too long to read; the late read's replace
+    them, its alert and incident with them."""
+    legs = step["legs"]
+    return legs is not None and not any(
+        "read afterwards" in fact for fact in legs["rationalization"]["facts"]
+    )
 
 
 def checks(step: dict) -> list[tuple[str, bool]]:
@@ -85,6 +95,44 @@ async def test_a_long_file_edit_runs_quiet(tmp_path):
     edit = {"file_path": "notes.md", "content": PADDED}
     step, incidents = await ran_long(tmp_path, DownJudge(), "Write", edit)
     assert (step["status"], checks(step), incidents) == ("allowed", [], [])
+
+
+async def test_the_incident_of_a_write_read_afterwards_hides_what_its_own_scan_finds(
+    tmp_path,
+):
+    """Its sources hide what the arguments hide: a value the scan of the whole call finds
+    (`api_key: ...`), read earlier in plain text, which no scan of that result flagged."""
+    unseen = "unseen-value-4242"
+    write = f"{PADDED}api_key: {unseen} (rotated)\n"
+    calls = [
+        ("c1", "cat ops.txt", f"rotation value {unseen} from ops"),
+        ("c2", write, "done"),
+    ]
+    with serving(tmp_path, hold_timeout=10, judge=Irreversible()) as base:
+        body = {"task": "Tidy the infrastructure"}
+        run = (await api(base, "POST", "/api/runs", json=body)).json()
+        auth = {"Authorization": f"Bearer {run['key']}"}
+        for call, command, result in calls:
+            event = {
+                "session_id": "s1",
+                "tool_name": "Bash",
+                "tool_use_id": call,
+                "tool_input": {"command": command},
+            }
+            for kind, extra in (
+                ("PreToolUse", {}),
+                ("PostToolUse", {"tool_response": result}),
+            ):
+                sent = {**event, "hook_event_name": kind, **extra}
+                await api(base, "POST", "/hook/claude", json=sent, headers=auth)
+        for _ in range(500):
+            page = (await api(base, "GET", f"/api/runs/{run['id']}")).json()
+            if page["steps"][-1]["status"] == "alerted":  # read afterwards, flagged
+                break
+            await asyncio.sleep(0.02)
+        [incident] = await traced_incidents(base)
+    assert [s["step"] for s in incident["sources"]] == [1]  # traced to the read
+    assert unseen not in json.dumps(incident)
 
 
 async def late_then_next(tmp_path, responses: dict) -> tuple[dict, dict]:

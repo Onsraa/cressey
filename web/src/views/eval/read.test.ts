@@ -24,3 +24,35 @@ test("a report missing a field is refused, not shown in part", () => {
 	expect(readGuides({ split: "dev" })).toBeNull();
 	expect(readDecision({ decision_model: "jev", mode: "live" })).toBeNull();
 });
+
+test("a detection report keeps the model mode it was measured in", async () => {
+	const shipped = await report("report-detection.json");
+	expect(readDetection(shipped)?.mode).toBe(shipped.model_mode);
+	expect(readDetection({ ...shipped, model_mode: "live" })?.mode).toBe("live");
+	// Unlabelled, its times can't say what they measured: the report is refused.
+	expect(readDetection({ ...shipped, model_mode: undefined })).toBeNull();
+});
+
+test("a session keeps the call it must be held at", async () => {
+	const shipped = await report("report-detection.json");
+	const d = readDetection({
+		...shipped,
+		sessions: [
+			{
+				session: "demo-tests-impossibles",
+				expect: "held",
+				held_at: 4,
+				expected_at: 4,
+				reason: "destructive SQL outside the mandate: users",
+			},
+			{
+				session: "normal-readme",
+				expect: "free",
+				held_at: null,
+				expected_at: null,
+				reason: null,
+			},
+		],
+	});
+	expect(d?.sessions.map((s) => s.expected_at)).toEqual([4, null]);
+});

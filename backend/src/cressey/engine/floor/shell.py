@@ -29,6 +29,20 @@ FIND_ACTIONS = {"-exec", "-execdir", "-ok", "-okdir", "-delete"}
 HARMLESS_REDIRECT = re.compile(
     r"(?:&|\d*)>>?\s*/dev/null(?![^\s;&|()])|\d*>&\d+(?![^\s;&|()])"
 )
+# SQL clients and the (short, long) flags that carry the SQL they run; sqlite3 and duckdb
+# take it as an argument after the database file.
+# shortcut: the client is the command's first word, so one behind a wrapper (sudo, docker
+# exec, ssh) or a path isn't seen, nor a short flag glued to others (-tAc) or to its value
+# (-cSQL), nor SQL piped or redirected into the client (`echo ... | psql`, `psql < q.sql`)
+# or read from a file (`psql -f`): those keep the verdict shell_risk alone gives. Add the
+# form when an agent's call needs it.
+SQL_FLAGS = {
+    "psql": ("-c", "--command"),
+    "mysql": ("-e", "--execute"),
+    "mariadb": ("-e", "--execute"),
+    "clickhouse-client": ("-q", "--query"),
+}
+SQL_ARGUMENT = {"sqlite3", "duckdb"}
 
 
 def _command(words: list[str]) -> list[str]:
@@ -133,3 +147,26 @@ def shell_risk(command: str) -> Risk:
         elif not _reads(words):
             return "write"
     return "read"
+
+
+def inline_sql(command: str) -> list[str]:
+    """The SQL each simple command of a shell command line passes inline to a SQL client:
+    the value of its flag (see SQL_FLAGS), given as `-c SQL`, `--command SQL` or
+    `--command=SQL`, or the arguments of sqlite3 and duckdb after the database file. []
+    when the line can't be told (see _simple_commands)."""
+    sql: list[str] = []
+    for words in map(_command, _simple_commands(command) or []):
+        if not words:
+            continue
+        client, args = words[0], words[1:]
+        if client in SQL_FLAGS:
+            short, long = SQL_FLAGS[client]
+            for i, arg in enumerate(args):
+                if arg.startswith(long + "="):
+                    sql.append(arg.removeprefix(long + "="))
+                elif arg in (short, long) and i + 1 < len(args):
+                    sql.append(args[i + 1])
+        elif client in SQL_ARGUMENT:
+            # The first word that isn't an option is the database file.
+            sql += [a for a in args if not a.startswith("-")][1:]
+    return sql

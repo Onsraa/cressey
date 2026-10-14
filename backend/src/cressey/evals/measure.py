@@ -452,7 +452,11 @@ async def attack(
         risk, reason = check(
             runs_policy.tools[SURFACE].get(final.tool), final.args, base.mandate
         )
-        row["floor"] = {"risk": risk, "reason": reason, "depends_on_text": False}
+        row["floor"] = {
+            "risk": risk,
+            "reason": reason.text if reason else None,
+            "depends_on_text": False,
+        }
         out.append(row)
     return out
 

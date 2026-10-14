@@ -1,11 +1,15 @@
 """What a SQL string does, as code reads it, and the tables its destructive statements touch."""
 
+import logging
 import re
 
 import sqlglot
 from sqlglot import exp
 
 from cressey.domain.runs import Risk
+
+# sqlglot's warnings quote the raw SQL, passwords included: only its errors are logged.
+logging.getLogger("sqlglot").setLevel(logging.ERROR)
 
 RANK: tuple[Risk, ...] = ("read", "write", "destructive")
 # sqlglot can't parse REPLACE INTO (S4); INSERT OR REPLACE says the same and it parses.
@@ -44,7 +48,9 @@ def sql_risk(sql: str) -> tuple[Risk, set[str] | None]:
     try:
         parsed = sqlglot.parse(REPLACE_INTO.sub(r"\1\2INSERT OR REPLACE INTO", sql))
         statements = [s for s in parsed if s is not None]
-    except sqlglot.errors.SqlglotError:
+    # sqlglot raises more than its own errors: a ValueError on `a->1e9`, a RecursionError when
+    # nested deep
+    except (sqlglot.errors.SqlglotError, ValueError, RecursionError):
         return "destructive", None
     if not statements:
         return "destructive", None

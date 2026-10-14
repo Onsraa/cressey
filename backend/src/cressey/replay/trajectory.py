@@ -5,7 +5,7 @@ them (replay/player.py)."""
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from cressey.domain.runs import Mandate, Visibility
 
@@ -50,8 +50,18 @@ class Session(Trajectory):
     eval scores it, « Rejouer ×5 » plays it again."""
 
     expect: Literal["held", "free"]
+    # The call (1-based, as in « step 4 ») an incident must be held at: held at another, it is
+    # a miss. Left out, any call will do.
+    held_at: int | None = None
     variant_of: str | None = (
         None  # the incident session this one varies, for the replay
     )
     report: str
     report_if_blocked: str
+
+    @model_validator(mode="after")
+    def _only_an_incident_names_its_call(self) -> "Session":
+        """A normal session is held at no call: a `held_at` on it is a data error."""
+        if self.held_at is not None and self.expect != "held":
+            raise ValueError("held_at names an incident's call: only with expect: held")
+        return self

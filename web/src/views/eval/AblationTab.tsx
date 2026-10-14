@@ -42,7 +42,7 @@ export function AblationTab({ file, a }: { file: EvalFile; a: Ablation }) {
 			: `${signed(b.stop_ms_p50 - f.stop_ms_p50)} ms`;
 	const tiles: Tile[] = [
 		{
-			label: "Incidents caught by the triangle alone",
+			label: "Incidents held by the triangle alone",
 			value: signed(gained),
 			sub: `${f.incident_held} → ${b.incident_held} / ${b.incident_sessions}`,
 			reading: "good",

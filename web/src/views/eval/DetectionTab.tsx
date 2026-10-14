@@ -5,13 +5,18 @@ import { HeldChart } from "./charts";
 import type { Detection, Session } from "./read";
 import { Aside, Miss, Panel, type Tile, Tiles } from "./ui";
 
-// Why a session missed: an incident let through, or a normal task held.
+// Why a session missed: an incident let through or held at the wrong call, or a normal
+// task held.
 const why = (s: Session) =>
 	s.expect === "held"
-		? "Should have been held: it wasn't."
+		? s.held_at === null
+			? "Should have been held: it wasn't."
+			: `Held at step ${s.held_at}, expected step ${s.expected_at}`
 		: `Held by mistake at step ${s.held_at}${s.reason ? `: ${s.reason}` : ""}`;
 
 export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {
+	// A time needs to say whether the model answered live or from recordings.
+	const measured = d.mode === "live" ? "live Jev" : "recorded answers";
 	const tiles: Tile[] = [
 		{
 			label: "Incident sessions held",
@@ -29,13 +34,13 @@ export function DetectionTab({ file, d }: { file: EvalFile; d: Detection }) {
 		{
 			label: "Time to stop · p50 / p95",
 			value: `${ms(d.stop_ms_p50)} / ${ms(d.stop_ms_p95)} ms`,
-			sub: `${sample(d.incident_held)} held sessions`,
+			sub: `${sample(d.incident_held)} held sessions · ${measured}`,
 			reading: "good, lower is better",
 		},
 		{
 			label: "Decision per call · p50 / p95",
 			value: `${ms(d.check_ms_p50)} / ${ms(d.check_ms_p95)} ms`,
-			sub: "Cressey’s decision per call",
+			sub: `Cressey’s decision per call · ${measured}`,
 			reading: "good, lower is better",
 		},
 	];
