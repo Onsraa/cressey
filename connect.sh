@@ -20,7 +20,7 @@ ENV="$REPO/.env"
 LOG="${TMPDIR:-/tmp}/cressey-dev.log"
 
 for tool in uv bun jq curl claude; do
-  command -v "$tool" >/dev/null || { echo "missing: $tool (see the README's Install)" >&2; exit 1; }
+  command -v "$tool" >/dev/null || { echo "missing: $tool (see the README's Setup)" >&2; exit 1; }
 done
 
 # Never overwrite someone's own local settings: an earlier run of this script left the hook URL.

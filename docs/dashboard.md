@@ -1,6 +1,6 @@
 # Dashboard
 
-The web interface of Cressey (`web/`). This is where a human approves or rejects a held call. Since the 2026-07-28 MCP protocol, a server can't ask the agent's client for input, so approval goes through Cressey's own endpoint. The dashboard also carries the demo and the fiche défense numbers.
+The web interface of Cressey (`web/`). This is where a human approves or rejects a held call. Since the 2026-07-28 MCP protocol, a server can't ask the agent's client for input, so approval goes through Cressey's own endpoint. The dashboard also carries the demo and the evaluation numbers.
 
 ## Users
 - **SOC analyst** (primary): decides on holds, and follows each incident until its replay is validated.
@@ -74,7 +74,7 @@ The interface is in English (since 10-10). One theme, readable on a projector.
 - **« Connect an agent »:** the MCP command, `claude mcp add --transport http cressey <url>/mcp --header "Authorization: Bearer <run key>"`. The run key is given once, when the run is created.
 
 ## Stretch goals, after the 21:30 go/no-go
-- **Claude Code hook** (first stretch goal, `runsheet.md` item 8):
+- **Claude Code hook:**
   - a « Connect an agent » card with the MCP command (`claude mcp add --transport http …`) and the hook settings block, both copyable and filled with the run key;
   - a « via MCP » or « via hook » badge on each step of the Run view.
 - **Owner MCP connector**, like Sentry's: the owner's terminal agent reads incidents, guides and fixes, and asks for a replay. The results show up on the dashboard.

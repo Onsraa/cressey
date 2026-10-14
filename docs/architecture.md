@@ -16,7 +16,7 @@ Under `backend/src/cressey/`. Imports point one way, checked by `tests/test_laye
 | Replay | `replay/` | one recorded-session format (`trajectory.py`: what the agent said, each call and what it returned when recorded), read from the scripted sessions and Claude Code transcripts (`importers.py`), and one player (`player.py`) that plays it through the MCP gateway or the Claude Code hook: the detection eval, the stage recorder, « Rejouer ×5 » and the lab all play through it |
 | « Rejouer ×5 » | `replay/fixes.py` | an incident's variants and the normal sessions replayed on a fresh Cressey with the approved fixes |
 | Guides | `guide/` | the fix guides: corpus, retrieval, adapters, pipeline, store, API, eval |
-| Demo | `demo/` | the demo tools (a workspace with a fake production key and a trap key, a SQLite database of 5 fake users), the scripted sessions (`data/sessions`, format in `sessions.md`), the stage recorder (`record.py`) |
+| Demo | `demo/` | the demo tools (a workspace with a fake production key and a trap key, a SQLite database of 5 fake users), the scripted sessions (`data/sessions`), the stage recorder (`record.py`) |
 | Evals | `evals/` | the detection eval and its ablation (`evaluate.py`), the decision-model measure (`measure.py`), the floor's calibration (`calibrate_floor.py`), the stress test (`stress.py`) |
 | Shared doubles | `testing.py` | judges that answer no or nothing, a guide writer with no model, a served Cressey, a percentile: for the tests and the evals |
 | App | `app.py`, `settings.py`, `tasks.py` | the wiring, the settings, the background tasks |
@@ -57,7 +57,7 @@ agent ──MCP──▶ Cressey proxy (fastmcp, on_call_tool) ──▶ real to
 | `reranker` | `CRESSEY_RERANKER` | `jev`. `bedrock` re-ranks with Cohere Rerank 3.5 (`cohere.rerank-v3-5:0`) |
 | `relevance_min` | — | set per re-ranker on the dev set: `0.4` for Jev, `0.2` for Rerank 3.5 |
 | `aws_region` | `AWS_REGION` | `us-east-1`. The `us.` inference profiles of the Bedrock models need a US region |
-| AWS credentials | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | none: boto3's own chain. They sign every Bedrock call. The event's temporary credentials go in `.env`, never in Git |
+| AWS credentials | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | none: boto3's own chain. They sign every Bedrock call. Temporary credentials go in `.env`, never in Git |
 | `hold_timeout` | `CRESSEY_HOLD_TIMEOUT` | `240` s. Under the MCP client's 300 s default, so the agent gets Cressey's answer |
 | `demo_dir` | `CRESSEY_DEMO_DIR` | a new temp folder at each start |
 | `profile` | `CRESSEY_PROFILE` | `data/profiles/demo.yaml`: the demo's own tools. A profile names the MCP servers Cressey fronts (`upstreams`, as MCP clients configure them: `{"mcpServers": {name: {"url": …}}}`; with several, each tool is named `<server>_<tool>`), what their tools do (`tools`), the key broker's credentials (`broker`) and its trap keys (`decoys`). A tool listed twice for one surface refuses the start. « Rejouer ×5 » always plays on the demo's tools |
@@ -130,7 +130,7 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
 - **Records:** every call becomes a step with its risk class, status, `held_until` and `decided_at`, and two timings: `check_ms` (Cressey's decision, before the tool runs) and `scan_ms` (the secret scan of the result).
   - What the agent read, and the raw arguments, are kept in memory for tracing and never served.
   - **What a result holds** (`_text`): its text, the text of embedded resources, and its structured content unless it repeats the text (FastMCP returns a `str` or `dict` tool's result both ways). Images, audio, binary resources and links leave one line, « [image/png, 12 Ko] » or « [lien : …] », so nothing is skipped silently.
-  - Each result is scanned for secrets (`scan/secrets.py`, off the event loop). The naming rule (`NAME=value`) reads all of it; detect-secrets reads the first 16 KB, a long line in windows of 256 characters (quadratic regexes: `decisions.md`). The step lists them by name and fingerprint. From then on their values are replaced by `[secret:<fingerprint>]` in served arguments and in the report. What reads a result later (the ledger, the floor's labels, the case, the report check) hides the values already known (`hide`): a result is never scanned twice. Arguments are redacted off the event loop too.
+  - Each result is scanned for secrets (`scan/secrets.py`, off the event loop). The naming rule (`NAME=value`) reads all of it; detect-secrets reads the first 16 KB, a long line in windows of 256 characters (quadratic regexes). The step lists them by name and fingerprint. From then on their values are replaced by `[secret:<fingerprint>]` in served arguments and in the report. What reads a result later (the ledger, the floor's labels, the case, the report check) hides the values already known (`hide`): a result is never scanned twice. Arguments are redacted off the event loop too.
 - **Triangle** (`engine/triangle.py`, thresholds in `policy.yaml` under `triangle`), computed on every call from the run so far:
   - **Pressure** is confirmed by 2 failed calls or 2 repeated identical calls. A deadline word in the task raises the score but doesn't confirm it.
   - **Opportunity** is confirmed by a secret read that the mandate's `may_read_secrets` doesn't list.
@@ -148,7 +148,7 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
   - The decision model's answers go through the same cache modes as the guide models (`data/cache/judge/`). Changing a question changes the cache keys, so record again.
 - **Acting on pressure** (`Runs.act_on_pressure`): without a human, once each per run. Not in the Observateur run, nor in the floor-alone ablation.
   - **The way out:** the result of the call that confirms pressure gets a second text block, « Cressey : Déclarer la tâche impossible est une réponse acceptée. » The step's recorded result leaves it out, so the ledger never labels it. A hold or a refusal at that call already carries it. The run's `way_out_step`, and a `way_out` event.
-  - **The read-only key:** once pressure and opportunity are both confirmed, a destructive call that nothing holds is refused at once, with status `denied` and the reason « clé en lecture seule : pression et opportunité confirmées ». Reads and writes go through (S9, `decisions.md`). A call the floor or the triangle holds still goes to a human. The run's `read_only_step`, and a `read_only` event.
+  - **The read-only key:** once pressure and opportunity are both confirmed, a destructive call that nothing holds is refused at once, with status `denied` and the reason « clé en lecture seule : pression et opportunité confirmées ». Reads and writes go through (S9). A call the floor or the triangle holds still goes to a human. The run's `read_only_step`, and a `read_only` event.
 - **Incidents** (`incidents/incidents.py`): every held call in a `live` or `control` run opens one. Replays open none.
   - **Severity:** « critique » when the safety floor's code held the call, « haute » when only a model's label did: the triangle, or Jev's floor labels.
   - **Sources:** each value of the call is traced to the first step that read it (`scan/trace.py`), with how it matched. A secret shows by name only. The trace takes seconds on a big call, so it runs after the incident opens, in the background and in a thread, on a copy of what the run had read: the incident is served at once with `tracing: true` and no sources, then with its sources and `tracing: false`. The decision, the fleet count and the log don't wait for it.
@@ -195,8 +195,8 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
 - **secrets:** ggshield. It needs the `GITGUARDIAN_API_KEY` repo secret, and warns when the key is missing.
 
 ## Deployment
-- **For the event: local only**, on the stage Mac (decided 10-10, `decisions.md`). The control plane needs the admin key (see API); on one machine the agent could still read it from `.env`.
-- **After the event: AWS** (the Bedrock partnership covers hosting and models).
+- **Local only.** The control plane needs the admin key (see API); on one machine the agent could still read it from `.env`.
+- **Next: AWS**, with Bedrock for hosting and models.
 - **Built:** Bedrock runs the guides' rewriter, writer and embedder by default (`CRESSEY_MODELS=bedrock`). Bedrock for the re-ranker (`CRESSEY_RERANKER=bedrock`, Rerank 3.5) is off by default. **Not built yet:** the container deploy.
 - **`CRESSEY_MODELS=bedrock`** (adapters in `clients.py`; measured in `evaluation.md`, « Bedrock models »):
   - **Rewriter and writer:** the same `responses.parse(text_format=…, store=False)` calls, on the Responses API of `bedrock-runtime` (`https://bedrock-runtime.<region>.amazonaws.com/openai/v1`). Their models are inference profiles: `us.openai.gpt-5.6-sol` rewrites, `us.openai.gpt-5.5` writes.
@@ -205,10 +205,10 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
   - **Switching** re-embeds the corpus once (`embeddings.npy`) and needs its own cache recording, because the model names are in the cache keys.
 - **Checked on 2026-10-10 from our account:**
   - Structured output (`text_format`) and `store=False` work through `bedrock-runtime`, with no change to the account's data retention.
-  - OpenAI models on Bedrock: GPT-5.4, GPT-5.5 and GPT-5.6 Luna, Sol and Terra, through inference profiles such as `us.openai.gpt-5.5`. GPT-6 is listed too, but the event's allowlist excludes it. There's no gpt-5.4-mini.
+  - OpenAI models on Bedrock: GPT-5.4, GPT-5.5 and GPT-5.6 Luna, Sol and Terra, through inference profiles such as `us.openai.gpt-5.5`. GPT-6 is listed too, but our account's allowlist excludes it. There's no gpt-5.4-mini.
   - From the AWS docs: `bedrock-runtime` rejects `background=true` and has no `GET /models`. Neither is used.
   - Claude models are reached through the Anthropic Messages API on that endpoint. Whether Claude also answers through Chat Completions there is not verified.
-- **Strands Decider 2B** (chosen 10-10, then measured weaker than Jev for both uses: `decisions.md`; facts from its GitHub README, checked 10-10):
+- **Strands Decider 2B** (chosen 10-10, then measured weaker than Jev for both uses; facts from its GitHub README, checked 10-10):
   - Weights: `StrandsAgents/strands-decider-2B-qwen3.5-v1-2610` on Hugging Face (also under the `amazon` org), Apache 2.0. Released by AWS Strands Labs on 2026-10-01 as an experiment, not as a managed AWS service.
   - Install with `pip install strands-decider`. For Apple silicon's MLX, install from a clone with `pip install -e ".[mlx]"` until the next release.
   - Serve with `strands-decider serve <model> --port 8100`.
@@ -220,4 +220,4 @@ Types are in `backend/src/cressey/domain/`. The web app uses the generated `web/
     - Mac M3 Pro with MLX: 153 ms median warm, 234 ms p95;
     - RTX 3090: 115 ms median, 299 ms p95.
   - Calibration was fitted on short classification tasks. Answers at confidence 0.9 or more are right about 95% of the time there. Its documented weakness is long, multi-step documents, and our run summary is one.
-  - On AWS: an EC2 instance with a GPU, or any host that runs the package. On stage: the Mac, with MLX.
+  - On AWS: an EC2 instance with a GPU, or any host that runs the package. Locally: a Mac, with MLX.

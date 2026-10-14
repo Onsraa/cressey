@@ -1,4 +1,4 @@
-"""Eval harness: numbers for the fiche défense. Run: uv run python -m cressey.guide.eval --split dev"""
+"""Eval harness: the guide pipeline's numbers. Run: uv run python -m cressey.guide.eval --split dev"""
 
 import argparse
 import json
