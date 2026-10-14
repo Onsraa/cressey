@@ -30,7 +30,7 @@ AI agents act with real rights, often limited by nothing but their prompt. In Ap
 
 Agent firewalls judge the action. Cressey also reads the conditions that produce it, and steps in before the harm.
 
-Cressey started as a 24.5-hour build at ESSECKATHON Secure Horizons (ESSEC, October 2026), where it won 1st place in the AI for Security track.
+Cressey started as a 24.5-hour build at ESSECKATHON Secure Horizons (ESSEC, October 2026), where it won 1st place in the AI for Security & Secure AI track.
 
 ## The fraud triangle
 
