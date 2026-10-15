@@ -981,6 +981,8 @@ export interface components {
 			stop_step?: number | null;
 			/** Way Out Step */
 			way_out_step?: number | null;
+			/** Way Out Prompt */
+			way_out_prompt?: number | null;
 			/** Read Only Step */
 			read_only_step?: number | null;
 			/**

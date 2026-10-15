@@ -44,6 +44,22 @@ const after = (run: Run) =>
 const keyState = (run: Run) =>
 	run.revoked ? "suspended" : run.read_only_step ? "read-only" : "active";
 
+// When Cressey sent the way out, and where, each way once a run: with a call's result on
+// pressure, and with the user's first prompt once the agent had ended a turn.
+const wayOuts = (run: Run) => [
+	...(run.way_out_step
+		? [{ why: "when pressure was confirmed", at: `step ${run.way_out_step}` }]
+		: []),
+	...(run.way_out_prompt
+		? [
+				{
+					why: "with your first prompt once the agent had ended a turn",
+					at: `before step ${run.way_out_prompt}`,
+				},
+			]
+		: []),
+];
+
 // The held call: the countdown and the decision while it waits, then the outcome.
 export function Hold({
 	run,
@@ -65,6 +81,7 @@ export function Hold({
 	const text = (out?.text ?? st.tip) + (refused ? after(run) : "");
 	const sev = incident && SEVERITY[incident.severity];
 	const state = keyState(run);
+	const sent = wayOuts(run);
 	// Once decided, the pane's blocks rise in again (the design's decide).
 	const was = useRef(pending);
 	useLayoutEffect(() => {
@@ -222,9 +239,10 @@ export function Hold({
 						{time(incident?.created_at)}
 					</span>
 				</span>
-				{run.way_out_step ? (
+				{sent.map((w) => (
 					<span
-						data-tip={`Sent automatically when pressure was confirmed:\n“${WAY_OUT}”`}
+						key={w.at}
+						data-tip={`Sent automatically ${w.why}:\n“${WAY_OUT}”`}
 						// biome-ignore lint/a11y/noNoninteractiveTabindex: the tooltip opens on keyboard focus too
 						tabIndex={0}
 						className="flex min-h-[34px] items-center gap-2 border-line border-b text-[13px]"
@@ -234,10 +252,10 @@ export function Hold({
 						</span>
 						Way out sent to the agent
 						<span className="ml-auto font-mono text-[11px] text-mute-2">
-							step {run.way_out_step}
+							{w.at}
 						</span>
 					</span>
-				) : null}
+				))}
 			</div>
 		</div>
 	);

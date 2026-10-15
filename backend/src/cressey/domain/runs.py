@@ -259,9 +259,11 @@ class Run(BaseModel):
     # The step whose "stop" response suspended the key, before it ran or once read after:
     # suspended until an Unlock or the next prompt, whatever holds are decided meanwhile.
     stop_step: int | None = None
-    # Acting on pressure, without a human: the step whose result carried the way out, and
-    # the step from which the key refuses destructive calls.
+    # Acting without a human, each once a run: the step whose result carried the way out
+    # (pressure), the step before which the user's prompt carried it (their first once a
+    # turn ended), and the step from which the key refuses destructive calls.
     way_out_step: int | None = None
+    way_out_prompt: int | None = None
     read_only_step: int | None = None
     steps: list[Step] = []
     messages: list[Message] = []

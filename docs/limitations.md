@@ -10,6 +10,7 @@ What Cressey doesn't do yet. The plan is in the README's [Roadmap](../README.md#
 **Evidence**
 - **Small evaluation.** 14 synthetic sessions written by the team, plus a few runs of a real agent on real infrastructure. A held-out set written outside the team is next.
 - **Reasoning is the agent's narration.** No provider exposes the raw chain of thought, so Cressey reads what the agent says.
+- **The way out on your next prompt.** Cressey adds it to your first prompt after the agent ends a turn, whatever you typed. On impossible tasks it cut the cheats that came after that push; whether it makes an agent give up on a task it could do isn't measured yet.
 
 **Running it**
 - **One machine, one user.** The agent could read the admin key in `.env`. For real isolation, run Cressey on another machine or sandbox the agent.

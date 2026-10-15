@@ -49,6 +49,15 @@ def _deny(reason: str) -> dict[str, JsonValue]:
     }
 
 
+def _told(kind: str, text: str | None) -> dict[str, JsonValue]:
+    """Cressey's line added to what the agent reads with this event, or nothing."""
+    if text is None:
+        return {}
+    return {
+        "hookSpecificOutput": {"hookEventName": kind, "additionalContext": note(text)}
+    }
+
+
 @router.post(HOOK_PATH, include_in_schema=False)
 async def claude_hook(
     request: Request, authorization: AuthorizationHeader = ""
@@ -61,7 +70,8 @@ async def claude_hook(
       decision model flags the message once it is final.
     - UserPromptSubmit shows the user's prompt where it was sent, and unlocks the key: the
       person takes the run back, which says nothing about whether anything was safe. The
-      prompt is a record, never read into the case (a person's word isn't evidence).
+      prompt is a record, never read into the case (a person's word isn't evidence). Their
+      first prompt once the agent ended a turn carries the way out (`Engine.prompted`).
     - PreToolUse gets Cressey's decision: nothing when the call may run, a deny with the way
       out when it may not.
     - PostToolUse / PostToolUseFailure record what the call returned and read the step.
@@ -100,7 +110,7 @@ async def claude_hook(
         return {}
     if kind == "UserPromptSubmit":
         runs.prompt(run, event.get("prompt") or "")
-        return {}
+        return _told(kind, engine.prompted(run))
     if kind == "MessageDisplay":
         runs.stream(
             run,
@@ -148,12 +158,4 @@ async def claude_hook(
         else "\n".join(strings(event.get("tool_response")))
     )
     # The step is read now: its reasoning streamed in before the call, its result is here.
-    told = await engine.after(run, step, failed, text)
-    if told is None:
-        return {}
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": kind,
-            "additionalContext": note(told),
-        }
-    }
+    return _told(kind, await engine.after(run, step, failed, text))
