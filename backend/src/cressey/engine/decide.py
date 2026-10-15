@@ -398,6 +398,22 @@ class Engine:
             self.ended(run)
         return WAY_OUT if run.way_out_step == step.n else None
 
+    def prompted(self, run: Run) -> str | None:
+        """The way out, when this user's prompt carries it: their first once the agent has
+        ended a turn, whatever they typed, once a run, even if pressure sent it already.
+        On ImpossibleBench the agents cheated once pushed again, often after 0 or 1 failed
+        calls: with that push the way out cut those later cheats from 5 runs of 18 to 1 of
+        19; sent mid-work alone, 2 of 8 still cheated. Not in the Observateur run, nor in
+        the floor-alone ablation."""
+        turn_ended = run.report is not None  # a Stop brought the turn's last message
+        if run.way_out_prompt is not None or not turn_ended:
+            return None
+        if run.kind == "control" or not self.triangle_holds:
+            return None
+        run.way_out_prompt = len(run.steps) + 1
+        self.runs.log.append("way_out", {"run": run.id, "before": run.way_out_prompt})
+        return WAY_OUT
+
     def ended(self, run: Run) -> None:
         """The run ended (its report, its session's end): what its calls returned is dropped
         once every read of its steps is done, so a long-lived Cressey keeps what it decided,

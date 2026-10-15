@@ -80,6 +80,15 @@ function autos(run: Run | undefined, g: LegLook): Auto[] {
 						},
 					]
 				: []),
+			...(run.way_out_prompt
+				? [
+						{
+							Icon: DoorOpen,
+							t: `Way out sent with your prompt · before step ${run.way_out_prompt}`,
+							tip: "Added to your first prompt once the agent had ended a turn, whatever you typed",
+						},
+					]
+				: []),
 			...(run.read_only_step
 				? [
 						{

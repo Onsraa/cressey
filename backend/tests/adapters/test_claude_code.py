@@ -488,6 +488,94 @@ async def test_stop_ends_a_turn_and_session_end_ends_the_run(served):
     assert (await run_of(served, run))["ended_at"]
 
 
+def way_out_with(kind: str) -> dict:
+    return {
+        "hookSpecificOutput": {
+            "hookEventName": kind,
+            "additionalContext": f"Cressey: {WAY_OUT}",
+        }
+    }
+
+
+async def prompt(base: str, key: str, text: str) -> dict:
+    sent = session_event("UserPromptSubmit", prompt=text)
+    return (await hook(base, key, sent)).json()
+
+
+async def turn_ends(base: str, key: str) -> None:
+    said = "Two tests still fail."
+    await hook(base, key, session_event("Stop", last_assistant_message=said))
+
+
+async def read(base: str, key: str, call: str, fails: bool = False) -> dict:
+    """A Read through both hooks: what Cressey adds to its result."""
+    args = {"file_path": f"{call}.md"}
+    await hook(base, key, event("PreToolUse", "Read", call, tool_input=args))
+    if fails:
+        done = event("PostToolUseFailure", "Read", call, error="not found")
+    else:
+        done = event("PostToolUse", "Read", call, tool_response="ok")
+    return (await hook(base, key, done)).json()
+
+
+async def test_your_first_prompt_after_a_turn_carries_the_way_out_once(served):
+    """The person pushes again: the way out goes with their prompt, once a run, whatever
+    they typed. On ImpossibleBench it stopped every cheat after a failed round
+    (test-results/way-out-impossiblebench.md)."""
+    run = await new_run(served)
+    key = run["key"]
+    first = await prompt(served, key, "make the tests pass")
+    await read(served, key, "t1")
+    await turn_ends(served, key)
+    again = await prompt(served, key, "they still fail")
+    await turn_ends(served, key)
+    third = await prompt(served, key, "try again")
+    assert (first, again, third) == ({}, way_out_with("UserPromptSubmit"), {})
+    assert (await run_of(served, run))["way_out_prompt"] == 2  # before step 2
+
+
+async def test_a_session_resumed_after_its_end_gets_the_way_out_too(served):
+    """`claude -p --resume`: each round is a session that ends, then resumes."""
+    run = await new_run(served)
+    key = run["key"]
+    await hook(served, key, session_event("SessionStart", source="startup"))
+    await prompt(served, key, "make the tests pass")
+    await turn_ends(served, key)
+    await hook(served, key, session_event("SessionEnd", reason="other"))
+    await hook(served, key, session_event("SessionStart", source="resume"))
+    assert await prompt(served, key, "they still fail") == way_out_with(
+        "UserPromptSubmit"
+    )
+
+
+async def test_a_control_run_gets_no_way_out_with_your_prompt(served):
+    body = {"task": TASK, "kind": "control"}
+    key = (await api(served, "POST", "/api/runs", json=body)).json()["key"]
+    await prompt(served, key, "make the tests pass")
+    await turn_ends(served, key)
+    assert await prompt(served, key, "they still fail") == {}
+
+
+async def test_pressure_mid_turn_leaves_the_way_out_for_the_next_prompt(served):
+    """Each way goes once a run. Two failed calls send it with a result, mid-work; the
+    person's next prompt, the push itself, still carries it: on ImpossibleBench, sent mid-work
+    alone it didn't stop the cheats that came after that push."""
+    run = await new_run(served)
+    key = run["key"]
+    await prompt(served, key, "make the tests pass")
+    for call in ("f1", "f2"):
+        await read(served, key, call, fails=True)
+    assert await read(served, key, "t3") == way_out_with("PostToolUse")
+    await turn_ends(served, key)
+    assert await prompt(served, key, "they still fail") == way_out_with(
+        "UserPromptSubmit"
+    )
+    await turn_ends(served, key)
+    assert await prompt(served, key, "try again") == {}
+    got = await run_of(served, run)
+    assert (got["way_out_step"], got["way_out_prompt"]) == (3, 4)
+
+
 async def test_each_claude_code_session_on_a_key_gets_its_own_run(served):
     run = await new_run(served)
     key = run["key"]

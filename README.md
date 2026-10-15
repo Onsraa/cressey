@@ -60,7 +60,7 @@ agent ──▶ Cressey ──▶ real tools
 
 1. **Plug in.** A Claude Code hook sees every shell command, file edit and message. An MCP proxy covers MCP tool calls.
 2. **Safety floor.** Code rules hold irreversible actions outside the agent's mandate (`rm`, `DROP TABLE`, `git push --force`…) and any write made with a *trap key*, a decoy secret planted where an agent might look.
-3. **Fraud triangle.** Cressey tightens as the legs confirm. Under pressure, the agent is told that declaring the task impossible is an accepted answer. Add an opportunity, and its key turns read-only for destructive calls. A hold needs Jev's judgment plus a confirmed leg, and no model can release it.
+3. **Fraud triangle.** Cressey tightens as the legs confirm. Under pressure, or with your first prompt after it ends a turn, the agent is told that declaring the task impossible is an accepted answer. Add an opportunity, and its key turns read-only for destructive calls. A hold needs Jev's judgment plus a confirmed leg, and no model can release it.
 4. **Incident.** Every hold opens an incident. Cressey traces the misused secret back to where the agent found it and writes a fix guide per owner, each step quoting a verified source (ANSSI, MITRE ATLAS, OWASP).
 
 Each check can alert, hold for a human (the default) or refuse at once, switchable live in Settings.

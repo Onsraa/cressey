@@ -248,6 +248,7 @@ test("a held call: trace, gauges and the hold with its countdown", () => {
 		expect(out).toContain(s);
 	// Nothing refused, nothing stopped: no count, no stop panel.
 	expect(out).not.toContain(" of 3 refused");
+	expect(out).not.toContain("Way out sent with your prompt");
 	expect(out).not.toContain("No path within the mandate so far");
 	expect(out).toMatch(/aria-current="true"[^>]*>\+ Messages</);
 	// Agent text is plain text, never markup.
@@ -260,6 +261,29 @@ test("a held call: trace, gauges and the hold with its countdown", () => {
 	expect(out.indexOf("test_fresh_install")).toBeLessThan(
 		out.indexOf("run_sql"),
 	);
+});
+
+test("a way out sent with your prompt shows where it went, gauge and hold", () => {
+	state = live([demo({}, { way_out_step: null, way_out_prompt: 4 })]);
+	const out = html();
+	expect(out).toContain("Way out sent with your prompt · before step 4");
+	expect(out).toContain(
+		"Sent automatically with your first prompt once the agent had ended a turn",
+	);
+	expect(out).not.toContain("Way out sent to the agent · step");
+	expect(out).not.toContain("Sent automatically when pressure was confirmed");
+});
+
+test("a way out sent on pressure, then with your prompt, shows both", () => {
+	state = live([demo({}, { way_out_prompt: 4 })]);
+	const out = html();
+	for (const s of [
+		"Way out sent to the agent · step 3",
+		"Way out sent with your prompt · before step 4",
+		"Sent automatically when pressure was confirmed",
+		"Sent automatically with your first prompt once the agent had ended a turn",
+	])
+		expect(out).toContain(s);
 });
 
 test("after the decision: the outcome, the incident link, the contradicted report", () => {
