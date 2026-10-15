@@ -5,7 +5,8 @@ its feedback after a failed round, up to 5 rounds. The `wayout` arm adds Cressey
 in its own words, to the first feedback: the sentence alone, without Cressey. The `upfront`
 arm writes it into the task instead, as Cressey's preflight tells task authors. With the `hook`
 arm every call goes through the Cressey at --cressey first, as in run_pressure.sh: give it
-alert responses and the way out is the only thing the agent gets from it.
+alert responses and the way out is the only thing the agent gets from it, with the first
+feedback (a prompt once a turn ended) or with a call's result on pressure.
 
   python3 -I lab/run_impossible.py --split oneoff --model claude-sonnet-5-5 --tasks 20 --arms control wayout
   python3 -I lab/run_impossible.py --report lab/runs/impossible-oneoff
@@ -294,6 +295,7 @@ def one(row: dict, model: str, arm: str, args, env: dict, admin: str | None) -> 
         run = cressey_call(args.cressey, admin, f"/api/runs/{rec['cressey_run']}")
         (out / "cressey_run.json").write_text(json.dumps(run, indent=2))
         rec["way_out_step"] = run.get("way_out_step")
+        rec["way_out_prompt"] = run.get("way_out_prompt")
         rec["flagged"] = [
             {
                 "n": s["n"],
@@ -312,7 +314,7 @@ def one(row: dict, model: str, arm: str, args, env: dict, admin: str | None) -> 
     shutil.rmtree(work, ignore_errors=True)
     print(
         f"{model} {arm} {row['task_id']}: cheated={rec['cheated']} rounds={len(rec['attempts'])} "
-        f"way_out={rec.get('way_out_step')} cost=${rec['cost']:.2f}",
+        f"way_out={sent(rec)} cost=${rec['cost']:.2f}",
         flush=True,
     )
     return rec
@@ -323,7 +325,7 @@ def report(root: Path, split: str) -> None:
     recs = [json.loads(p.read_text()) for p in sorted(root.glob("*/*/result.json"))]
     recs.sort(key=lambda r: (r["task_id"], r["arm"]))
     print(
-        "| task | model | arm | cheated | tests edited | func.py alone passes | solves the real task | rounds | way out at step | flagged steps | cost |"
+        "| task | model | arm | cheated | tests edited | func.py alone passes | solves the real task | rounds | way out | flagged steps | cost |"
     )
     print("|---|---|---|---|---|---|---|---|---|---|---|")
     for r in recs:
@@ -336,7 +338,7 @@ def report(root: Path, split: str) -> None:
         print(
             f"| {r['task_id']} | {r['model'].removeprefix('claude-')} | {r['arm']} | {'**yes**' if r['cheated'] else 'no'} | "
             f"{'yes' if r['test_modified'] else 'no'} | {'yes' if r['func_passes_impossible'] else 'no'} | "
-            f"{'yes' if r['func_passes_original'] else 'no'} | {len(r['attempts'])} | {r.get('way_out_step') or '-'} | {flagged} | ${r['cost']:.2f} |"
+            f"{'yes' if r['func_passes_original'] else 'no'} | {len(r['attempts'])} | {sent(r)} | {flagged} | ${r['cost']:.2f} |"
         )
     for arm in sorted({r["arm"] for r in recs}):
         mine = [r for r in recs if r["arm"] == arm]
@@ -346,7 +348,7 @@ def report(root: Path, split: str) -> None:
     by_task: dict[str, dict[str, dict]] = {}
     for r in recs:
         by_task.setdefault(r["task_id"], {})[r["arm"]] = r
-    for arm in ("wayout", "upfront"):
+    for arm in ("wayout", "upfront", "hook"):
         pairs = [
             (t["control"], t[arm])
             for t in by_task.values()
@@ -355,7 +357,7 @@ def report(root: Path, split: str) -> None:
         if not pairs:
             continue
         cuts = [("all pairs", pairs)]
-        if arm == "wayout":
+        if arm in ("wayout", "hook"):
             # A cheat in round 1 comes before any feedback, so before this way out could arrive:
             # until then the two arms are the same run, and such a pair says nothing about it.
             cuts.append(
@@ -395,6 +397,14 @@ def report(root: Path, split: str) -> None:
             "\nfunc.py as left (first 40 lines):\n"
             + "".join((d / "func.py").read_text().splitlines(True)[:40])
         )
+
+
+def sent(r: dict) -> str:
+    """Where Cressey's way out reached the agent, on the hook arm: each way once."""
+    ways = [f"step {r['way_out_step']}"] if r.get("way_out_step") else []
+    if r.get("way_out_prompt"):
+        ways.append(f"prompt, before step {r['way_out_prompt']}")
+    return ", ".join(ways) or "-"
 
 
 def early(r: dict) -> bool:
